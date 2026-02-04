@@ -124,7 +124,6 @@
 // =============================================================================
 
 pub mod config;
-pub mod descriptor;
 pub mod dma;
 pub mod error;
 pub mod hal;
@@ -182,7 +181,6 @@ pub use config::{
     MacAddressFilter, MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State,
     TxChecksumMode,
 };
-pub use descriptor::{RxDescriptor, TxDescriptor, VolatileCell};
 pub use dma::{DescriptorRing, DmaEngine};
 pub use error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};
 pub use mac::{Emac, EmacDefault, EmacLarge, EmacSmall, InterruptStatus};

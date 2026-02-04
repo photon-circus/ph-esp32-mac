@@ -2,8 +2,30 @@
 //!
 //! This module provides the DMA engine for managing TX and RX descriptor rings
 //! and buffer transfers. All memory is statically allocated using const generics.
+//!
+//! # Architecture
+//!
+//! The DMA engine consists of:
+//! - [`DmaEngine`]: Main structure managing RX and TX descriptor rings and buffers
+//! - [`DescriptorRing`]: Circular ring buffer for descriptors
+//! - Internal descriptor types for RX and TX operations
+//!
+//! # Example
+//!
+//! ```ignore
+//! use ph_esp32_mac::dma::DmaEngine;
+//!
+//! // Create DMA engine with 4 RX buffers, 4 TX buffers, 1600 bytes each
+//! static mut DMA: DmaEngine<4, 4, 1600> = DmaEngine::new();
+//!
+//! // Initialize before use
+//! unsafe { DMA.init(); }
+//! ```
 
-use crate::descriptor::{RxDescriptor, TxDescriptor};
+// Internal descriptor module
+mod descriptor;
+
+use descriptor::{RxDescriptor, TxDescriptor};
 use crate::error::{DmaError, IoError, Result};
 use crate::internal::register::dma::DmaRegs;
 
