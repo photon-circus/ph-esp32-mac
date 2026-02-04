@@ -264,6 +264,10 @@ pub fn ethernet_address<const RX: usize, const TX: usize, const BUF: usize>(
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // Constants Tests
+    // =========================================================================
+
     #[test]
     fn test_max_frame_size() {
         assert_eq!(MAX_FRAME_SIZE, 1522);
@@ -272,5 +276,73 @@ mod tests {
     #[test]
     fn test_mtu() {
         assert_eq!(MTU, 1500);
+    }
+
+    // =========================================================================
+    // DeviceCapabilities Tests (can test without hardware)
+    // =========================================================================
+
+    #[test]
+    fn capabilities_medium_is_ethernet() {
+        // We can't create an Emac without hardware, but we can verify
+        // that Medium::Ethernet exists and is the expected value
+        let medium = Medium::Ethernet;
+        assert_eq!(medium, Medium::Ethernet);
+    }
+
+    #[test]
+    fn capabilities_mtu_matches_constant() {
+        // Verify MTU constant matches Ethernet standard
+        assert_eq!(MTU, 1500);
+    }
+
+    #[test]
+    fn checksum_variants_are_constructable() {
+        // Verify Checksum variants exist and can be constructed
+        // (Checksum doesn't implement PartialEq, so we use pattern matching)
+        let _none = Checksum::None;
+        let _tx = Checksum::Tx;
+        let _rx = Checksum::Rx;
+        let both = Checksum::Both;
+
+        // Verify we can match on the variants
+        assert!(matches!(both, Checksum::Both));
+    }
+
+    #[test]
+    fn checksum_capabilities_is_constructable() {
+        // Verify ChecksumCapabilities can be constructed and fields accessed
+        // (Checksum doesn't implement PartialEq, so we use pattern matching)
+        let caps = ChecksumCapabilities::default();
+        // Verify the struct has the expected fields
+        let _ipv4 = caps.ipv4;
+        let _udp = caps.udp;
+        let _tcp = caps.tcp;
+        let _icmpv4 = caps.icmpv4;
+    }
+
+    #[test]
+    fn device_capabilities_default_has_medium_ethernet() {
+        let caps = DeviceCapabilities::default();
+        assert_eq!(caps.medium, Medium::Ethernet);
+    }
+
+    #[test]
+    fn device_capabilities_default_has_no_max_burst() {
+        let caps = DeviceCapabilities::default();
+        assert_eq!(caps.max_burst_size, None);
+    }
+
+    // =========================================================================
+    // Token Marker Tests
+    // =========================================================================
+
+    #[test]
+    fn phantom_data_is_zero_sized() {
+        use core::mem::size_of;
+        assert_eq!(
+            size_of::<core::marker::PhantomData<&mut Emac<10, 10, 1600>>>(),
+            0
+        );
     }
 }

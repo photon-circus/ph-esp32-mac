@@ -501,3 +501,230 @@ pub fn reset_async_state() {
     TX_WAKER.wake();
     ERR_WAKER.wake();
 }
+
+// =============================================================================
+// Unit Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use super::*;
+    use core::task::{RawWaker, RawWakerVTable, Waker};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    // =========================================================================
+    // Test Waker Implementation
+    // =========================================================================
+
+    /// Counter for tracking waker calls
+    struct WakeCounter {
+        count: AtomicUsize,
+    }
+
+    impl WakeCounter {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                count: AtomicUsize::new(0),
+            })
+        }
+
+        fn count(&self) -> usize {
+            self.count.load(Ordering::SeqCst)
+        }
+    }
+
+    /// Create a test waker that increments a counter when woken
+    fn test_waker(counter: Arc<WakeCounter>) -> Waker {
+        fn clone_fn(ptr: *const ()) -> RawWaker {
+            let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
+            let cloned = arc.clone();
+            core::mem::forget(arc); // Don't decrement ref count
+            RawWaker::new(Arc::into_raw(cloned) as *const (), &VTABLE)
+        }
+
+        fn wake_fn(ptr: *const ()) {
+            let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
+            arc.count.fetch_add(1, Ordering::SeqCst);
+            // Don't forget - we're consuming the wake
+        }
+
+        fn wake_by_ref_fn(ptr: *const ()) {
+            let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
+            arc.count.fetch_add(1, Ordering::SeqCst);
+            core::mem::forget(arc); // Don't decrement ref count
+        }
+
+        fn drop_fn(ptr: *const ()) {
+            unsafe {
+                Arc::from_raw(ptr as *const WakeCounter);
+            }
+        }
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(clone_fn, wake_fn, wake_by_ref_fn, drop_fn);
+
+        let raw = RawWaker::new(Arc::into_raw(counter) as *const (), &VTABLE);
+        unsafe { Waker::from_raw(raw) }
+    }
+
+    // =========================================================================
+    // AtomicWaker Tests
+    // =========================================================================
+
+    #[test]
+    fn atomic_waker_new_is_empty() {
+        let waker = AtomicWaker::new();
+        assert!(!waker.is_registered());
+    }
+
+    #[test]
+    fn atomic_waker_default_is_empty() {
+        let waker = AtomicWaker::default();
+        assert!(!waker.is_registered());
+    }
+
+    #[test]
+    fn atomic_waker_register_stores_waker() {
+        let atomic_waker = AtomicWaker::new();
+        let counter = WakeCounter::new();
+        let waker = test_waker(counter.clone());
+
+        atomic_waker.register(&waker);
+        assert!(atomic_waker.is_registered());
+    }
+
+    #[test]
+    fn atomic_waker_wake_calls_waker() {
+        let atomic_waker = AtomicWaker::new();
+        let counter = WakeCounter::new();
+        let waker = test_waker(counter.clone());
+
+        atomic_waker.register(&waker);
+        assert_eq!(counter.count(), 0);
+
+        atomic_waker.wake();
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn atomic_waker_wake_clears_waker() {
+        let atomic_waker = AtomicWaker::new();
+        let counter = WakeCounter::new();
+        let waker = test_waker(counter.clone());
+
+        atomic_waker.register(&waker);
+        assert!(atomic_waker.is_registered());
+
+        atomic_waker.wake();
+        assert!(!atomic_waker.is_registered());
+    }
+
+    #[test]
+    fn atomic_waker_wake_without_registered_is_noop() {
+        let atomic_waker = AtomicWaker::new();
+        // Should not panic
+        atomic_waker.wake();
+        assert!(!atomic_waker.is_registered());
+    }
+
+    #[test]
+    fn atomic_waker_register_overwrites_previous() {
+        let atomic_waker = AtomicWaker::new();
+        let counter1 = WakeCounter::new();
+        let counter2 = WakeCounter::new();
+        let waker1 = test_waker(counter1.clone());
+        let waker2 = test_waker(counter2.clone());
+
+        atomic_waker.register(&waker1);
+        atomic_waker.register(&waker2);
+        atomic_waker.wake();
+
+        // Only the second waker should be called
+        assert_eq!(counter1.count(), 0);
+        assert_eq!(counter2.count(), 1);
+    }
+
+    #[test]
+    fn atomic_waker_double_wake_only_wakes_once() {
+        let atomic_waker = AtomicWaker::new();
+        let counter = WakeCounter::new();
+        let waker = test_waker(counter.clone());
+
+        atomic_waker.register(&waker);
+        atomic_waker.wake();
+        atomic_waker.wake(); // Second wake should be no-op
+
+        assert_eq!(counter.count(), 1);
+    }
+
+    // =========================================================================
+    // Static Waker Tests
+    // =========================================================================
+
+    #[test]
+    fn static_wakers_are_independent() {
+        // Reset any state from previous tests
+        RX_WAKER.wake();
+        TX_WAKER.wake();
+        ERR_WAKER.wake();
+
+        // Register different wakers
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+        let err_counter = WakeCounter::new();
+
+        RX_WAKER.register(&test_waker(rx_counter.clone()));
+        TX_WAKER.register(&test_waker(tx_counter.clone()));
+        ERR_WAKER.register(&test_waker(err_counter.clone()));
+
+        // Wake only RX
+        RX_WAKER.wake();
+        assert_eq!(rx_counter.count(), 1);
+        assert_eq!(tx_counter.count(), 0);
+        assert_eq!(err_counter.count(), 0);
+
+        // Re-register RX and wake TX
+        RX_WAKER.register(&test_waker(rx_counter.clone()));
+        TX_WAKER.wake();
+        assert_eq!(rx_counter.count(), 1); // Not woken again
+        assert_eq!(tx_counter.count(), 1);
+        assert_eq!(err_counter.count(), 0);
+    }
+
+    #[test]
+    fn reset_async_state_wakes_all() {
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+        let err_counter = WakeCounter::new();
+
+        RX_WAKER.register(&test_waker(rx_counter.clone()));
+        TX_WAKER.register(&test_waker(tx_counter.clone()));
+        ERR_WAKER.register(&test_waker(err_counter.clone()));
+
+        reset_async_state();
+
+        assert_eq!(rx_counter.count(), 1);
+        assert_eq!(tx_counter.count(), 1);
+        assert_eq!(err_counter.count(), 1);
+    }
+
+    // =========================================================================
+    // ErrorFuture Tests
+    // =========================================================================
+
+    #[test]
+    fn error_future_new() {
+        let future = ErrorFuture::new();
+        // Should create without panicking
+        let _ = future;
+    }
+
+    #[test]
+    fn error_future_default() {
+        let future = ErrorFuture::default();
+        let _ = future;
+    }
+}

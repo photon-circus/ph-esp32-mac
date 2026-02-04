@@ -219,6 +219,11 @@ pub type SharedEmacLarge = SharedEmac<16, 16, 1600>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::State;
+
+    // =========================================================================
+    // Construction Tests
+    // =========================================================================
 
     #[test]
     fn test_shared_emac_new() {
@@ -229,5 +234,103 @@ mod tests {
     #[test]
     fn test_shared_emac_default() {
         let _emac: SharedEmacDefault = SharedEmac::default();
+    }
+
+    #[test]
+    fn test_shared_emac_small_type_alias() {
+        let _emac: SharedEmacSmall = SharedEmac::new();
+    }
+
+    #[test]
+    fn test_shared_emac_large_type_alias() {
+        let _emac: SharedEmacLarge = SharedEmac::new();
+    }
+
+    // =========================================================================
+    // with() Tests
+    // =========================================================================
+
+    #[test]
+    fn test_shared_emac_with_returns_value() {
+        let shared: SharedEmacDefault = SharedEmac::new();
+        let result = shared.with(|_emac| 42);
+        assert_eq!(result, 42);
+    }
+
+    #[test]
+    fn test_shared_emac_with_can_read_state() {
+        let shared: SharedEmacDefault = SharedEmac::new();
+        let state = shared.with(|emac| emac.state());
+        assert_eq!(state, State::Uninitialized);
+    }
+
+    #[test]
+    fn test_shared_emac_with_closure_executed() {
+        let shared: SharedEmacDefault = SharedEmac::new();
+        let mut executed = false;
+        shared.with(|_emac| {
+            executed = true;
+        });
+        assert!(executed);
+    }
+
+    // =========================================================================
+    // try_with() Tests
+    // =========================================================================
+
+    #[test]
+    fn test_shared_emac_try_with_returns_some() {
+        let shared: SharedEmacDefault = SharedEmac::new();
+        let result = shared.try_with(|_emac| 123);
+        assert_eq!(result, Some(123));
+    }
+
+    #[test]
+    fn test_shared_emac_try_with_can_read_state() {
+        let shared: SharedEmacDefault = SharedEmac::new();
+        let state = shared.try_with(|emac| emac.state());
+        assert_eq!(state, Some(State::Uninitialized));
+    }
+
+    // =========================================================================
+    // Multiple Access Tests
+    // =========================================================================
+
+    #[test]
+    fn test_shared_emac_multiple_with_calls() {
+        let shared: SharedEmacDefault = SharedEmac::new();
+
+        let r1 = shared.with(|_emac| 1);
+        let r2 = shared.with(|_emac| 2);
+        let r3 = shared.with(|_emac| 3);
+
+        assert_eq!(r1, 1);
+        assert_eq!(r2, 2);
+        assert_eq!(r3, 3);
+    }
+
+    #[test]
+    fn test_shared_emac_interleaved_with_try_with() {
+        let shared: SharedEmacDefault = SharedEmac::new();
+
+        let r1 = shared.with(|_emac| 1);
+        let r2 = shared.try_with(|_emac| 2);
+        let r3 = shared.with(|_emac| 3);
+
+        assert_eq!(r1, 1);
+        assert_eq!(r2, Some(2));
+        assert_eq!(r3, 3);
+    }
+
+    // =========================================================================
+    // Static Allocation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_static_shared_emac() {
+        static SHARED: SharedEmac<10, 10, 1600> = SharedEmac::new();
+
+        let state = SHARED.with(|emac| emac.state());
+        assert_eq!(state, State::Uninitialized);
     }
 }
