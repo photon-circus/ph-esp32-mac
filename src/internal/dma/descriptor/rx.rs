@@ -1,7 +1,7 @@
 //! RX DMA descriptor for frame reception.
 
 use super::VolatileCell;
-use crate::internal::descriptor_bits::{rdes0, rdes1, rdes4};
+use super::bits::{rdes0, rdes1, rdes4};
 
 /// RX DMA descriptor (32 bytes on ESP32, 64 bytes on ESP32-P4).
 #[repr(C)]
@@ -293,7 +293,7 @@ unsafe impl Send for RxDescriptor {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::internal::descriptor_bits::{rdes0, rdes1};
+    use crate::internal::dma::descriptor::bits::{rdes0, rdes1};
 
     // =========================================================================
     // Layout Tests

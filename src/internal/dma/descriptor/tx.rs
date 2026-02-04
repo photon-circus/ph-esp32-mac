@@ -1,7 +1,7 @@
 //! TX DMA descriptor for frame transmission.
 
 use super::VolatileCell;
-use crate::internal::descriptor_bits::{tdes0, tdes1};
+use super::bits::{tdes0, tdes1};
 
 /// TX DMA descriptor (32 bytes on ESP32, 64 bytes on ESP32-P4).
 #[repr(C)]
@@ -223,7 +223,7 @@ unsafe impl Send for TxDescriptor {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::internal::descriptor_bits::{checksum_mode, tdes0, tdes1};
+    use crate::internal::dma::descriptor::bits::{checksum_mode, tdes0, tdes1};
 
     #[test]
     fn tx_descriptor_size() {

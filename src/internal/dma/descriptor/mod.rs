@@ -14,6 +14,7 @@
 //! Descriptors are internal to the DMA module. The public API is through
 //! [`super::DmaEngine`].
 
+pub mod bits;
 pub mod rx;
 pub mod tx;
 

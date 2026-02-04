@@ -9,7 +9,6 @@
 //! - [`phy_regs`]: PHY register definitions (MDIO-accessed)
 //! - [`constants`]: Internal constants and magic numbers
 //! - [`gpio_pins`]: GPIO pin assignments for EMAC
-//! - [`descriptor_bits`]: DMA descriptor bit field constants
 //! - [`dma`]: DMA engine and descriptor management
 //!
 //! # Stability
@@ -19,7 +18,6 @@
 //! without notice.
 
 pub(crate) mod constants;
-pub(crate) mod descriptor_bits;
 pub(crate) mod dma;
 pub(crate) mod gpio_pins;
 pub(crate) mod phy_regs;
