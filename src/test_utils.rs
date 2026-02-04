@@ -215,6 +215,154 @@ impl embedded_hal::delay::DelayNs for MockDelay {
 }
 
 // =============================================================================
+// Mock DMA Descriptor
+// =============================================================================
+
+/// Mock DMA descriptor for testing DMA flow logic without hardware
+///
+/// This allows simulating DMA descriptor behavior for TX/RX flow testing
+/// without requiring actual ESP32 hardware access.
+///
+/// # Example
+///
+/// ```ignore
+/// use crate::test_utils::MockDescriptor;
+/// use crate::dma::DescriptorRing;
+///
+/// let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing::from_array(
+///     [MockDescriptor::new(); 4]
+/// );
+///
+/// // Simulate DMA receiving a frame
+/// ring.get_mut(0).simulate_receive(1500);
+/// assert!(!ring.get(0).is_owned());
+/// assert_eq!(ring.get(0).frame_length(), 1500);
+/// ```
+#[derive(Clone, Copy, Default, Debug)]
+pub struct MockDescriptor {
+    /// Whether the descriptor is owned by DMA (true) or CPU (false)
+    pub owned: bool,
+    /// Whether this is the first descriptor of a frame
+    pub first: bool,
+    /// Whether this is the last descriptor of a frame
+    pub last: bool,
+    /// Whether the descriptor has an error
+    pub has_error: bool,
+    /// Frame length (valid when `last` is true)
+    pub frame_len: usize,
+}
+
+impl MockDescriptor {
+    /// Create a new mock descriptor with default (empty) state
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check if descriptor is owned by DMA
+    pub fn is_owned(&self) -> bool {
+        self.owned
+    }
+
+    /// Give descriptor ownership to DMA
+    pub fn set_owned(&mut self) {
+        self.owned = true;
+    }
+
+    /// Take ownership from DMA (for CPU use)
+    pub fn clear_owned(&mut self) {
+        self.owned = false;
+    }
+
+    /// Check if this is the first descriptor of a frame
+    pub fn is_first(&self) -> bool {
+        self.first
+    }
+
+    /// Check if this is the last descriptor of a frame
+    pub fn is_last(&self) -> bool {
+        self.last
+    }
+
+    /// Check if frame has any errors
+    pub fn has_error(&self) -> bool {
+        self.has_error
+    }
+
+    /// Get received frame length
+    pub fn frame_length(&self) -> usize {
+        self.frame_len
+    }
+
+    /// Simulate receiving a complete frame
+    ///
+    /// This sets the descriptor state as if DMA had received a complete frame:
+    /// - Ownership released to CPU
+    /// - First and last flags set (single-descriptor frame)
+    /// - No errors
+    /// - Frame length set to `len`
+    pub fn simulate_receive(&mut self, len: usize) {
+        self.owned = false; // DMA releases ownership
+        self.first = true;
+        self.last = true;
+        self.has_error = false;
+        self.frame_len = len;
+    }
+
+    /// Simulate a receive error
+    ///
+    /// This sets the descriptor state as if DMA had encountered an error:
+    /// - Ownership released to CPU
+    /// - First and last flags set
+    /// - Error flag set
+    /// - Frame length set to 0
+    pub fn simulate_error(&mut self) {
+        self.owned = false;
+        self.first = true;
+        self.last = true;
+        self.has_error = true;
+        self.frame_len = 0;
+    }
+
+    /// Simulate a multi-descriptor frame fragment
+    ///
+    /// This sets the descriptor state for part of a multi-descriptor frame:
+    /// - Ownership released to CPU
+    /// - First/last flags set according to parameters
+    /// - No errors
+    /// - Frame length set (only valid on last descriptor)
+    pub fn simulate_fragment(&mut self, first: bool, last: bool, len: usize) {
+        self.owned = false;
+        self.first = first;
+        self.last = last;
+        self.has_error = false;
+        self.frame_len = len;
+    }
+
+    /// Reset the descriptor to initial state
+    ///
+    /// Returns descriptor to the state as if it was newly created:
+    /// - Not owned by DMA
+    /// - No first/last flags
+    /// - No errors
+    /// - Zero frame length
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Recycle the descriptor for reuse
+    ///
+    /// Prepares descriptor to be given back to DMA for receiving:
+    /// - Not owned yet (call `set_owned()` to give to DMA)
+    /// - Clears all status flags
+    pub fn recycle(&mut self) {
+        self.first = false;
+        self.last = false;
+        self.has_error = false;
+        self.frame_len = 0;
+    }
+}
+
+// =============================================================================
 // Test Assertions
 // =============================================================================
 

@@ -937,4 +937,421 @@ mod tests {
         dma.set_tx_ctrl_flags(0x1234);
         assert_eq!(dma.tx_ctrl_flags(), 0x1234);
     }
+
+    // =========================================================================
+    // Mock Test Utilities (imported from test_utils)
+    // =========================================================================
+
+    // Use the shared MockDescriptor from test_utils module
+    use crate::test_utils::MockDescriptor;
+
+    // =========================================================================
+    // DescriptorRing with MockDescriptor Tests
+    // =========================================================================
+
+    #[test]
+    fn mock_descriptor_ring_basic_operations() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // Initially all descriptors are not owned
+        for desc in ring.iter() {
+            assert!(!desc.is_owned());
+        }
+
+        // Set ownership on first two descriptors
+        ring.get_mut(0).set_owned();
+        ring.get_mut(1).set_owned();
+
+        assert!(ring.get(0).is_owned());
+        assert!(ring.get(1).is_owned());
+        assert!(!ring.get(2).is_owned());
+        assert!(!ring.get(3).is_owned());
+    }
+
+    #[test]
+    fn mock_descriptor_ring_simulate_rx_flow() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // Give all descriptors to DMA
+        for desc in ring.iter_mut() {
+            desc.set_owned();
+        }
+
+        // Simulate DMA receiving a frame on descriptor 0
+        ring.get_mut(0).simulate_receive(1500);
+
+        // Current descriptor should now be available
+        assert!(!ring.current().is_owned());
+        assert!(ring.current().is_first());
+        assert!(ring.current().is_last());
+        assert_eq!(ring.current().frame_length(), 1500);
+    }
+
+    #[test]
+    fn mock_descriptor_ring_simulate_multi_desc_frame() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // Simulate a frame spanning 2 descriptors
+        ring.get_mut(0).owned = false;
+        ring.get_mut(0).first = true;
+        ring.get_mut(0).last = false;
+        ring.get_mut(0).frame_len = 1600;
+
+        ring.get_mut(1).owned = false;
+        ring.get_mut(1).first = false;
+        ring.get_mut(1).last = true;
+        ring.get_mut(1).frame_len = 2048; // Total frame length
+
+        assert!(ring.get(0).is_first());
+        assert!(!ring.get(0).is_last());
+        assert!(!ring.get(1).is_first());
+        assert!(ring.get(1).is_last());
+    }
+
+    // =========================================================================
+    // Descriptor Ring Ownership Tracking Tests
+    // =========================================================================
+
+    #[test]
+    fn descriptor_ring_count_owned() {
+        let mut ring: DescriptorRing<MockDescriptor, 8> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 8],
+            current: 0,
+        };
+
+        // Helper function to count owned descriptors
+        fn count_owned(ring: &DescriptorRing<MockDescriptor, 8>) -> usize {
+            ring.iter().filter(|d| d.is_owned()).count()
+        }
+
+        assert_eq!(count_owned(&ring), 0);
+
+        ring.get_mut(0).set_owned();
+        ring.get_mut(2).set_owned();
+        ring.get_mut(5).set_owned();
+
+        assert_eq!(count_owned(&ring), 3);
+
+        ring.get_mut(0).clear_owned();
+        assert_eq!(count_owned(&ring), 2);
+    }
+
+    #[test]
+    fn descriptor_ring_find_next_available() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 1, // Start at index 1
+        };
+
+        // Mark all as owned except index 3
+        for desc in ring.iter_mut() {
+            desc.set_owned();
+        }
+        ring.get_mut(3).clear_owned();
+
+        // Search for next available descriptor
+        let mut found_offset = None;
+        for offset in 0..4 {
+            if !ring.at_offset(offset).is_owned() {
+                found_offset = Some(offset);
+                break;
+            }
+        }
+
+        // From current=1, offset 2 leads to index 3
+        assert_eq!(found_offset, Some(2));
+    }
+
+    // =========================================================================
+    // Buffer Size and Alignment Tests
+    // =========================================================================
+
+    #[test]
+    fn dma_engine_buffer_sizes() {
+        // Verify that buffer sizes are correctly represented
+        let _small: DmaEngine<2, 2, 512> = DmaEngine::new();
+        let _medium: DmaEngine<4, 4, 1600> = DmaEngine::new();
+        let _large: DmaEngine<8, 8, 2048> = DmaEngine::new();
+
+        // Memory usage should increase with size
+        assert!(DmaEngine::<2, 2, 512>::memory_usage() < DmaEngine::<4, 4, 1600>::memory_usage());
+        assert!(DmaEngine::<4, 4, 1600>::memory_usage() < DmaEngine::<8, 8, 2048>::memory_usage());
+    }
+
+    #[test]
+    fn dma_engine_buffer_access() {
+        let dma: DmaEngine<4, 4, 256> = DmaEngine::new();
+
+        // Should be able to access all buffers without panic
+        for i in 0..4 {
+            let _rx_buf = dma.rx_buffer(i);
+            let _tx_buf = dma.tx_buffer(i);
+        }
+
+        // Index wrapping should work
+        let buf0 = dma.rx_buffer(0);
+        let buf4 = dma.rx_buffer(4); // Should wrap to 0
+        assert_eq!(buf0.as_ptr(), buf4.as_ptr());
+    }
+
+    #[test]
+    fn dma_engine_ring_base_addresses() {
+        let dma: DmaEngine<4, 4, 1600> = DmaEngine::new();
+
+        // Base addresses should be non-zero
+        assert_ne!(dma.rx_ring_base(), 0);
+        assert_ne!(dma.tx_ring_base(), 0);
+
+        // RX and TX rings should have different addresses
+        assert_ne!(dma.rx_ring_base(), dma.tx_ring_base());
+    }
+
+    #[test]
+    fn dma_engine_initial_indices() {
+        let dma: DmaEngine<4, 4, 1600> = DmaEngine::new();
+
+        // Initial indices should be 0
+        assert_eq!(dma.rx_current_index(), 0);
+        assert_eq!(dma.tx_current_index(), 0);
+    }
+
+    // =========================================================================
+    // Frame Processing Simulation Tests
+    // =========================================================================
+
+    /// Helper function to count available descriptors in a mock ring
+    fn count_available(ring: &DescriptorRing<MockDescriptor, 4>) -> usize {
+        ring.iter().filter(|d| !d.is_owned()).count()
+    }
+
+    #[test]
+    fn simulate_tx_submission_flow() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // All descriptors start as available (not owned by DMA)
+        assert_eq!(count_available(&ring), 4);
+
+        // Submit 3 frames (give to DMA)
+        for _ in 0..3 {
+            assert!(
+                !ring.current().is_owned(),
+                "Current descriptor should be available"
+            );
+            ring.current_mut().set_owned();
+            ring.advance();
+        }
+
+        // Now 3 are owned, 1 available
+        assert_eq!(count_available(&ring), 1);
+        assert_eq!(ring.current_index(), 3);
+    }
+
+    #[test]
+    fn simulate_tx_completion_flow() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // Submit all 4 descriptors
+        for desc in ring.iter_mut() {
+            desc.set_owned();
+        }
+        ring.advance_by(4); // Ring wraps, current = 0
+
+        // Simulate DMA completing transmission on first 2
+        ring.get_mut(0).clear_owned();
+        ring.get_mut(1).clear_owned();
+
+        // Reclaim completed descriptors
+        let mut reclaimed = 0;
+        let mut reclaim_idx = 0usize;
+        while !ring.get(reclaim_idx).is_owned() && reclaimed < 4 {
+            reclaimed += 1;
+            reclaim_idx = (reclaim_idx + 1) % 4;
+            // Stop if we've checked all or hit an owned descriptor
+            if reclaim_idx == 2 {
+                break;
+            }
+        }
+
+        assert_eq!(reclaimed, 2);
+    }
+
+    #[test]
+    fn simulate_rx_receive_flow() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // Give all descriptors to DMA for receiving
+        for desc in ring.iter_mut() {
+            desc.set_owned();
+        }
+
+        // Simulate DMA receiving frames on descriptors 0, 1
+        ring.get_mut(0).simulate_receive(64);
+        ring.get_mut(1).simulate_receive(1500);
+
+        // Process received frames using fixed-size array
+        let mut frames_received: [usize; 4] = [0; 4];
+        let mut frame_count = 0;
+
+        while !ring.current().is_owned() && frame_count < 4 {
+            let frame_len = ring.current().frame_length();
+            if ring.current().is_first() && ring.current().is_last() {
+                frames_received[frame_count] = frame_len;
+                frame_count += 1;
+            }
+            // Return to DMA for reuse
+            ring.current_mut().set_owned();
+            ring.advance();
+
+            // Safety: Don't process forever
+            if ring.current_index() == 0 && frame_count > 0 {
+                break;
+            }
+        }
+
+        assert_eq!(frame_count, 2);
+        assert_eq!(frames_received[0], 64);
+        assert_eq!(frames_received[1], 1500);
+    }
+
+    #[test]
+    fn simulate_rx_error_handling() {
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // Give to DMA
+        for desc in ring.iter_mut() {
+            desc.set_owned();
+        }
+
+        // Simulate error on first descriptor
+        ring.get_mut(0).simulate_error();
+
+        // Check error detection
+        assert!(ring.current().has_error());
+
+        // Should still be able to recycle the descriptor
+        ring.current_mut().set_owned();
+        ring.advance();
+    }
+
+    // =========================================================================
+    // Ring Wraparound Tests
+    // =========================================================================
+
+    #[test]
+    fn descriptor_ring_wraparound_stress() {
+        let mut ring: DescriptorRing<u32, 7> = DescriptorRing {
+            descriptors: [0; 7],
+            current: 0,
+        };
+
+        // Advance many times and verify wraparound is correct
+        for i in 0..100 {
+            assert_eq!(ring.current_index(), i % 7);
+            ring.advance();
+        }
+    }
+
+    #[test]
+    fn descriptor_ring_advance_by_wraparound() {
+        let mut ring: DescriptorRing<u32, 5> = DescriptorRing {
+            descriptors: [0; 5],
+            current: 0,
+        };
+
+        ring.advance_by(3);
+        assert_eq!(ring.current_index(), 3);
+
+        ring.advance_by(4);
+        assert_eq!(ring.current_index(), 2); // (3 + 4) % 5 = 2
+
+        ring.advance_by(10);
+        assert_eq!(ring.current_index(), 2); // (2 + 10) % 5 = 2
+    }
+
+    // =========================================================================
+    // Edge Case Tests
+    // =========================================================================
+
+    #[test]
+    fn descriptor_ring_single_element() {
+        let mut ring: DescriptorRing<MockDescriptor, 1> = DescriptorRing {
+            descriptors: [MockDescriptor::new()],
+            current: 0,
+        };
+
+        assert_eq!(ring.len(), 1);
+        assert_eq!(ring.current_index(), 0);
+
+        ring.advance();
+        assert_eq!(ring.current_index(), 0); // Still 0, wraps immediately
+
+        ring.get_mut(0).set_owned();
+        assert!(ring.current().is_owned());
+    }
+
+    #[test]
+    fn mock_rx_back_pressure() {
+        // Simulate a scenario where all descriptors are filled before processing
+        let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing {
+            descriptors: [MockDescriptor::new(); 4],
+            current: 0,
+        };
+
+        // Give all to DMA
+        for desc in ring.iter_mut() {
+            desc.set_owned();
+        }
+
+        // DMA fills all descriptors
+        for (i, desc) in ring.iter_mut().enumerate() {
+            desc.simulate_receive(100 + i * 100);
+        }
+
+        // No more descriptors available for DMA (simulating back pressure)
+        let available_for_dma = ring.iter().filter(|d| d.is_owned()).count();
+        assert_eq!(available_for_dma, 0);
+
+        // Process all frames and return descriptors to DMA
+        for _ in 0..4 {
+            assert!(ring.current().is_first());
+            ring.current_mut().set_owned();
+            ring.advance();
+        }
+
+        // All descriptors now available again
+        let available_for_dma = ring.iter().filter(|d| d.is_owned()).count();
+        assert_eq!(available_for_dma, 4);
+    }
+
+    #[test]
+    fn dma_engine_default_trait() {
+        let dma1: DmaEngine<4, 4, 1600> = DmaEngine::new();
+        let dma2: DmaEngine<4, 4, 1600> = DmaEngine::default();
+
+        // Both should have same initial state
+        assert!(!dma1.is_initialized());
+        assert!(!dma2.is_initialized());
+        assert_eq!(dma1.tx_ctrl_flags(), dma2.tx_ctrl_flags());
+    }
 }

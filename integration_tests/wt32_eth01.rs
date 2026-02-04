@@ -114,14 +114,18 @@ fn main() -> ! {
     // -------------------------------------------------------------------------
     #[allow(unused_variables)]
     let clk_enable_pin: Option<Output<'_>>;
-    
+
     if USE_EXTERNAL_CLOCK {
         // The WT32-ETH01 has an external crystal oscillator that must be enabled
         // by pulling GPIO16 HIGH. This oscillator provides the 50 MHz reference
         // clock to both the ESP32 EMAC and the LAN8720A PHY.
         info!("Enabling external oscillator (GPIO{})...", CLK_EN_GPIO);
-        clk_enable_pin = Some(Output::new(peripherals.GPIO16, Level::High, OutputConfig::default()));
-        
+        clk_enable_pin = Some(Output::new(
+            peripherals.GPIO16,
+            Level::High,
+            OutputConfig::default(),
+        ));
+
         // Wait for oscillator to stabilize (10ms is plenty)
         esp_hal::delay::Delay::new().delay_millis(10);
         info!("Oscillator enabled");
@@ -164,7 +168,7 @@ fn main() -> ! {
     let ext_oscclk = unsafe { core::ptr::read_volatile(0x3FF6_9804 as *const u32) };
     let ext_clkctrl = unsafe { core::ptr::read_volatile(0x3FF6_9808 as *const u32) };
     let ext_phyinf = unsafe { core::ptr::read_volatile(0x3FF6_980C as *const u32) };
-    
+
     info!("Extension registers:");
     info!("  EX_CLKOUT_CONF (0x800): {:#010x}", ext_clkout);
     info!("  EX_OSCCLK_CONF (0x804): {:#010x}", ext_oscclk);
@@ -189,7 +193,7 @@ fn main() -> ! {
         info!("");
         info!("For full EMAC testing, use a board with Ethernet hardware like WT32-ETH01.");
         info!("");
-        
+
         // Just loop forever
         loop {
             esp_hal::delay::Delay::new().delay_millis(1000);
@@ -227,13 +231,21 @@ fn main() -> ! {
     // Note: MDC (GPIO23) and MDIO (GPIO18) are fixed by ESP32 hardware
     // The RMII data pins are also fixed (see board config for reference)
     let rmii_clock_mode = if USE_EXTERNAL_CLOCK {
-        info!("Configuring RMII with external clock input on GPIO{}", REF_CLK_GPIO);
+        info!(
+            "Configuring RMII with external clock input on GPIO{}",
+            REF_CLK_GPIO
+        );
         RmiiClockMode::ExternalInput { gpio: REF_CLK_GPIO }
     } else {
-        info!("Configuring RMII with internal clock output on GPIO{}", REF_CLK_OUT_GPIO);
-        RmiiClockMode::InternalOutput { gpio: REF_CLK_OUT_GPIO }
+        info!(
+            "Configuring RMII with internal clock output on GPIO{}",
+            REF_CLK_OUT_GPIO
+        );
+        RmiiClockMode::InternalOutput {
+            gpio: REF_CLK_OUT_GPIO,
+        }
     };
-    
+
     let config = EmacConfig::new()
         .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56]) // Locally administered
         .with_phy_interface(PhyInterface::Rmii)
@@ -243,7 +255,7 @@ fn main() -> ! {
     critical_section::with(|cs| {
         let mut emac = Emac::new();
         let mut delay = esp_hal::delay::Delay::new();
-        
+
         match emac.init(config, &mut delay) {
             Ok(()) => {
                 info!("EMAC initialized successfully");
@@ -288,7 +300,7 @@ fn main() -> ! {
     // Step 4: Wait for link and configure MAC
     // -------------------------------------------------------------------------
     info!("Waiting for Ethernet link...");
-    
+
     let mut link_up = false;
     let mut retry_count = 0;
     const MAX_RETRIES: u32 = 100; // 10 seconds
@@ -376,26 +388,34 @@ fn main() -> ! {
                     match emac.receive(&mut rx_buffer) {
                         Ok(len) => {
                             packet_count += 1;
-                            
+
                             // Parse Ethernet header
                             if len >= 14 {
                                 let dst_mac = &rx_buffer[0..6];
                                 let src_mac = &rx_buffer[6..12];
                                 let ethertype = u16::from_be_bytes([rx_buffer[12], rx_buffer[13]]);
-                                
+
                                 info!(
                                     "RX #{}: {} bytes, EtherType=0x{:04X}",
                                     packet_count, len, ethertype
                                 );
                                 info!(
                                     "  Dst: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                                    dst_mac[0], dst_mac[1], dst_mac[2],
-                                    dst_mac[3], dst_mac[4], dst_mac[5]
+                                    dst_mac[0],
+                                    dst_mac[1],
+                                    dst_mac[2],
+                                    dst_mac[3],
+                                    dst_mac[4],
+                                    dst_mac[5]
                                 );
                                 info!(
                                     "  Src: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                                    src_mac[0], src_mac[1], src_mac[2],
-                                    src_mac[3], src_mac[4], src_mac[5]
+                                    src_mac[0],
+                                    src_mac[1],
+                                    src_mac[2],
+                                    src_mac[3],
+                                    src_mac[4],
+                                    src_mac[5]
                                 );
 
                                 // Check for ARP (0x0806) or IPv4 (0x0800)
@@ -430,7 +450,7 @@ fn main() -> ! {
         if last_status_time >= 5000 {
             last_status_time = 0;
             info!("--- Status: {} packets received ---", packet_count);
-            
+
             // Re-check link status
             match phy.poll_link(&mut mdio) {
                 Ok(Some(_)) => info!("Link: UP"),

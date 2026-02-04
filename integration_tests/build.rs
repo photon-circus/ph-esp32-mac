@@ -1,11 +1,11 @@
 //! Build script for integration tests
-//! 
+//!
 //! This primarily provides helpful error messages if building on the wrong target.
 
 fn main() {
     // Only compile for Xtensa ESP32
     let target = std::env::var("TARGET").unwrap_or_default();
-    
+
     if !target.contains("xtensa-esp32") {
         println!("cargo:warning==============================================");
         println!("cargo:warning= Building for target: {}", target);
@@ -20,7 +20,7 @@ fn main() {
         println!("cargo:warning= (target is set in .cargo/config.toml)");
         println!("cargo:warning==============================================");
     }
-    
+
     // Rerun if target changes
     println!("cargo:rerun-if-env-changed=TARGET");
 }
