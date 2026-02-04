@@ -1,18 +1,7 @@
-//! DMA Descriptor definitions
+//! TX and RX DMA descriptor structures.
 //!
-//! This module defines the TX and RX DMA descriptors used by the EMAC DMA engine
-//! for scatter-gather transfers.
-//!
-//! # Architecture
-//!
-//! The ESP32 EMAC uses a ring buffer of DMA descriptors for both transmission and
-//! reception. Each descriptor points to a data buffer and contains status/control
-//! bits that coordinate ownership between the CPU and DMA engine.
-//!
-//! # Note
-//!
-//! Descriptors are internal to the DMA module. The public API is through
-//! [`super::DmaEngine`].
+//! Each descriptor points to a data buffer and contains status/control bits
+//! for CPU/DMA ownership coordination.
 
 pub mod bits;
 pub mod rx;

@@ -1,15 +1,6 @@
-//! Descriptor Ring Buffer
-//!
-//! A generic circular ring buffer for managing DMA descriptors.
+//! Generic circular ring buffer for DMA descriptors.
 
-// =============================================================================
-// Descriptor Ring
-// =============================================================================
-
-/// Circular descriptor ring for DMA operations
-///
-/// Manages a fixed-size ring of descriptors with a current index pointer.
-/// The ring wraps around automatically.
+/// Circular descriptor ring with wraparound index.
 pub struct DescriptorRing<D, const N: usize> {
     /// Array of descriptors
     pub(super) descriptors: [D; N],

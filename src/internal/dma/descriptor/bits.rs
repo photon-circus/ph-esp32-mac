@@ -1,21 +1,6 @@
-//! DMA Descriptor Bit Field Constants
+//! DMA descriptor bit field constants.
 //!
-//! This module contains the internal bit field definitions for TX and RX DMA descriptors.
-//! These are implementation details used by the descriptor module.
-//!
-//! # Module Organization
-//!
-//! - `rdes0`: RX Descriptor Word 0 - Status bits
-//! - `rdes1`: RX Descriptor Word 1 - Control bits
-//! - `rdes4`: RX Descriptor Word 4 - Extended status
-//! - `tdes0`: TX Descriptor Word 0 - Status/Control bits
-//! - `tdes1`: TX Descriptor Word 1 - Buffer sizes
-//! - `checksum_mode`: TX checksum insertion modes
-//!
-//! # References
-//!
-//! - ESP32 Technical Reference Manual, Chapter 10: Ethernet MAC
-//! - IEEE 802.3 Ethernet standard
+//! Based on ESP32 TRM Chapter 10 and IEEE 802.3.
 
 #![allow(dead_code)]
 

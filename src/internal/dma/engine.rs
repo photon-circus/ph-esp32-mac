@@ -1,31 +1,16 @@
-//! DMA Engine
-//!
-//! The main DMA engine that manages TX and RX descriptor rings and buffers.
+//! DMA engine managing TX/RX descriptor rings and buffers.
 
 use super::descriptor::{RxDescriptor, TxDescriptor};
 use super::ring::DescriptorRing;
 use crate::driver::error::{DmaError, IoError, Result};
 use crate::internal::register::dma::DmaRegs;
 
-// =============================================================================
-// DMA Engine
-// =============================================================================
-
-/// DMA Engine with statically allocated buffers
-///
-/// This structure manages TX and RX descriptor rings and their associated
-/// data buffers. All memory is allocated at compile time using const generics.
+/// DMA Engine with statically allocated buffers.
 ///
 /// # Type Parameters
 /// * `RX_BUFS` - Number of receive buffers/descriptors
 /// * `TX_BUFS` - Number of transmit buffers/descriptors
-/// * `BUF_SIZE` - Size of each buffer in bytes (should be >= 1600 for jumbo frames)
-///
-/// # Example
-/// ```ignore
-/// // Create a DMA engine with 10 RX buffers, 10 TX buffers, 1600 bytes each
-/// static mut DMA: DmaEngine<10, 10, 1600> = DmaEngine::new();
-/// ```
+/// * `BUF_SIZE` - Size of each buffer in bytes (>= 1600 for standard frames)
 pub struct DmaEngine<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> {
     /// RX descriptor ring
     rx_ring: DescriptorRing<RxDescriptor, RX_BUFS>,
@@ -44,9 +29,7 @@ pub struct DmaEngine<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE:
 impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     DmaEngine<RX_BUFS, TX_BUFS, BUF_SIZE>
 {
-    /// Create a new DMA engine with zeroed buffers
-    ///
-    /// This is a const function and can be used to initialize static variables.
+    /// Create a new DMA engine with zeroed buffers. Const-compatible.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -65,79 +48,50 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         }
     }
 
-    /// Get the total memory usage of this DMA engine in bytes
+    /// Total memory usage in bytes.
     #[must_use]
     pub const fn memory_usage() -> usize {
-        // Descriptors
         let rx_desc_size = RX_BUFS * RxDescriptor::SIZE;
         let tx_desc_size = TX_BUFS * TxDescriptor::SIZE;
-        // Buffers
         let rx_buf_size = RX_BUFS * BUF_SIZE;
         let tx_buf_size = TX_BUFS * BUF_SIZE;
-        // Total
         rx_desc_size + tx_desc_size + rx_buf_size + tx_buf_size
     }
 
-    /// Initialize the DMA descriptor chains
-    ///
-    /// This must be called before any DMA operations. It sets up the
-    /// descriptor chains in circular mode and configures the DMA registers.
-    ///
-    /// # Safety
-    /// This function accesses hardware registers. The caller must ensure:
-    /// - The EMAC peripheral clock is enabled
-    /// - No DMA operations are in progress
-    /// - This is only called once, or after a full reset
+    /// Initialize descriptor chains and DMA registers.
+    /// Must be called before any DMA operations.
     pub fn init(&mut self) {
-        // Initialize RX descriptor chain
         for i in 0..RX_BUFS {
             let next_idx = (i + 1) % RX_BUFS;
             let buffer_ptr = self.rx_buffers[i].as_mut_ptr();
             let next_desc = &self.rx_ring.descriptors[next_idx] as *const RxDescriptor;
-
             self.rx_ring.descriptors[i].setup_chained(buffer_ptr, BUF_SIZE, next_desc);
         }
 
-        // Initialize TX descriptor chain
         for i in 0..TX_BUFS {
             let next_idx = (i + 1) % TX_BUFS;
             let buffer_ptr = self.tx_buffers[i].as_ptr();
             let next_desc = &self.tx_ring.descriptors[next_idx] as *const TxDescriptor;
-
             self.tx_ring.descriptors[i].setup_chained(buffer_ptr, next_desc);
         }
 
-        // Reset indices
         self.rx_ring.reset();
         self.tx_ring.reset();
-
-        // Set descriptor base addresses in DMA registers
         DmaRegs::set_rx_desc_list_addr(self.rx_ring.base_addr_u32());
         DmaRegs::set_tx_desc_list_addr(self.tx_ring.base_addr_u32());
-
         self.initialized = true;
     }
 
-    /// Reset the DMA engine to initial state
-    ///
-    /// Re-initializes all descriptors and resets indices. Does not
-    /// touch the DMA registers (caller should stop DMA first).
+    /// Reset to initial state. Caller should stop DMA first.
     pub fn reset(&mut self) {
-        // Reset RX descriptors - give all back to DMA
         for i in 0..RX_BUFS {
             self.rx_ring.descriptors[i].recycle();
         }
-
-        // Reset TX descriptors - CPU owns all
         for i in 0..TX_BUFS {
             self.tx_ring.descriptors[i].reset();
         }
-
-        // Reset indices
         self.rx_ring.reset();
         self.tx_ring.reset();
-
-        // Update DMA registers with base addresses
         DmaRegs::set_rx_desc_list_addr(self.rx_ring.base_addr_u32());
         DmaRegs::set_tx_desc_list_addr(self.tx_ring.base_addr_u32());
     }
@@ -148,14 +102,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.initialized
     }
 
-    // =========================================================================
-    // TX Operations
-    // =========================================================================
-
-    /// Set TX control flags to apply to all transmitted frames
-    ///
-    /// These flags are OR'd with the descriptor flags for each frame.
-    /// Useful for enabling checksum offload, timestamping, etc.
+    /// Set TX control flags (checksum offload, etc).
     pub fn set_tx_ctrl_flags(&mut self, flags: u32) {
         self.tx_ctrl_flags = flags;
     }
@@ -166,7 +113,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.tx_ctrl_flags
     }
 
-    /// Check how many TX descriptors are available (not owned by DMA)
+    /// Count available TX descriptors (not owned by DMA).
     pub fn tx_available(&self) -> usize {
         let mut count = 0;
         for i in 0..TX_BUFS {
@@ -180,7 +127,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         count
     }
 
-    /// Check if there are enough descriptors for a frame of given size
+    /// Check if enough descriptors available for frame of given size.
     pub fn can_transmit(&self, len: usize) -> bool {
         if len == 0 || len > BUF_SIZE * TX_BUFS {
             return false;
@@ -189,19 +136,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.tx_available() >= needed
     }
 
-    /// Transmit a frame
-    ///
-    /// Copies the frame data to TX buffers and submits to DMA for transmission.
-    /// Supports frames larger than a single buffer (scatter-gather).
-    ///
-    /// # Arguments
-    /// * `data` - Frame data to transmit (must be non-empty)
-    ///
-    /// # Returns
-    /// * `Ok(len)` - Number of bytes submitted for transmission
-    /// * `Err(Error::Dma(DmaError::InvalidLength))` - Data is empty
-    /// * `Err(Error::Dma(DmaError::FrameTooLarge))` - Data exceeds total buffer capacity
-    /// * `Err(Error::Dma(DmaError::NoDescriptorsAvailable))` - Not enough free descriptors
+    /// Transmit a frame. Supports scatter-gather for large frames.
     pub fn transmit(&mut self, data: &[u8]) -> Result<usize> {
         if data.is_empty() {
             return Err(DmaError::InvalidLength.into());
@@ -212,10 +147,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
             return Err(DmaError::FrameTooLarge.into());
         }
 
-        // Calculate number of descriptors needed
         let desc_count = data.len().div_ceil(BUF_SIZE);
-
-        // Check availability
         if self.tx_available() < desc_count {
             return Err(DmaError::NoDescriptorsAvailable.into());
         }
@@ -223,58 +155,36 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         let mut remaining = data.len();
         let mut offset = 0usize;
 
-        // Prepare all descriptors (but don't give to DMA yet)
+        // Prepare descriptors
         for i in 0..desc_count {
             let idx = (self.tx_ring.current + i) % TX_BUFS;
             let desc = &self.tx_ring.descriptors[idx];
 
-            // Verify ownership (should be CPU's)
             if desc.is_owned() {
                 return Err(DmaError::DescriptorBusy.into());
             }
 
-            // Calculate chunk size for this buffer
             let chunk_size = core::cmp::min(remaining, BUF_SIZE);
-
-            // Copy data to buffer
             self.tx_buffers[idx][..chunk_size].copy_from_slice(&data[offset..offset + chunk_size]);
-
-            // Configure descriptor
-            let is_first = i == 0;
-            let is_last = i == desc_count - 1;
-            desc.prepare(chunk_size, is_first, is_last);
+            desc.prepare(chunk_size, i == 0, i == desc_count - 1);
 
             remaining -= chunk_size;
             offset += chunk_size;
         }
 
-        // Give descriptors to DMA in reverse order to prevent race conditions
-        // (DMA might start processing before we finish setting up all descriptors)
+        // Give to DMA in reverse order (prevents race)
         for i in (0..desc_count).rev() {
             let idx = (self.tx_ring.current + i) % TX_BUFS;
             self.tx_ring.descriptors[idx].set_owned();
         }
 
-        // Advance current index
         self.tx_ring.advance_by(desc_count);
-
-        // Issue TX poll demand to wake up DMA
         DmaRegs::tx_poll_demand();
-
         Ok(data.len())
     }
 
-    /// Check if transmission is complete (all descriptors processed)
-    ///
-    /// This checks if the descriptor before the current one is no longer owned
-    /// by DMA, indicating the previous transmission completed.
-    ///
-    /// # Note
-    /// Reserved for future async/interrupt-driven TX completion handling.
-    /// For more accurate tracking, use the TX complete interrupt.
+    /// Check if previous transmission completed.
     pub fn tx_complete(&self) -> bool {
-        // Check if the descriptor before current is no longer owned by DMA
-        // This is a simple heuristic; for more accurate tracking, use interrupts
         let prev_idx = if self.tx_ring.current == 0 {
             TX_BUFS - 1
         } else {
@@ -283,26 +193,11 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         !self.tx_ring.descriptors[prev_idx].is_owned()
     }
 
-    /// Reclaim completed TX descriptors
-    ///
-    /// Scans the TX descriptor ring for completed transmissions and returns
-    /// the count of reclaimed descriptors along with any error flags encountered.
-    ///
-    /// # Returns
-    /// A tuple of (reclaimed_count, error_flags) where:
-    /// - `reclaimed_count` - Number of descriptors that completed transmission
-    /// - `error_flags` - Bitwise OR of any error flags from completed descriptors
-    ///
-    /// # Note
-    /// Reserved for future async/interrupt-driven TX completion handling.
-    /// This will be used to track TX buffer availability and report TX errors.
+    /// Reclaim completed TX descriptors. Returns (count, error_flags).
     pub fn tx_reclaim(&mut self) -> (usize, u32) {
         let mut reclaimed = 0;
         let mut errors = 0u32;
 
-        // We can't reclaim past current, so we look behind
-        // This is a simplified approach; a more robust implementation
-        // would track a separate "clean" index
         for desc in self.tx_ring.iter() {
             if !desc.is_owned() {
                 if desc.has_error() {
@@ -315,13 +210,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         (reclaimed, errors)
     }
 
-    // =========================================================================
-    // RX Operations
-    // =========================================================================
-
-    /// Count free RX descriptors (owned by DMA, ready to receive)
-    ///
-    /// This is used for flow control to determine when to send PAUSE frames.
+    /// Count free RX descriptors (owned by DMA).
     pub fn rx_free_count(&self) -> usize {
         let mut count = 0;
         for desc in &self.rx_ring.descriptors {
@@ -332,22 +221,13 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         count
     }
 
-    /// Check if a complete frame is available for receiving
+    /// Check if a complete frame is available.
     pub fn rx_available(&self) -> bool {
         let desc = self.rx_ring.current();
-
-        // If DMA still owns it, no frame available
-        if desc.is_owned() {
-            return false;
-        }
-
-        // Check if it's a complete frame (or at least the last descriptor of one)
-        desc.is_last()
+        !desc.is_owned() && desc.is_last()
     }
 
-    /// Get the length of the next available frame without consuming it
-    ///
-    /// Returns `None` if no complete frame is available
+    /// Peek next frame length without consuming.
     pub fn peek_frame_length(&self) -> Option<usize> {
         let desc = self.rx_ring.current();
 
@@ -408,31 +288,17 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         count
     }
 
-    /// Receive a frame into the provided buffer
-    ///
-    /// Copies received frame data from DMA buffers to the provided buffer
-    /// and returns the actual frame length (excluding CRC).
-    ///
-    /// # Arguments
-    /// * `buffer` - Buffer to receive frame data
-    ///
-    /// # Returns
-    /// * `Ok(len)` - Number of bytes received
-    /// * `Err(Error::Io(IoError::BufferTooSmall))` - Buffer too small for frame
-    /// * `Err(Error::Io(IoError::IncompleteFrame))` - No complete frame available
-    /// * `Err(Error::Io(IoError::FrameError))` - Frame has receive errors
+    /// Receive a frame into buffer. Returns length excluding CRC.
     pub fn receive(&mut self, buffer: &mut [u8]) -> Result<usize> {
-        // Find frame start (should be at current index)
         let first_desc = self.rx_ring.current();
 
         if first_desc.is_owned() {
             return Err(IoError::IncompleteFrame.into());
         }
 
-        // For a single-descriptor frame
+        // Single-descriptor frame (common case)
         if first_desc.is_first() && first_desc.is_last() {
             if first_desc.has_error() {
-                // Recycle and skip this frame
                 first_desc.recycle();
                 self.rx_ring.advance();
                 DmaRegs::rx_poll_demand();
@@ -440,41 +306,32 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
             }
 
             let frame_len = first_desc.payload_length();
-
             if buffer.len() < frame_len {
-                // Recycle and skip
                 first_desc.recycle();
                 self.rx_ring.advance();
                 DmaRegs::rx_poll_demand();
                 return Err(IoError::BufferTooSmall.into());
             }
 
-            // Copy data
             let idx = self.rx_ring.current_index();
             buffer[..frame_len].copy_from_slice(&self.rx_buffers[idx][..frame_len]);
-
-            // Recycle descriptor
             first_desc.recycle();
             self.rx_ring.advance();
             DmaRegs::rx_poll_demand();
-
             return Ok(frame_len);
         }
 
         // Multi-descriptor frame
         if !first_desc.is_first() {
-            // We're in the middle of a frame somehow - flush and try again
             self.flush_rx_frame();
             return Err(IoError::IncompleteFrame.into());
         }
 
-        // Check for errors on first descriptor
         if first_desc.has_error() {
             self.flush_rx_frame();
             return Err(IoError::FrameError.into());
         }
 
-        // Find the last descriptor and calculate total length
         let mut frame_len = 0usize;
         let mut desc_count = 0usize;
         let mut last_idx = self.rx_ring.current_index();
@@ -508,16 +365,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         for i in 0..desc_count {
             let idx = (self.rx_ring.current_index() + i) % RX_BUFS;
             let desc = &self.rx_ring.descriptors[idx];
-
-            // Calculate how much to copy from this buffer
-            let buf_data_len = if idx == last_idx {
-                // Last descriptor - copy only what's needed
-                frame_len - copied
-            } else {
-                // Full buffer
-                BUF_SIZE
-            };
-
+            let buf_data_len = if idx == last_idx { frame_len - copied } else { BUF_SIZE };
             let copy_len = core::cmp::min(buf_data_len, frame_len - copied);
 
             if copy_len > 0 {
@@ -525,21 +373,16 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
                     .copy_from_slice(&self.rx_buffers[idx][..copy_len]);
                 copied += copy_len;
             }
-
-            // Recycle descriptor
             desc.recycle();
         }
 
-        // Advance past all consumed descriptors
         self.rx_ring.advance_by(desc_count);
         DmaRegs::rx_poll_demand();
 
         Ok(frame_len)
     }
 
-    /// Flush (discard) the current RX frame
-    ///
-    /// Used to skip frames with errors or when buffer is too small.
+    /// Discard current RX frame (for errors or small buffer).
     pub fn flush_rx_frame(&mut self) {
         loop {
             let desc = self.rx_ring.current();
@@ -560,36 +403,32 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         DmaRegs::rx_poll_demand();
     }
 
-    // =========================================================================
-    // Statistics and Debug
-    // =========================================================================
-
-    /// Get RX ring base address (for debugging)
+    /// RX ring base address (for debugging).
     pub fn rx_ring_base(&self) -> u32 {
         self.rx_ring.base_addr_u32()
     }
 
-    /// Get TX ring base address (for debugging)
+    /// TX ring base address (for debugging).
     pub fn tx_ring_base(&self) -> u32 {
         self.tx_ring.base_addr_u32()
     }
 
-    /// Get current RX index (for debugging)
+    /// Current RX index (for debugging).
     pub fn rx_current_index(&self) -> usize {
         self.rx_ring.current_index()
     }
 
-    /// Get current TX index (for debugging)
+    /// Current TX index (for debugging).
     pub fn tx_current_index(&self) -> usize {
         self.tx_ring.current_index()
     }
 
-    /// Get a reference to the RX buffer at the given index
+    /// RX buffer at index.
     pub fn rx_buffer(&self, index: usize) -> &[u8; BUF_SIZE] {
         &self.rx_buffers[index % RX_BUFS]
     }
 
-    /// Get a reference to the TX buffer at the given index
+    /// TX buffer at index.
     pub fn tx_buffer(&self, index: usize) -> &[u8; BUF_SIZE] {
         &self.tx_buffers[index % TX_BUFS]
     }
