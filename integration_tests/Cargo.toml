@@ -14,13 +14,22 @@ test = false
 
 [dependencies]
 # The EMAC driver we're testing
-ph-esp32-mac = { path = "..", features = ["esp32", "critical-section"] }
+ph-esp32-mac = { path = "..", features = ["esp32", "critical-section", "smoltcp"] }
 
 # ESP32 HAL and support crates
 esp-hal = { version = "1.0", features = ["esp32", "unstable"] }
 esp-bootloader-esp-idf = { version = "0.4", features = ["esp32"] }
-esp-backtrace = { version = "0.18", features = ["esp32", "panic-handler", "println"] }
+esp-backtrace = { version = "0.18", features = ["esp32", "panic-handler", "println", "colors"] }
 esp-println = { version = "0.16", features = ["esp32", "log-04"] }
+
+# Network stack
+smoltcp = { version = "0.12", default-features = false, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "socket-icmp",
+    "socket-udp",
+    "socket-tcp",
+] }
 
 # Logging
 log = "0.4"
