@@ -192,7 +192,7 @@ pub trait PhyDriver {
 /// Helper functions using standard IEEE 802.3 registers
 pub mod ieee802_3 {
     use super::*;
-    use crate::internal::phy_registers::{anar, bmcr, bmsr, phy_reg};
+    use crate::internal::phy_regs::standard::{anar, bmcr, bmsr, phy_reg};
 
     /// Read BMSR and check link status bit
     pub fn is_link_up<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<bool> {

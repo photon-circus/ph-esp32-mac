@@ -13,7 +13,7 @@ use crate::internal::register::mac::{
 };
 
 // Import internal PHY register definitions for use in helper functions
-use crate::internal::phy_registers::{
+use crate::internal::phy_regs::standard::{
     bmcr as int_bmcr, bmsr as int_bmsr, phy_reg as int_phy_reg,
 };
 
@@ -242,10 +242,10 @@ impl<D: DelayNs> MdioBus for MdioController<D> {
 /// Standard PHY register addresses (IEEE 802.3 Clause 22)
 ///
 /// **Deprecated:** This module is re-exported for backward compatibility.
-/// The canonical location is now `crate::internal::phy_registers::phy_reg`.
+/// The canonical location is now `crate::internal::phy_regs::standard::phy_reg`.
 #[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod phy_reg {
-    pub use crate::internal::phy_registers::phy_reg::*;
+    pub use crate::internal::phy_regs::standard::phy_reg::*;
 }
 
 /// BMCR (Basic Mode Control Register) bits
@@ -253,7 +253,7 @@ pub mod phy_reg {
 /// **Deprecated:** This module is re-exported for backward compatibility.
 #[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod bmcr {
-    pub use crate::internal::phy_registers::bmcr::*;
+    pub use crate::internal::phy_regs::standard::bmcr::*;
 }
 
 /// BMSR (Basic Mode Status Register) bits
@@ -261,7 +261,7 @@ pub mod bmcr {
 /// **Deprecated:** This module is re-exported for backward compatibility.
 #[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod bmsr {
-    pub use crate::internal::phy_registers::bmsr::*;
+    pub use crate::internal::phy_regs::standard::bmsr::*;
 }
 
 /// ANAR (Auto-Negotiation Advertisement Register) bits
@@ -269,7 +269,7 @@ pub mod bmsr {
 /// **Deprecated:** This module is re-exported for backward compatibility.
 #[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod anar {
-    pub use crate::internal::phy_registers::anar::*;
+    pub use crate::internal::phy_regs::standard::anar::*;
 }
 
 /// ANLPAR (Auto-Negotiation Link Partner Ability Register) bits
@@ -277,7 +277,7 @@ pub mod anar {
 /// **Deprecated:** This module is re-exported for backward compatibility.
 #[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod anlpar {
-    pub use crate::internal::phy_registers::anlpar::*;
+    pub use crate::internal::phy_regs::standard::anlpar::*;
 }
 
 // =============================================================================

@@ -82,7 +82,7 @@ use embedded_hal::digital::OutputPin;
 
 use crate::driver::error::Result;
 use crate::hal::mdio::MdioBus;
-use crate::internal::lan8720a_regs as regs_int;
+use crate::internal::phy_regs::lan8720a as regs_int;
 
 use super::generic::{LinkStatus, PhyCapabilities, PhyDriver, ieee802_3};
 
@@ -374,7 +374,7 @@ impl Lan8720a {
         mdio: &mut M,
         caps: &PhyCapabilities,
     ) -> Result<()> {
-        use crate::internal::phy_registers::{anar, phy_reg};
+        use crate::internal::phy_regs::standard::{anar, phy_reg};
 
         let mut anar_val = anar::SELECTOR_IEEE802_3;
 
@@ -736,7 +736,7 @@ mod tests {
 
     use super::*;
     use crate::driver::config::{Duplex, Speed};
-    use crate::internal::phy_registers::{bmcr, phy_reg};
+    use crate::internal::phy_regs::standard::{bmcr, phy_reg};
     use crate::testing::MockMdioBus;
     use std::vec::Vec;
 
@@ -1398,7 +1398,7 @@ mod tests {
         phy.configure_advertisement(&mut mdio, &caps).unwrap();
 
         let anar = mdio.get_register(0, phy_reg::ANAR).unwrap();
-        use crate::internal::phy_registers::anar;
+        use crate::internal::phy_regs::standard::anar;
         assert!(anar & anar::TX_FD != 0, "Should advertise 100FD");
         assert_eq!(anar & anar::TX_HD, 0, "Should not advertise 100HD");
         assert!(anar & anar::T10_FD != 0, "Should advertise 10FD");

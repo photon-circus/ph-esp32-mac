@@ -69,4 +69,4 @@ pub use lan8720a::{Lan8720a, Lan8720aWithReset};
 // Re-export IEEE 802.3 standard register definitions from internal module
 // These are implementation details for PHY drivers
 #[doc(hidden)]
-pub use crate::internal::phy_registers::{anar, anlpar, bmcr, bmsr, phy_reg};
+pub use crate::internal::phy_regs::standard::{anar, anlpar, bmcr, bmsr, phy_reg};

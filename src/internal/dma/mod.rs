@@ -10,10 +10,15 @@
 //! - [`DescriptorRing`]: Circular ring buffer for descriptors
 //! - Internal descriptor types for RX and TX operations
 //!
+//! # Note
+//!
+//! This is an internal module. Many methods are reserved for future use,
+//! testing, or debugging purposes.
+//!
 //! # Example
 //!
 //! ```ignore
-//! use ph_esp32_mac::dma::DmaEngine;
+//! use ph_esp32_mac::internal::dma::DmaEngine;
 //!
 //! // Create DMA engine with 4 RX buffers, 4 TX buffers, 1600 bytes each
 //! static mut DMA: DmaEngine<4, 4, 1600> = DmaEngine::new();
@@ -21,6 +26,9 @@
 //! // Initialize before use
 //! unsafe { DMA.init(); }
 //! ```
+
+// Allow dead code in this internal module - methods are reserved for future use
+#![allow(dead_code)]
 
 // Internal descriptor module
 mod descriptor;
@@ -404,6 +412,13 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     }
 
     /// Check if transmission is complete (all descriptors processed)
+    ///
+    /// This checks if the descriptor before the current one is no longer owned
+    /// by DMA, indicating the previous transmission completed.
+    ///
+    /// # Note
+    /// Reserved for future async/interrupt-driven TX completion handling.
+    /// For more accurate tracking, use the TX complete interrupt.
     pub fn tx_complete(&self) -> bool {
         // Check if the descriptor before current is no longer owned by DMA
         // This is a simple heuristic; for more accurate tracking, use interrupts
@@ -417,7 +432,17 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
 
     /// Reclaim completed TX descriptors
     ///
-    /// Returns the number of descriptors reclaimed and any error flags encountered
+    /// Scans the TX descriptor ring for completed transmissions and returns
+    /// the count of reclaimed descriptors along with any error flags encountered.
+    ///
+    /// # Returns
+    /// A tuple of (reclaimed_count, error_flags) where:
+    /// - `reclaimed_count` - Number of descriptors that completed transmission
+    /// - `error_flags` - Bitwise OR of any error flags from completed descriptors
+    ///
+    /// # Note
+    /// Reserved for future async/interrupt-driven TX completion handling.
+    /// This will be used to track TX buffer availability and report TX errors.
     pub fn tx_reclaim(&mut self) -> (usize, u32) {
         let mut reclaimed = 0;
         let mut errors = 0u32;

@@ -6,11 +6,11 @@
 //! # Contents
 //!
 //! - [`register`]: Raw memory-mapped register definitions
+//! - [`phy_regs`]: PHY register definitions (MDIO-accessed)
 //! - [`constants`]: Internal constants and magic numbers
-//! - [`phy_registers`]: IEEE 802.3 PHY register definitions
 //! - [`gpio_pins`]: GPIO pin assignments for EMAC
 //! - [`descriptor_bits`]: DMA descriptor bit field constants
-//! - [`lan8720a_regs`]: LAN8720A vendor-specific register definitions
+//! - [`dma`]: DMA engine and descriptor management
 //!
 //! # Stability
 //!
@@ -20,9 +20,9 @@
 
 pub(crate) mod constants;
 pub(crate) mod descriptor_bits;
+pub(crate) mod dma;
 pub(crate) mod gpio_pins;
-pub(crate) mod lan8720a_regs;
-pub(crate) mod phy_registers;
+pub(crate) mod phy_regs;
 pub(crate) mod register;
 
 // Register types are accessed via submodules: register::dma::DmaRegs, etc.

@@ -17,7 +17,7 @@ use embedded_hal::delay::DelayNs;
 use super::config::{Duplex, EmacConfig, PhyInterface, RmiiClockMode, Speed, State};
 use super::error::{ConfigError, IoError, Result};
 use super::interrupt::InterruptStatus;
-use crate::dma::DmaEngine;
+use crate::internal::dma::DmaEngine;
 use crate::hal::reset::ResetController;
 use crate::internal::constants::{
     CSR_CLOCK_DIV_42, FLUSH_TIMEOUT, MII_BUSY_TIMEOUT, TX_DMA_STATE_MASK, TX_DMA_STATE_SHIFT,

@@ -124,7 +124,6 @@
 // =============================================================================
 
 pub mod driver;
-pub mod dma;
 pub mod hal;
 pub mod phy;
 
@@ -170,7 +169,6 @@ pub use driver::config::{
     MacAddressFilter, MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State,
     TxChecksumMode,
 };
-pub use dma::{DescriptorRing, DmaEngine};
 pub use driver::error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};
 pub use driver::emac::{Emac, EmacDefault, EmacLarge, EmacSmall};
 pub use driver::interrupt::InterruptStatus;

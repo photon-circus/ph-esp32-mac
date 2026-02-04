@@ -20,7 +20,7 @@ use crate::driver::error::Result;
 use crate::hal::mdio::MdioBus;
 
 // Use the internal PHY register constants
-use crate::internal::phy_registers::{anlpar, bmsr, phy_reg};
+use crate::internal::phy_regs::standard::{anlpar, bmsr, phy_reg};
 
 // =============================================================================
 // Mock MDIO Bus
@@ -227,7 +227,7 @@ impl embedded_hal::delay::DelayNs for MockDelay {
 ///
 /// ```ignore
 /// use crate::testing::MockDescriptor;
-/// use crate::dma::DescriptorRing;
+/// use crate::internal::dma::DescriptorRing;
 ///
 /// let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing::from_array(
 ///     [MockDescriptor::new(); 4]
