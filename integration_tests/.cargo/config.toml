@@ -1,0 +1,22 @@
+# Cargo configuration for ESP32 integration tests
+#
+# This configures cargo to build for the ESP32 Xtensa target by default.
+
+[build]
+target = "xtensa-esp32-none-elf"
+
+[target.xtensa-esp32-none-elf]
+runner = "espflash flash --monitor"
+rustflags = [
+  # For Xtensa, use GNU ld with -nostartfiles and the esp-hal linkall.x script
+  "-C", "link-arg=-nostartfiles",
+  "-C", "link-arg=-Wl,-Tlinkall.x",
+]
+
+[env]
+# ESP-IDF framework version (if needed for esp-idf-sys)
+ESP_IDF_VERSION = "v5.1"
+
+[unstable]
+# Enable build-std for no_std targets
+build-std = ["core"]

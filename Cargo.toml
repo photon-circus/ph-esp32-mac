@@ -51,6 +51,16 @@ esp-hal = { version = "1.0", optional = true, default-features = false }
 critical-section = { version = "1.2", features = ["std"] }
 
 # =============================================================================
+# Integration Test Dependencies (only needed when building for target hardware)
+# =============================================================================
+# The integration tests in `integration_tests/` require the xtensa target.
+# They are NOT examples (to avoid host compilation issues) - they're standalone.
+#
+# To build and flash:
+#   cargo build --manifest-path integration_tests/Cargo.toml --release
+#   espflash flash target/xtensa-esp32-none-elf/release/wt32_eth01 --monitor
+
+# =============================================================================
 # Clippy Lints
 # =============================================================================
 # Lint configuration for embedded/driver development best practices

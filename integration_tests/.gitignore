@@ -1,0 +1,5 @@
+# Build artifacts
+/target/
+
+# Cargo lock is not needed for binary crates in workspaces
+Cargo.lock
