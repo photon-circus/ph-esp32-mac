@@ -262,13 +262,41 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
 
         self.config = config;
 
-        // Enable EMAC clocks
-        self.enable_clocks();
+        // === STEP 1: Configure GPIO routing BEFORE any EMAC operations ===
+        // GPIO0 IO_MUX is NOT part of EMAC peripheral, so it can be configured
+        // before EMAC peripheral clock is enabled. This routes the external
+        // 50MHz clock to the EMAC block.
+        if matches!(self.config.rmii_clock, RmiiClockMode::ExternalInput { .. }) {
+            ExtRegs::configure_gpio0_rmii_clock_input();
 
-        // Configure PHY interface (MII/RMII)
-        self.configure_phy_interface();
+            #[cfg(feature = "defmt")]
+            defmt::info!("GPIO0 configured for external RMII clock input");
+        }
 
-        // Perform software reset
+        // === STEP 2: Enable DPORT peripheral clock ===
+        // This enables access to EMAC registers (required before any EMAC register access)
+        ExtRegs::enable_peripheral_clock();
+
+        #[cfg(feature = "defmt")]
+        defmt::info!("EMAC peripheral clock enabled via DPORT");
+
+        // === STEP 3: Configure PHY interface in extension registers ===
+        // Now that EMAC peripheral is accessible, configure RMII/MII mode and clock source
+        self.configure_phy_interface_regs();
+
+        // === STEP 4: Enable EMAC extension clocks ===
+        // The external clock should now be reaching the EMAC, so we can enable internal clocks
+        ExtRegs::enable_clocks();
+        ExtRegs::power_up_ram();
+
+        #[cfg(feature = "defmt")]
+        {
+            let bus_mode = crate::register::dma::DmaRegs::bus_mode();
+            defmt::debug!("DMA bus_mode after clock enable: {:#010x}", bus_mode);
+        }
+
+        // === STEP 5: Perform software reset ===
+        // With clocks properly configured, DMA reset should complete
         self.software_reset(&mut delay)?;
 
         // Configure MAC defaults
@@ -289,19 +317,30 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     }
 
     /// Enable EMAC peripheral clocks
-    fn enable_clocks(&self) {
+    ///
+    /// NOTE: This is now deprecated/unused - the clock enable logic has been
+    /// moved to init() for more explicit control over initialization order.
+    /// Keeping for reference.
+    #[allow(dead_code)]
+    fn enable_clocks_deprecated(&self) {
+        ExtRegs::enable_peripheral_clock();
         ExtRegs::enable_clocks();
         ExtRegs::power_up_ram();
     }
 
-    /// Configure PHY interface (MII/RMII)
-    fn configure_phy_interface(&self) {
+    /// Configure PHY interface extension registers (MII/RMII mode and clock source)
+    ///
+    /// This configures the EMAC extension registers for the PHY interface.
+    /// NOTE: DPORT peripheral clock must be enabled before calling this!
+    /// NOTE: GPIO0 should already be configured for external clock if applicable.
+    fn configure_phy_interface_regs(&self) {
         match self.config.phy_interface {
             PhyInterface::Rmii => {
                 ExtRegs::set_rmii_mode();
 
                 match self.config.rmii_clock {
                     RmiiClockMode::ExternalInput { .. } => {
+                        // GPIO0 should already be configured via IO_MUX in init()
                         ExtRegs::set_rmii_clock_external();
                     }
                     RmiiClockMode::InternalOutput { .. } => {

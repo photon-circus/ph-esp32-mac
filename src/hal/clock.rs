@@ -6,10 +6,7 @@
 
 use crate::config::{PhyInterface, RmiiClockMode};
 use crate::error::{ConfigError, Result};
-use crate::register::ext::{
-    EX_PHYINF_CLK_INV, EX_PHYINF_RMII_CLK_SEL, EX_PHYINF_RMII_EN, EX_PHYINF_RMII_EXT_RX_CLK_EN,
-    EX_PHYINF_RMII_REF_CLK_OUT_EN, ExtRegs,
-};
+use crate::register::ext::ExtRegs;
 
 /// Clock configuration state
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -58,58 +55,41 @@ impl ClockController {
 
     /// Configure clocks for RMII mode
     fn configure_rmii(&mut self, clock_mode: RmiiClockMode) -> Result<()> {
-        // Read current configuration
-        let mut conf = ExtRegs::phy_inf_conf();
-
-        // Set RMII mode
-        conf |= EX_PHYINF_RMII_EN;
+        // Set RMII mode (phy_intf_sel = 4)
+        ExtRegs::set_rmii_mode();
 
         match clock_mode {
             RmiiClockMode::ExternalInput { gpio } => {
                 // External 50 MHz clock input
-                // Clear internal clock select, enable external RX clock
-                conf &= !EX_PHYINF_RMII_CLK_SEL;
-                conf |= EX_PHYINF_RMII_EXT_RX_CLK_EN;
-                conf &= !EX_PHYINF_RMII_REF_CLK_OUT_EN;
-
                 // GPIO0 is the standard input for external RMII clock
                 if gpio != 0 {
                     // Only GPIO0 is valid for external clock input on ESP32
                     #[cfg(feature = "esp32")]
                     return Err(ConfigError::InvalidConfig.into());
                 }
+
+                // Configure GPIO0 for clock input, then set external clock mode
+                ExtRegs::configure_gpio0_rmii_clock_input();
+                ExtRegs::set_rmii_clock_external();
             }
             RmiiClockMode::InternalOutput { gpio } => {
                 // Internal 50 MHz clock output (requires APLL)
-                // Set internal clock select, enable ref clock output
-                conf |= EX_PHYINF_RMII_CLK_SEL;
-                conf |= EX_PHYINF_RMII_REF_CLK_OUT_EN;
-                conf &= !EX_PHYINF_RMII_EXT_RX_CLK_EN;
-
                 #[cfg(feature = "esp32")]
                 if gpio != 0 && gpio != 16 && gpio != 17 {
                     return Err(ConfigError::InvalidConfig.into());
                 }
+
+                ExtRegs::set_rmii_clock_internal();
             }
         }
 
-        ExtRegs::set_phy_inf_conf(conf);
         Ok(())
     }
 
     /// Configure clocks for MII mode
     fn configure_mii(&mut self) -> Result<()> {
-        // Read current configuration
-        let mut conf = ExtRegs::phy_inf_conf();
-
-        // Clear RMII mode bit to select MII
-        conf &= !EX_PHYINF_RMII_EN;
-
-        // MII mode uses external clocks from PHY
-        conf &= !EX_PHYINF_RMII_CLK_SEL;
-        conf &= !EX_PHYINF_RMII_REF_CLK_OUT_EN;
-
-        ExtRegs::set_phy_inf_conf(conf);
+        // Set MII mode (phy_intf_sel = 0)
+        ExtRegs::set_mii_mode();
         Ok(())
     }
 
@@ -145,14 +125,18 @@ impl ClockController {
     /// Set clock inversion
     ///
     /// Some PHYs may require clock inversion to meet timing requirements.
+    ///
+    /// NOTE: This feature is not currently implemented for ESP32.
+    /// The ESP32 EMAC extension registers don't appear to have a clock
+    /// inversion bit in the standard register layout.
+    #[allow(unused_variables)]
     pub fn set_clock_inversion(&self, invert: bool) {
-        let mut conf = ExtRegs::phy_inf_conf();
+        // Clock inversion not available in ESP32 EMAC extension registers
+        // based on emac_ext_struct.h from ESP-IDF
+        #[cfg(feature = "defmt")]
         if invert {
-            conf |= EX_PHYINF_CLK_INV;
-        } else {
-            conf &= !EX_PHYINF_CLK_INV;
+            defmt::warn!("Clock inversion requested but not available on ESP32 EMAC");
         }
-        ExtRegs::set_phy_inf_conf(conf);
     }
 
     /// Read clock control register (for debugging)

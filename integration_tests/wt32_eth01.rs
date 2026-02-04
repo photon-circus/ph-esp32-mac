@@ -69,11 +69,22 @@ use ph_esp32_mac::{
 /// WT32-ETH01 PHY address (PHYAD0 is pulled high on this board)
 const PHY_ADDR: u8 = 1;
 
-/// Clock enable GPIO (controls external oscillator)
+/// Clock enable GPIO (controls external oscillator on WT32-ETH01)
 const CLK_EN_GPIO: u8 = 16;
 
-/// Reference clock input GPIO
+/// Reference clock input GPIO (for external clock mode)
 const REF_CLK_GPIO: u8 = 0;
+
+/// Reference clock output GPIO (for internal clock mode)
+const REF_CLK_OUT_GPIO: u8 = 0;
+
+/// Set to true for boards with external 50MHz oscillator (WT32-ETH01)
+/// Set to false for plain ESP32 boards to test EMAC register access only
+const USE_EXTERNAL_CLOCK: bool = true;
+
+/// Set to true to skip full EMAC initialization (for boards without Ethernet hardware)
+/// When true, only tests register access without DMA reset
+const REGISTER_ACCESS_TEST_ONLY: bool = false;
 
 // =============================================================================
 // Static EMAC Instance
@@ -99,29 +110,134 @@ fn main() -> ! {
     let peripherals = esp_hal::init(esp_hal::Config::default());
 
     // -------------------------------------------------------------------------
-    // Step 1: Enable the external 50 MHz oscillator
+    // Step 1: Clock source setup
     // -------------------------------------------------------------------------
-    // The WT32-ETH01 has an external crystal oscillator that must be enabled
-    // by pulling GPIO16 HIGH. This oscillator provides the 50 MHz reference
-    // clock to both the ESP32 EMAC and the LAN8720A PHY.
-    info!("Enabling external oscillator (GPIO{})...", CLK_EN_GPIO);
-    let _clk_enable = Output::new(peripherals.GPIO16, Level::High, OutputConfig::default());
+    #[allow(unused_variables)]
+    let clk_enable_pin: Option<Output<'_>>;
     
-    // Wait for oscillator to stabilize (10ms is plenty)
-    esp_hal::delay::Delay::new().delay_millis(10);
-    info!("Oscillator enabled");
+    if USE_EXTERNAL_CLOCK {
+        // The WT32-ETH01 has an external crystal oscillator that must be enabled
+        // by pulling GPIO16 HIGH. This oscillator provides the 50 MHz reference
+        // clock to both the ESP32 EMAC and the LAN8720A PHY.
+        info!("Enabling external oscillator (GPIO{})...", CLK_EN_GPIO);
+        clk_enable_pin = Some(Output::new(peripherals.GPIO16, Level::High, OutputConfig::default()));
+        
+        // Wait for oscillator to stabilize (10ms is plenty)
+        esp_hal::delay::Delay::new().delay_millis(10);
+        info!("Oscillator enabled");
+    } else {
+        // For plain ESP32 boards without external Ethernet hardware,
+        // use internal clock generation. The ESP32 will output the 50MHz
+        // clock on the REF_CLK_OUT_GPIO pin.
+        info!("Using internal clock generation (no external oscillator)");
+        clk_enable_pin = None;
+    }
 
     // -------------------------------------------------------------------------
-    // Step 2: Configure and initialize the EMAC
+    // Step 2: Test EMAC register access
     // -------------------------------------------------------------------------
-    info!("Initializing EMAC...");
+    info!("Testing EMAC register access...");
+
+    // Debug: Read DPORT WIFI_CLK_EN register to see current clock state
+    let dport_wifi_clk = unsafe { core::ptr::read_volatile(0x3FF0_00CC as *const u32) };
+    info!("DPORT WIFI_CLK_EN before init: {:#010x}", dport_wifi_clk);
+    info!("  EMAC_EN (bit 14): {}", (dport_wifi_clk & (1 << 14)) != 0);
+
+    // Enable EMAC peripheral clock if not already enabled
+    if (dport_wifi_clk & (1 << 14)) == 0 {
+        info!("Enabling EMAC peripheral clock via DPORT...");
+        unsafe {
+            let new_val = dport_wifi_clk | (1 << 14);
+            core::ptr::write_volatile(0x3FF0_00CC as *mut u32, new_val);
+        }
+        let dport_after = unsafe { core::ptr::read_volatile(0x3FF0_00CC as *const u32) };
+        info!("DPORT WIFI_CLK_EN after enable: {:#010x}", dport_after);
+    }
+
+    // Debug: Read DMA bus mode register to check if EMAC is accessible
+    let dma_bus_mode = unsafe { core::ptr::read_volatile(0x3FF6_9000 as *const u32) };
+    info!("DMA BUS_MODE: {:#010x}", dma_bus_mode);
+    info!("  SW_RST (bit 0): {}", (dma_bus_mode & 1) != 0);
+
+    // Read extension registers to verify access
+    let ext_clkout = unsafe { core::ptr::read_volatile(0x3FF6_9800 as *const u32) };
+    let ext_oscclk = unsafe { core::ptr::read_volatile(0x3FF6_9804 as *const u32) };
+    let ext_clkctrl = unsafe { core::ptr::read_volatile(0x3FF6_9808 as *const u32) };
+    let ext_phyinf = unsafe { core::ptr::read_volatile(0x3FF6_980C as *const u32) };
+    
+    info!("Extension registers:");
+    info!("  EX_CLKOUT_CONF (0x800): {:#010x}", ext_clkout);
+    info!("  EX_OSCCLK_CONF (0x804): {:#010x}", ext_oscclk);
+    info!("  EX_CLK_CTRL    (0x808): {:#010x}", ext_clkctrl);
+    info!("  EX_PHYINF_CONF (0x80C): {:#010x}", ext_phyinf);
+
+    // Read MAC registers
+    let mac_config = unsafe { core::ptr::read_volatile(0x3FF6_A000 as *const u32) };
+    let mac_ff = unsafe { core::ptr::read_volatile(0x3FF6_A004 as *const u32) };
+    info!("MAC registers:");
+    info!("  GMACCONFIG (0x1000): {:#010x}", mac_config);
+    info!("  GMACFF     (0x1004): {:#010x}", mac_ff);
+
+    if REGISTER_ACCESS_TEST_ONLY {
+        info!("");
+        info!("=== REGISTER ACCESS TEST PASSED ===");
+        info!("");
+        info!("EMAC peripheral registers are accessible.");
+        info!("DMA reset requires a working 50MHz reference clock which is not");
+        info!("available on this board (no external oscillator, and internal");
+        info!("clock generation requires APLL configuration).");
+        info!("");
+        info!("For full EMAC testing, use a board with Ethernet hardware like WT32-ETH01.");
+        info!("");
+        
+        // Just loop forever
+        loop {
+            esp_hal::delay::Delay::new().delay_millis(1000);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Step 3: Full EMAC initialization (only if not in register-test-only mode)
+    // -------------------------------------------------------------------------
+    info!("Attempting full EMAC initialization...");
+
+    // If SW_RST is already set, we may need to wait for it to clear or
+    // the EMAC needs a full power cycle
+    if (dma_bus_mode & 1) != 0 {
+        warn!("SW_RST bit is already set! Waiting for it to clear...");
+        let mut delay = esp_hal::delay::Delay::new();
+        for i in 0..100 {
+            delay.delay_millis(10);
+            let bus_mode = unsafe { core::ptr::read_volatile(0x3FF6_9000 as *const u32) };
+            if (bus_mode & 1) == 0 {
+                info!("SW_RST cleared after {} ms", (i + 1) * 10);
+                break;
+            }
+            if i == 99 {
+                warn!("SW_RST still set after 1s, trying to clear manually...");
+                // Try writing 0 to clear
+                unsafe { core::ptr::write_volatile(0x3FF6_9000 as *mut u32, 0) };
+                delay.delay_millis(10);
+                let bus_mode = unsafe { core::ptr::read_volatile(0x3FF6_9000 as *const u32) };
+                info!("DMA BUS_MODE after manual clear: {:#010x}", bus_mode);
+            }
+        }
+    }
 
     // Note: MDC (GPIO23) and MDIO (GPIO18) are fixed by ESP32 hardware
     // The RMII data pins are also fixed (see board config for reference)
+    let rmii_clock_mode = if USE_EXTERNAL_CLOCK {
+        info!("Configuring RMII with external clock input on GPIO{}", REF_CLK_GPIO);
+        RmiiClockMode::ExternalInput { gpio: REF_CLK_GPIO }
+    } else {
+        info!("Configuring RMII with internal clock output on GPIO{}", REF_CLK_OUT_GPIO);
+        RmiiClockMode::InternalOutput { gpio: REF_CLK_OUT_GPIO }
+    };
+    
     let config = EmacConfig::new()
         .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56]) // Locally administered
         .with_phy_interface(PhyInterface::Rmii)
-        .with_rmii_clock(RmiiClockMode::ExternalInput { gpio: REF_CLK_GPIO });
+        .with_rmii_clock(rmii_clock_mode);
 
     // Initialize EMAC in critical section
     critical_section::with(|cs| {

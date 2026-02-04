@@ -16,6 +16,7 @@ rustflags = [
 [env]
 # ESP-IDF framework version (if needed for esp-idf-sys)
 ESP_IDF_VERSION = "v5.1"
+ESP_LOG = "info"
 
 [unstable]
 # Enable build-std for no_std targets
