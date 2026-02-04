@@ -65,6 +65,6 @@ pub mod asynch;
 
 #[cfg(feature = "async")]
 pub use asynch::{
-    async_interrupt_handler, peek_interrupt_status, reset_async_state, AsyncEmacExt, ErrorFuture,
-    RxFuture, TxFuture, ERR_WAKER, RX_WAKER, TX_WAKER,
+    AsyncEmacExt, ERR_WAKER, ErrorFuture, RX_WAKER, RxFuture, TX_WAKER, TxFuture,
+    async_interrupt_handler, peek_interrupt_status, reset_async_state,
 };

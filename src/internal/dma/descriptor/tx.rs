@@ -141,8 +141,7 @@ impl TxDescriptor {
     #[inline(always)]
     #[must_use]
     pub fn collision_count(&self) -> u8 {
-        ((self.tdes0.get() & tdes0::COLLISION_COUNT_MASK) >> tdes0::COLLISION_COUNT_SHIFT)
-            as u8
+        ((self.tdes0.get() & tdes0::COLLISION_COUNT_MASK) >> tdes0::COLLISION_COUNT_SHIFT) as u8
     }
 
     /// Check if timestamp was captured.

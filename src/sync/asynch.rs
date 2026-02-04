@@ -234,8 +234,8 @@ mod tests {
 
     use super::*;
     use core::task::{RawWaker, RawWakerVTable, Waker};
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct WakeCounter {
         count: AtomicUsize,

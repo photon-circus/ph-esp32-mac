@@ -60,9 +60,8 @@ impl RxDescriptor {
     ) {
         self.buffer1_addr.set(buffer as u32);
         self.buffer2_next_desc.set(next_desc as u32);
-        self.rdes1.set(
-            rdes1::SECOND_ADDR_CHAINED | ((buffer_size as u32) & rdes1::BUFFER1_SIZE_MASK),
-        );
+        self.rdes1
+            .set(rdes1::SECOND_ADDR_CHAINED | ((buffer_size as u32) & rdes1::BUFFER1_SIZE_MASK));
         // Give ownership to DMA
         self.rdes0.set(rdes0::OWN);
     }
@@ -123,8 +122,7 @@ impl RxDescriptor {
     #[must_use]
     pub fn is_complete_frame(&self) -> bool {
         let status = self.rdes0.get();
-        (status & (rdes0::FIRST_DESC | rdes0::LAST_DESC))
-            == (rdes0::FIRST_DESC | rdes0::LAST_DESC)
+        (status & (rdes0::FIRST_DESC | rdes0::LAST_DESC)) == (rdes0::FIRST_DESC | rdes0::LAST_DESC)
     }
 
     /// Returns true if error summary bit is set.

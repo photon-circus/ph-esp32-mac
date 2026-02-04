@@ -13,9 +13,7 @@ use crate::internal::register::mac::{
 };
 
 // Import internal PHY register definitions for use in helper functions and tests
-use crate::internal::phy_regs::standard::{
-    anar, anlpar, bmcr, bmsr, phy_reg,
-};
+use crate::internal::phy_regs::standard::{bmcr, bmsr, phy_reg};
 
 // =============================================================================
 // MDIO Constants
@@ -323,6 +321,7 @@ pub fn force_speed_duplex<M: MdioBus>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::internal::phy_regs::standard::{anar, anlpar, bmcr, bmsr, phy_reg};
 
     // =========================================================================
     // Clock Divider Tests

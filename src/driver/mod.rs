@@ -29,9 +29,9 @@ pub mod interrupt;
 
 // Re-exports for convenience
 pub use config::{
-    ChecksumConfig, DmaBurstLen, Duplex, EmacConfig, FlowControlConfig, MacAddressFilter,
-    MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State, TxChecksumMode,
-    MAC_FILTER_SLOTS,
+    ChecksumConfig, DmaBurstLen, Duplex, EmacConfig, FlowControlConfig, MAC_FILTER_SLOTS,
+    MacAddressFilter, MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State,
+    TxChecksumMode,
 };
 pub use emac::{Emac, EmacDefault, EmacLarge, EmacSmall};
 pub use error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};

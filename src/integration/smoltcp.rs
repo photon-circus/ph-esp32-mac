@@ -51,8 +51,8 @@
 //! This pattern is common in embedded networking crates (see embassy-net, esp-wifi).
 
 use crate::driver::config::State;
-use crate::internal::constants::{MAX_FRAME_SIZE, MTU};
 use crate::driver::emac::Emac;
+use crate::internal::constants::{MAX_FRAME_SIZE, MTU};
 
 use smoltcp::phy::{Checksum, ChecksumCapabilities, Device, DeviceCapabilities, Medium};
 use smoltcp::time::Instant;

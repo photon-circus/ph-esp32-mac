@@ -37,7 +37,7 @@ pub mod smoltcp;
 
 // Re-export key types for convenience when both features are enabled
 #[cfg(feature = "esp-hal")]
-pub use esp_hal::{EmacExt, EspHalEmac, EMAC_INTERRUPT};
+pub use esp_hal::{EMAC_INTERRUPT, EmacExt, EspHalEmac};
 
 #[cfg(feature = "smoltcp")]
-pub use smoltcp::{ethernet_address, EmacRxToken, EmacTxToken};
+pub use smoltcp::{EmacRxToken, EmacTxToken, ethernet_address};

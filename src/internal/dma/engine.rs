@@ -365,7 +365,11 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         for i in 0..desc_count {
             let idx = (self.rx_ring.current_index() + i) % RX_BUFS;
             let desc = &self.rx_ring.descriptors[idx];
-            let buf_data_len = if idx == last_idx { frame_len - copied } else { BUF_SIZE };
+            let buf_data_len = if idx == last_idx {
+                frame_len - copied
+            } else {
+                BUF_SIZE
+            };
             let copy_len = core::cmp::min(buf_data_len, frame_len - copied);
 
             if copy_len > 0 {

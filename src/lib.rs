@@ -149,8 +149,10 @@ pub use driver::config::{
     MacAddressFilter, MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State,
     TxChecksumMode,
 };
-pub use driver::error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};
 pub use driver::emac::{Emac, EmacDefault, EmacLarge, EmacSmall};
+pub use driver::error::{
+    ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result,
+};
 pub use driver::interrupt::InterruptStatus;
 
 // Re-export register access types

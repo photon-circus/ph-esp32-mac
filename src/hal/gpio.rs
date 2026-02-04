@@ -47,7 +47,10 @@
 /// **Deprecated:** This module is re-exported for backward compatibility.
 /// The canonical location is now `crate::internal::gpio_pins::esp32`.
 #[cfg(feature = "esp32")]
-#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
+#[deprecated(
+    since = "0.2.0",
+    note = "moved to internal module; will be removed in 0.3.0"
+)]
 pub mod esp32_gpio {
     pub use crate::internal::gpio_pins::esp32::*;
 }

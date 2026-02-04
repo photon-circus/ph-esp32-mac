@@ -17,11 +17,11 @@ use embedded_hal::delay::DelayNs;
 use super::config::{Duplex, EmacConfig, PhyInterface, RmiiClockMode, Speed, State};
 use super::error::{ConfigError, IoError, Result};
 use super::interrupt::InterruptStatus;
-use crate::internal::dma::DmaEngine;
 use crate::hal::reset::ResetController;
 use crate::internal::constants::{
     CSR_CLOCK_DIV_42, FLUSH_TIMEOUT, MII_BUSY_TIMEOUT, TX_DMA_STATE_MASK, TX_DMA_STATE_SHIFT,
 };
+use crate::internal::dma::DmaEngine;
 use crate::internal::register::dma::{
     DMABUSMODE_AAL, DMABUSMODE_ATDS, DMABUSMODE_FB, DMABUSMODE_PBL_MASK, DMABUSMODE_PBL_SHIFT,
     DMABUSMODE_USP, DMAOPERATION_RSF, DMAOPERATION_TSF, DmaRegs,

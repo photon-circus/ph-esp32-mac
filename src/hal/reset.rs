@@ -5,8 +5,8 @@
 
 use embedded_hal::delay::DelayNs;
 
-use crate::internal::constants::{RESET_POLL_INTERVAL_US, SOFT_RESET_TIMEOUT_MS};
 use crate::driver::error::{IoError, Result};
+use crate::internal::constants::{RESET_POLL_INTERVAL_US, SOFT_RESET_TIMEOUT_MS};
 use crate::internal::register::dma::{DMABUSMODE_SW_RST, DmaRegs};
 use crate::internal::register::ext::ExtRegs;
 
