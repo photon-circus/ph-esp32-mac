@@ -130,26 +130,6 @@ pub mod phy;
 // Internal implementation details (pub(crate) only)
 mod internal;
 
-// Deprecated public re-exports for backward compatibility
-// These will be removed in a future version
-#[deprecated(since = "0.2.0", note = "use crate internals directly; this module will become private")]
-#[doc(hidden)]
-pub mod constants {
-    //! Re-export of constants for backward compatibility.
-    //!
-    //! This module is deprecated. Constants are now internal implementation details.
-    pub use crate::internal::constants::*;
-}
-
-#[deprecated(since = "0.2.0", note = "use crate internals directly; this module will become private")]
-#[doc(hidden)]
-pub mod register {
-    //! Re-export of registers for backward compatibility.
-    //!
-    //! This module is deprecated. Register access is now internal implementation details.
-    pub use crate::internal::register::*;
-}
-
 #[cfg(any(feature = "smoltcp", feature = "esp-hal"))]
 pub mod integration;
 

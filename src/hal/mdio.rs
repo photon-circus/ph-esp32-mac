@@ -12,9 +12,9 @@ use crate::internal::register::mac::{
     GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_MASK, GMACMIIADDR_PA_SHIFT, MacRegs,
 };
 
-// Import internal PHY register definitions for use in helper functions
+// Import internal PHY register definitions for use in helper functions and tests
 use crate::internal::phy_regs::standard::{
-    bmcr as int_bmcr, bmsr as int_bmsr, phy_reg as int_phy_reg,
+    anar, anlpar, bmcr, bmsr, phy_reg,
 };
 
 // =============================================================================
@@ -234,53 +234,6 @@ impl<D: DelayNs> MdioBus for MdioController<D> {
 }
 
 // =============================================================================
-// PHY Register Definitions - Deprecated Re-exports
-// =============================================================================
-// These are re-exported for backward compatibility but are now defined in
-// crate::internal::phy_registers
-
-/// Standard PHY register addresses (IEEE 802.3 Clause 22)
-///
-/// **Deprecated:** This module is re-exported for backward compatibility.
-/// The canonical location is now `crate::internal::phy_regs::standard::phy_reg`.
-#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
-pub mod phy_reg {
-    pub use crate::internal::phy_regs::standard::phy_reg::*;
-}
-
-/// BMCR (Basic Mode Control Register) bits
-///
-/// **Deprecated:** This module is re-exported for backward compatibility.
-#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
-pub mod bmcr {
-    pub use crate::internal::phy_regs::standard::bmcr::*;
-}
-
-/// BMSR (Basic Mode Status Register) bits
-///
-/// **Deprecated:** This module is re-exported for backward compatibility.
-#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
-pub mod bmsr {
-    pub use crate::internal::phy_regs::standard::bmsr::*;
-}
-
-/// ANAR (Auto-Negotiation Advertisement Register) bits
-///
-/// **Deprecated:** This module is re-exported for backward compatibility.
-#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
-pub mod anar {
-    pub use crate::internal::phy_regs::standard::anar::*;
-}
-
-/// ANLPAR (Auto-Negotiation Link Partner Ability Register) bits
-///
-/// **Deprecated:** This module is re-exported for backward compatibility.
-#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
-pub mod anlpar {
-    pub use crate::internal::phy_regs::standard::anlpar::*;
-}
-
-// =============================================================================
 // PHY Helper Functions
 // =============================================================================
 
@@ -300,36 +253,36 @@ pub struct PhyStatus {
 
 /// Read PHY status from standard registers
 pub fn read_phy_status<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<PhyStatus> {
-    let bmsr_val = mdio.read(phy_addr, int_phy_reg::BMSR)?;
-    let bmcr_val = mdio.read(phy_addr, int_phy_reg::BMCR)?;
+    let bmsr_val = mdio.read(phy_addr, phy_reg::BMSR)?;
+    let bmcr_val = mdio.read(phy_addr, phy_reg::BMCR)?;
 
     Ok(PhyStatus {
-        link_up: (bmsr_val & int_bmsr::LINK_STATUS) != 0,
-        an_complete: (bmsr_val & int_bmsr::AN_COMPLETE) != 0,
-        speed_100: (bmcr_val & int_bmcr::SPEED_100) != 0,
-        full_duplex: (bmcr_val & int_bmcr::DUPLEX_FULL) != 0,
+        link_up: (bmsr_val & bmsr::LINK_STATUS) != 0,
+        an_complete: (bmsr_val & bmsr::AN_COMPLETE) != 0,
+        speed_100: (bmcr_val & bmcr::SPEED_100) != 0,
+        full_duplex: (bmcr_val & bmcr::DUPLEX_FULL) != 0,
     })
 }
 
 /// Perform a soft reset on the PHY
 pub fn reset_phy<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<()> {
-    mdio.write(phy_addr, int_phy_reg::BMCR, int_bmcr::RESET)
+    mdio.write(phy_addr, phy_reg::BMCR, bmcr::RESET)
 }
 
 /// Read the PHY identifier
 pub fn read_phy_id<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<u32> {
-    let id1 = mdio.read(phy_addr, int_phy_reg::PHYIDR1)? as u32;
-    let id2 = mdio.read(phy_addr, int_phy_reg::PHYIDR2)? as u32;
+    let id1 = mdio.read(phy_addr, phy_reg::PHYIDR1)? as u32;
+    let id2 = mdio.read(phy_addr, phy_reg::PHYIDR2)? as u32;
     Ok((id1 << 16) | id2)
 }
 
 /// Enable auto-negotiation on the PHY
 pub fn enable_auto_negotiation<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<()> {
-    let bmcr_val = mdio.read(phy_addr, int_phy_reg::BMCR)?;
+    let bmcr_val = mdio.read(phy_addr, phy_reg::BMCR)?;
     mdio.write(
         phy_addr,
-        int_phy_reg::BMCR,
-        (bmcr_val | int_bmcr::AN_ENABLE | int_bmcr::AN_RESTART) & !int_bmcr::ISOLATE,
+        phy_reg::BMCR,
+        (bmcr_val | bmcr::AN_ENABLE | bmcr::AN_RESTART) & !bmcr::ISOLATE,
     )
 }
 
@@ -340,27 +293,27 @@ pub fn force_speed_duplex<M: MdioBus>(
     speed_100: bool,
     full_duplex: bool,
 ) -> Result<()> {
-    let mut bmcr_val = mdio.read(phy_addr, int_phy_reg::BMCR)?;
+    let mut bmcr_val = mdio.read(phy_addr, phy_reg::BMCR)?;
 
     // Disable auto-negotiation
-    bmcr_val &= !int_bmcr::AN_ENABLE;
-    bmcr_val &= !int_bmcr::ISOLATE;
+    bmcr_val &= !bmcr::AN_ENABLE;
+    bmcr_val &= !bmcr::ISOLATE;
 
     // Set speed
     if speed_100 {
-        bmcr_val |= int_bmcr::SPEED_100;
+        bmcr_val |= bmcr::SPEED_100;
     } else {
-        bmcr_val &= !int_bmcr::SPEED_100;
+        bmcr_val &= !bmcr::SPEED_100;
     }
 
     // Set duplex
     if full_duplex {
-        bmcr_val |= int_bmcr::DUPLEX_FULL;
+        bmcr_val |= bmcr::DUPLEX_FULL;
     } else {
-        bmcr_val &= !int_bmcr::DUPLEX_FULL;
+        bmcr_val &= !bmcr::DUPLEX_FULL;
     }
 
-    mdio.write(phy_addr, int_phy_reg::BMCR, bmcr_val)
+    mdio.write(phy_addr, phy_reg::BMCR, bmcr_val)
 }
 
 // =============================================================================
