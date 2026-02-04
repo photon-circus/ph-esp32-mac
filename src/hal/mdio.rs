@@ -495,6 +495,161 @@ mod tests {
         assert_eq!(MdcClockDivider::default(), MdcClockDivider::Div102);
     }
 
+    #[test]
+    fn clock_divider_boundary_35mhz() {
+        // Just under 35MHz -> Div16
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(34_999_999), MdcClockDivider::Div16);
+        // At 35MHz -> Div26
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(35_000_000), MdcClockDivider::Div26);
+    }
+
+    #[test]
+    fn clock_divider_boundary_60mhz() {
+        // Just under 60MHz -> Div26
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(59_999_999), MdcClockDivider::Div26);
+        // At 60MHz -> Div42
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(60_000_000), MdcClockDivider::Div42);
+    }
+
+    #[test]
+    fn clock_divider_boundary_100mhz() {
+        // Just under 100MHz -> Div42
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(99_999_999), MdcClockDivider::Div42);
+        // At 100MHz -> Div62
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(100_000_000), MdcClockDivider::Div62);
+    }
+
+    #[test]
+    fn clock_divider_boundary_150mhz() {
+        // Just under 150MHz -> Div62
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(149_999_999), MdcClockDivider::Div62);
+        // At 150MHz -> Div102
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(150_000_000), MdcClockDivider::Div102);
+    }
+
+    #[test]
+    fn clock_divider_boundary_250mhz() {
+        // Just under 250MHz -> Div102
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(249_999_999), MdcClockDivider::Div102);
+        // At 250MHz -> Div124
+        assert_eq!(MdcClockDivider::from_sys_clock_hz(250_000_000), MdcClockDivider::Div124);
+    }
+
+    // =========================================================================
+    // MDIO Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn mdio_timeout_is_reasonable() {
+        assert!(MDIO_TIMEOUT_US > 0);
+        assert!(MDIO_TIMEOUT_US <= 10_000); // Max 10ms
+    }
+
+    #[test]
+    fn max_phy_addr_is_5_bits() {
+        assert_eq!(MAX_PHY_ADDR, 31);
+        assert!(MAX_PHY_ADDR < 32); // 5-bit field
+    }
+
+    #[test]
+    fn max_reg_addr_is_5_bits() {
+        assert_eq!(MAX_REG_ADDR, 31);
+        assert!(MAX_REG_ADDR < 32); // 5-bit field
+    }
+
+    // =========================================================================
+    // PHY Register Address Tests
+    // =========================================================================
+
+    #[test]
+    fn phy_reg_standard_addresses() {
+        // IEEE 802.3 Clause 22 standard register addresses
+        assert_eq!(phy_reg::BMCR, 0);
+        assert_eq!(phy_reg::BMSR, 1);
+        assert_eq!(phy_reg::PHYIDR1, 2);
+        assert_eq!(phy_reg::PHYIDR2, 3);
+        assert_eq!(phy_reg::ANAR, 4);
+        assert_eq!(phy_reg::ANLPAR, 5);
+    }
+
+    #[test]
+    fn phy_reg_extended_addresses() {
+        assert_eq!(phy_reg::ANER, 6);
+        assert_eq!(phy_reg::ANNPTR, 7);
+        assert_eq!(phy_reg::ANNPRR, 8);
+        assert_eq!(phy_reg::MMD_CTRL, 13);
+        assert_eq!(phy_reg::MMD_DATA, 14);
+        assert_eq!(phy_reg::ESTATUS, 15);
+    }
+
+    #[test]
+    fn phy_reg_all_valid() {
+        // All addresses should be within valid range
+        assert!(phy_reg::BMCR <= MAX_REG_ADDR);
+        assert!(phy_reg::BMSR <= MAX_REG_ADDR);
+        assert!(phy_reg::PHYIDR1 <= MAX_REG_ADDR);
+        assert!(phy_reg::PHYIDR2 <= MAX_REG_ADDR);
+        assert!(phy_reg::ANAR <= MAX_REG_ADDR);
+        assert!(phy_reg::ANLPAR <= MAX_REG_ADDR);
+        assert!(phy_reg::ESTATUS <= MAX_REG_ADDR);
+    }
+
+    // =========================================================================
+    // BMCR Bit Tests
+    // =========================================================================
+
+    #[test]
+    fn bmcr_reset_bit() {
+        assert_eq!(bmcr::RESET, 0x8000);
+    }
+
+    #[test]
+    fn bmcr_bit_positions() {
+        assert_eq!(bmcr::RESET, 1 << 15);
+        assert_eq!(bmcr::LOOPBACK, 1 << 14);
+        assert_eq!(bmcr::SPEED_100, 1 << 13);
+        assert_eq!(bmcr::AN_ENABLE, 1 << 12);
+        assert_eq!(bmcr::POWER_DOWN, 1 << 11);
+        assert_eq!(bmcr::ISOLATE, 1 << 10);
+        assert_eq!(bmcr::AN_RESTART, 1 << 9);
+        assert_eq!(bmcr::DUPLEX_FULL, 1 << 8);
+    }
+
+    #[test]
+    fn bmcr_speed_duplex_bits() {
+        // 100 Mbps Full Duplex
+        let bmcr_100fd = bmcr::SPEED_100 | bmcr::DUPLEX_FULL;
+        assert!(bmcr_100fd & bmcr::SPEED_100 != 0);
+        assert!(bmcr_100fd & bmcr::DUPLEX_FULL != 0);
+
+        // 10 Mbps Half Duplex
+        let bmcr_10hd = 0u16;
+        assert!(bmcr_10hd & bmcr::SPEED_100 == 0);
+        assert!(bmcr_10hd & bmcr::DUPLEX_FULL == 0);
+    }
+
+    #[test]
+    fn bmcr_auto_neg_bits() {
+        let bmcr_an = bmcr::AN_ENABLE | bmcr::AN_RESTART;
+        assert!(bmcr_an & bmcr::AN_ENABLE != 0);
+        assert!(bmcr_an & bmcr::AN_RESTART != 0);
+    }
+
+    #[test]
+    fn bmcr_bits_are_distinct() {
+        // Verify no bits overlap
+        let all_bits = bmcr::RESET
+            | bmcr::LOOPBACK
+            | bmcr::SPEED_100
+            | bmcr::AN_ENABLE
+            | bmcr::POWER_DOWN
+            | bmcr::ISOLATE
+            | bmcr::AN_RESTART
+            | bmcr::DUPLEX_FULL;
+        // Count the bits
+        assert_eq!(all_bits.count_ones(), 8);
+    }
+
     // =========================================================================
     // BMSR Bit Parsing Tests
     // =========================================================================
@@ -535,6 +690,56 @@ mod tests {
         assert!(bmsr & bmsr::T10_FD_CAPABLE != 0);
         assert!(bmsr & bmsr::T10_HD_CAPABLE != 0);
         assert!(bmsr & bmsr::AN_ABILITY != 0);
+    }
+
+    #[test]
+    fn bmsr_bit_positions() {
+        assert_eq!(bmsr::T4_CAPABLE, 1 << 15);
+        assert_eq!(bmsr::TX_FD_CAPABLE, 1 << 14);
+        assert_eq!(bmsr::TX_HD_CAPABLE, 1 << 13);
+        assert_eq!(bmsr::T10_FD_CAPABLE, 1 << 12);
+        assert_eq!(bmsr::T10_HD_CAPABLE, 1 << 11);
+        assert_eq!(bmsr::ESTATUS, 1 << 8);
+        assert_eq!(bmsr::AN_COMPLETE, 1 << 5);
+        assert_eq!(bmsr::REMOTE_FAULT, 1 << 4);
+        assert_eq!(bmsr::AN_ABILITY, 1 << 3);
+        assert_eq!(bmsr::LINK_STATUS, 1 << 2);
+        assert_eq!(bmsr::JABBER_DETECT, 1 << 1);
+        assert_eq!(bmsr::EXT_CAPABLE, 1 << 0);
+    }
+
+    // =========================================================================
+    // ANAR Bit Tests
+    // =========================================================================
+
+    #[test]
+    fn anar_bit_positions() {
+        assert_eq!(anar::NEXT_PAGE, 1 << 15);
+        assert_eq!(anar::ACK, 1 << 14);
+        assert_eq!(anar::REMOTE_FAULT, 1 << 13);
+        assert_eq!(anar::PAUSE, 1 << 10);
+        assert_eq!(anar::T4, 1 << 9);
+        assert_eq!(anar::TX_FD, 1 << 8);
+        assert_eq!(anar::TX_HD, 1 << 7);
+        assert_eq!(anar::T10_FD, 1 << 6);
+        assert_eq!(anar::T10_HD, 1 << 5);
+    }
+
+    #[test]
+    fn anar_selector_field() {
+        assert_eq!(anar::SELECTOR, 0x001F);
+        assert_eq!(anar::SELECTOR_IEEE802_3, 0x0001);
+    }
+
+    #[test]
+    fn anar_full_advertisement() {
+        // Typical full advertisement
+        let anar_val = anar::TX_FD | anar::TX_HD | anar::T10_FD | anar::T10_HD | anar::SELECTOR_IEEE802_3;
+        assert!(anar_val & anar::TX_FD != 0);
+        assert!(anar_val & anar::TX_HD != 0);
+        assert!(anar_val & anar::T10_FD != 0);
+        assert!(anar_val & anar::T10_HD != 0);
+        assert_eq!(anar_val & anar::SELECTOR, anar::SELECTOR_IEEE802_3);
     }
 
     // =========================================================================
@@ -592,33 +797,24 @@ mod tests {
         assert!(without_pause & anlpar::PAUSE == 0);
     }
 
-    // =========================================================================
-    // BMCR Control Bit Tests
-    // =========================================================================
-
     #[test]
-    fn bmcr_reset_bit() {
-        assert_eq!(bmcr::RESET, 0x8000);
+    fn anlpar_bit_positions() {
+        assert_eq!(anlpar::NEXT_PAGE, 1 << 15);
+        assert_eq!(anlpar::ACK, 1 << 14);
+        assert_eq!(anlpar::REMOTE_FAULT, 1 << 13);
+        assert_eq!(anlpar::PAUSE_ASYM, 1 << 11);
+        assert_eq!(anlpar::PAUSE, 1 << 10);
+        assert_eq!(anlpar::CAN_100_T4, 1 << 9);
+        assert_eq!(anlpar::CAN_100_FD, 1 << 8);
+        assert_eq!(anlpar::CAN_100_HD, 1 << 7);
+        assert_eq!(anlpar::CAN_10_FD, 1 << 6);
+        assert_eq!(anlpar::CAN_10_HD, 1 << 5);
     }
 
     #[test]
-    fn bmcr_speed_duplex_bits() {
-        // 100 Mbps Full Duplex
-        let bmcr_100fd = bmcr::SPEED_100 | bmcr::DUPLEX_FULL;
-        assert!(bmcr_100fd & bmcr::SPEED_100 != 0);
-        assert!(bmcr_100fd & bmcr::DUPLEX_FULL != 0);
-
-        // 10 Mbps Half Duplex
-        let bmcr_10hd = 0u16;
-        assert!(bmcr_10hd & bmcr::SPEED_100 == 0);
-        assert!(bmcr_10hd & bmcr::DUPLEX_FULL == 0);
-    }
-
-    #[test]
-    fn bmcr_auto_neg_bits() {
-        let bmcr_an = bmcr::AN_ENABLE | bmcr::AN_RESTART;
-        assert!(bmcr_an & bmcr::AN_ENABLE != 0);
-        assert!(bmcr_an & bmcr::AN_RESTART != 0);
+    fn anlpar_selector_field() {
+        assert_eq!(anlpar::SELECTOR_MASK, 0x001F);
+        assert_eq!(anlpar::SELECTOR_802_3, 0x0001);
     }
 
     // =========================================================================
@@ -632,5 +828,88 @@ mod tests {
         assert!(!status.an_complete);
         assert!(!status.speed_100);
         assert!(!status.full_duplex);
+    }
+
+    #[test]
+    fn phy_status_all_true() {
+        let status = PhyStatus {
+            link_up: true,
+            an_complete: true,
+            speed_100: true,
+            full_duplex: true,
+        };
+        assert!(status.link_up);
+        assert!(status.an_complete);
+        assert!(status.speed_100);
+        assert!(status.full_duplex);
+    }
+
+    #[test]
+    fn phy_status_partial() {
+        // Link up but AN not complete (manual config)
+        let status = PhyStatus {
+            link_up: true,
+            an_complete: false,
+            speed_100: true,
+            full_duplex: false,
+        };
+        assert!(status.link_up);
+        assert!(!status.an_complete);
+        assert!(status.speed_100);
+        assert!(!status.full_duplex);
+    }
+
+    #[test]
+    fn phy_status_clone() {
+        let status = PhyStatus {
+            link_up: true,
+            an_complete: true,
+            speed_100: true,
+            full_duplex: true,
+        };
+        let cloned = status;
+        assert_eq!(cloned.link_up, status.link_up);
+        assert_eq!(cloned.an_complete, status.an_complete);
+        assert_eq!(cloned.speed_100, status.speed_100);
+        assert_eq!(cloned.full_duplex, status.full_duplex);
+    }
+
+    #[test]
+    fn phy_status_10_half() {
+        let status = PhyStatus {
+            link_up: true,
+            an_complete: true,
+            speed_100: false,
+            full_duplex: false,
+        };
+        assert!(status.link_up);
+        assert!(!status.speed_100);
+        assert!(!status.full_duplex);
+    }
+
+    #[test]
+    fn phy_status_100_half() {
+        let status = PhyStatus {
+            link_up: true,
+            an_complete: true,
+            speed_100: true,
+            full_duplex: false,
+        };
+        assert!(status.link_up);
+        assert!(status.speed_100);
+        assert!(!status.full_duplex);
+    }
+
+    #[test]
+    fn phy_status_10_full() {
+        let status = PhyStatus {
+            link_up: true,
+            an_complete: true,
+            speed_100: false,
+            full_duplex: true,
+        };
+        assert!(status.link_up);
+        assert!(!status.speed_100);
+        assert!(status.full_duplex);
     }
 }

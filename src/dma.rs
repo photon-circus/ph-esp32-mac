@@ -748,4 +748,193 @@ mod tests {
         ring.advance();
         assert_eq!(ring.current_index(), 0); // Wrapped
     }
+
+    // =========================================================================
+    // DescriptorRing Tests
+    // =========================================================================
+
+    #[test]
+    fn descriptor_ring_from_array() {
+        let ring = DescriptorRing::from_array([10u32, 20, 30, 40]);
+        assert_eq!(ring.len(), 4);
+        assert_eq!(ring.current_index(), 0);
+    }
+
+    #[test]
+    fn descriptor_ring_len() {
+        let ring: DescriptorRing<u8, 8> = DescriptorRing {
+            descriptors: [0; 8],
+            current: 0,
+        };
+        assert_eq!(ring.len(), 8);
+    }
+
+    #[test]
+    fn descriptor_ring_is_empty_false_for_non_zero_size() {
+        let ring: DescriptorRing<u8, 4> = DescriptorRing {
+            descriptors: [0; 4],
+            current: 0,
+        };
+        assert!(!ring.is_empty());
+    }
+
+    #[test]
+    fn descriptor_ring_is_empty_true_for_zero_size() {
+        let ring: DescriptorRing<u8, 0> = DescriptorRing {
+            descriptors: [],
+            current: 0,
+        };
+        assert!(ring.is_empty());
+    }
+
+    #[test]
+    fn descriptor_ring_current_returns_reference() {
+        let ring = DescriptorRing::from_array([100u32, 200, 300]);
+        assert_eq!(*ring.current(), 100);
+    }
+
+    #[test]
+    fn descriptor_ring_current_mut_allows_modification() {
+        let mut ring = DescriptorRing::from_array([100u32, 200, 300]);
+        *ring.current_mut() = 999;
+        assert_eq!(*ring.current(), 999);
+    }
+
+    #[test]
+    fn descriptor_ring_get_by_index() {
+        let ring = DescriptorRing::from_array([10u32, 20, 30, 40]);
+        assert_eq!(*ring.get(0), 10);
+        assert_eq!(*ring.get(1), 20);
+        assert_eq!(*ring.get(2), 30);
+        assert_eq!(*ring.get(3), 40);
+    }
+
+    #[test]
+    fn descriptor_ring_get_wraps_index() {
+        let ring = DescriptorRing::from_array([10u32, 20, 30, 40]);
+        // Index 4 should wrap to 0
+        assert_eq!(*ring.get(4), 10);
+        assert_eq!(*ring.get(5), 20);
+        assert_eq!(*ring.get(8), 10);
+    }
+
+    #[test]
+    fn descriptor_ring_get_mut_by_index() {
+        let mut ring = DescriptorRing::from_array([10u32, 20, 30, 40]);
+        *ring.get_mut(2) = 999;
+        assert_eq!(*ring.get(2), 999);
+    }
+
+    #[test]
+    fn descriptor_ring_at_offset() {
+        let mut ring = DescriptorRing::from_array([10u32, 20, 30, 40]);
+        ring.advance(); // current = 1
+        assert_eq!(*ring.at_offset(0), 20); // current
+        assert_eq!(*ring.at_offset(1), 30); // current + 1
+        assert_eq!(*ring.at_offset(2), 40); // current + 2
+        assert_eq!(*ring.at_offset(3), 10); // wraps to 0
+    }
+
+    #[test]
+    fn descriptor_ring_advance_by() {
+        let mut ring = DescriptorRing::from_array([0u32; 8]);
+        assert_eq!(ring.current_index(), 0);
+        ring.advance_by(3);
+        assert_eq!(ring.current_index(), 3);
+        ring.advance_by(3);
+        assert_eq!(ring.current_index(), 6);
+        ring.advance_by(5);
+        assert_eq!(ring.current_index(), 3); // (6 + 5) % 8 = 3
+    }
+
+    #[test]
+    fn descriptor_ring_reset() {
+        let mut ring = DescriptorRing::from_array([0u32; 4]);
+        ring.advance();
+        ring.advance();
+        assert_eq!(ring.current_index(), 2);
+        ring.reset();
+        assert_eq!(ring.current_index(), 0);
+    }
+
+    #[test]
+    fn descriptor_ring_base_addr() {
+        let ring = DescriptorRing::from_array([10u32, 20, 30]);
+        let ptr = ring.base_addr();
+        assert!(!ptr.is_null());
+        // Pointer should point to first element
+        unsafe {
+            assert_eq!(*ptr, 10);
+        }
+    }
+
+    #[test]
+    fn descriptor_ring_base_addr_u32() {
+        let ring = DescriptorRing::from_array([10u32, 20, 30]);
+        let addr = ring.base_addr_u32();
+        // Should be non-zero (valid address)
+        assert!(addr != 0);
+        // Should equal the pointer cast
+        assert_eq!(addr, ring.base_addr() as u32);
+    }
+
+    #[test]
+    fn descriptor_ring_iter() {
+        let ring = DescriptorRing::from_array([10u32, 20, 30, 40]);
+        let mut iter = ring.iter();
+        assert_eq!(iter.next(), Some(&10));
+        assert_eq!(iter.next(), Some(&20));
+        assert_eq!(iter.next(), Some(&30));
+        assert_eq!(iter.next(), Some(&40));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn descriptor_ring_iter_mut() {
+        let mut ring = DescriptorRing::from_array([1u32, 2, 3, 4]);
+        for val in ring.iter_mut() {
+            *val *= 10;
+        }
+        assert_eq!(*ring.get(0), 10);
+        assert_eq!(*ring.get(1), 20);
+        assert_eq!(*ring.get(2), 30);
+        assert_eq!(*ring.get(3), 40);
+    }
+
+    // =========================================================================
+    // DmaEngine Tests
+    // =========================================================================
+
+    #[test]
+    fn dma_engine_new_is_not_initialized() {
+        let dma: DmaEngine<4, 4, 1600> = DmaEngine::new();
+        assert!(!dma.is_initialized());
+    }
+
+    #[test]
+    fn dma_engine_memory_usage_scales_with_buffers() {
+        let small = DmaEngine::<2, 2, 512>::memory_usage();
+        let large = DmaEngine::<10, 10, 1600>::memory_usage();
+        assert!(large > small);
+    }
+
+    #[test]
+    fn dma_engine_memory_usage_scales_with_buffer_size() {
+        let small = DmaEngine::<4, 4, 512>::memory_usage();
+        let large = DmaEngine::<4, 4, 2048>::memory_usage();
+        assert!(large > small);
+    }
+
+    #[test]
+    fn dma_engine_tx_ctrl_flags_default() {
+        let dma: DmaEngine<4, 4, 1600> = DmaEngine::new();
+        assert_eq!(dma.tx_ctrl_flags(), 0);
+    }
+
+    #[test]
+    fn dma_engine_set_tx_ctrl_flags() {
+        let mut dma: DmaEngine<4, 4, 1600> = DmaEngine::new();
+        dma.set_tx_ctrl_flags(0x1234);
+        assert_eq!(dma.tx_ctrl_flags(), 0x1234);
+    }
 }

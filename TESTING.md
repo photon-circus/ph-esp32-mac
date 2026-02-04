@@ -13,25 +13,25 @@ This document outlines the testing strategy for the ESP32 EMAC driver, covering 
 | `config.rs` | 19 | ✅ Implemented | 2026-02-03 |
 | `mac.rs` (InterruptStatus) | 28 | ✅ Implemented | 2026-02-03 |
 | `error.rs` | 22 | ✅ Implemented | 2026-02-03 |
-| `hal/mdio.rs` | 14 | ✅ Implemented | 2026-02-03 |
+| `hal/mdio.rs` | 32 | ✅ Implemented | 2026-02-03 |
 | `phy/lan8720a.rs` | 46 | ✅ Implemented | 2026-02-03 |
-| `dma.rs` | 2 | ✅ Implemented | 2026-02-03 |
+| `dma.rs` | 22 | ✅ Implemented | 2026-02-03 |
 | `test_utils.rs` | 5 | ✅ Implemented | 2026-02-03 |
 | `constants.rs` | 29 | ✅ Implemented | 2026-02-03 |
 | `asynch.rs` | 12 | ✅ Implemented | 2026-02-03 |
 | `smoltcp.rs` | 9 | ✅ Implemented | 2026-02-03 |
 | `sync.rs` | 11 | ✅ Implemented | 2026-02-03 |
 | `descriptor/mod.rs` | 1 | ✅ Implemented | 2026-02-03 |
-| **Total** | **229** | ✅ All Passing | 2026-02-03 |
+| **Total** | **275** | ✅ All Passing | 2026-02-03 |
 
 ### Code Coverage
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Region Coverage | 60.26% | Functions and branches |
-| Line Coverage | 55.66% | Executable lines |
+| Region Coverage | 64.14% | Functions and branches |
+| Line Coverage | 60.09% | Executable lines |
 | 100% Coverage | `constants.rs`, `sync.rs` | Fully tested modules |
-| High Coverage | `error.rs` (98%), `config.rs` (93%) | Well-tested modules |
+| High Coverage | `error.rs` (98%), `config.rs` (93%), `hal/mdio.rs` (73%) | Well-tested modules |
 
 ---
 
@@ -65,7 +65,7 @@ This document outlines the testing strategy for the ESP32 EMAC driver, covering 
                  │   Integration Tests   │  ← ESP32 + PHY + loopback
                  │      (Hardware)       │
               ┌──┴───────────────────────┴──┐
-              │        Unit Tests           │  ← Host-based, fast (229 tests)
+              │        Unit Tests           │  ← Host-based, fast (275 tests)
               │          (Host)             │
               └─────────────────────────────┘
 ```
@@ -344,17 +344,27 @@ Test-friendly constants available:
 
 ### Unit Test Coverage
 
-| Module | Target | Current | Status |
-|--------|--------|---------|--------|
-| `descriptor/` | 90% | 30 tests | ✅ |
-| `config.rs` | 85% | 19 tests | ✅ |
-| `error.rs` | 80% | 22 tests | ✅ |
-| `mac.rs` (InterruptStatus) | 70% | 28 tests | ✅ |
-| `hal/mdio.rs` | 80% | 14 tests | ✅ |
-| `phy/lan8720a.rs` | 90% | 46 tests | ✅ |
-| `dma.rs` | 75% | 2 tests | ✅ |
-| `asynch.rs` | 75% | 0 tests | 🔲 Planned |
-| `smoltcp.rs` | 60% | 0 tests | 🔲 Planned |
+| Module | Target | Current | Tests | Status |
+|--------|--------|---------|-------|--------|
+| `constants.rs` | 90% | **100%** | 29 | ✅ Exceeded |
+| `sync.rs` | 80% | **100%** | 11 | ✅ Exceeded |
+| `error.rs` | 80% | **98%** | 22 | ✅ Exceeded |
+| `config.rs` | 85% | **93%** | 19 | ✅ Exceeded |
+| `test_utils.rs` | 80% | **86%** | 5 | ✅ Exceeded |
+| `descriptor/tx.rs` | 85% | **84%** | 17 | ✅ Met |
+| `phy/lan8720a.rs` | 90% | **82%** | 46 | 🔶 Close |
+| `phy/generic.rs` | 80% | **90%** | 1 | ✅ Exceeded |
+| `hal/mdio.rs` | 80% | **73%** | 32 | 🔶 Close |
+| `descriptor/rx.rs` | 85% | **67%** | 13 | 🔶 Gap |
+| `asynch.rs` | 75% | **65%** | 12 | 🔶 Gap |
+| `dma.rs` | 75% | **46%** | 22 | 🔶 Gap |
+| `mac.rs` | 70% | **38%** | 28 | ⚠️ Needs work |
+| `smoltcp.rs` | 60% | **37%** | 9 | 🔶 Gap |
+| `hal/clock.rs` | 70% | 0% | 0 | 🔲 Planned |
+| `hal/reset.rs` | 70% | 0% | 0 | 🔲 Planned |
+| `register/*.rs` | 50% | 0% | 0 | 🔲 Hardware-only |
+
+**Overall Coverage:** 60.09% lines, 64.14% regions
 
 ### Integration Test Requirements
 
