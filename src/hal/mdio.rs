@@ -6,7 +6,7 @@
 
 use embedded_hal::delay::DelayNs;
 
-use crate::error::{ConfigError, IoError, Result};
+use crate::driver::error::{ConfigError, IoError, Result};
 use crate::internal::register::mac::{
     GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT, GMACMIIADDR_GB, GMACMIIADDR_GR_MASK,
     GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_MASK, GMACMIIADDR_PA_SHIFT, MacRegs,

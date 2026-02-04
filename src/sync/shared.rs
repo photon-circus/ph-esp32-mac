@@ -4,7 +4,7 @@
 //! [`AsyncSharedEmac`] for async-capable ISR-safe access.
 
 use super::primitives::CriticalSectionCell;
-use crate::mac::Emac;
+use crate::driver::mac::Emac;
 
 /// ISR-safe EMAC wrapper using critical sections.
 ///
@@ -209,7 +209,7 @@ pub type AsyncSharedEmacLarge = AsyncSharedEmac<16, 16, 1600>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::State;
+    use crate::driver::config::State;
 
     #[test]
     fn test_shared_emac_new() {

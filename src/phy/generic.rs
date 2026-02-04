@@ -3,8 +3,8 @@
 //! This module defines the common interface for all Ethernet PHY drivers,
 //! based on IEEE 802.3 Clause 22 standard registers.
 
-use crate::config::{Duplex, Speed};
-use crate::error::Result;
+use crate::driver::config::{Duplex, Speed};
+use crate::driver::error::Result;
 use crate::hal::mdio::MdioBus;
 
 // =============================================================================

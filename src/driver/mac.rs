@@ -5,14 +5,14 @@
 
 use embedded_hal::delay::DelayNs;
 
-use crate::config::{
+use super::config::{
     Duplex, EmacConfig, FlowControlConfig, PhyInterface, RmiiClockMode, Speed, State,
 };
 use crate::internal::constants::{
     CSR_CLOCK_DIV_42, FLUSH_TIMEOUT, MII_BUSY_TIMEOUT, TX_DMA_STATE_MASK, TX_DMA_STATE_SHIFT,
 };
 use crate::dma::DmaEngine;
-use crate::error::{ConfigError, DmaError, IoError, Result};
+use super::error::{ConfigError, DmaError, IoError, Result};
 use crate::hal::reset::ResetController;
 use crate::internal::register::dma::{
     DMABUSMODE_AAL, DMABUSMODE_ATDS, DMABUSMODE_FB, DMABUSMODE_PBL_MASK, DMABUSMODE_PBL_SHIFT,
@@ -798,7 +798,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// * `Err(NoDescriptorsAvailable)` - All 4 filter slots are in use
     pub fn add_mac_filter_config(
         &mut self,
-        filter: &crate::config::MacAddressFilter,
+        filter: &super::config::MacAddressFilter,
     ) -> Result<usize> {
         // Check if already in filter
         if MacRegs::find_mac_filter(&filter.address).is_some() {
@@ -808,7 +808,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         // Find a free slot
         let slot = MacRegs::find_free_mac_filter_slot().ok_or(DmaError::NoDescriptorsAvailable)?;
 
-        let is_source = matches!(filter.filter_type, crate::config::MacFilterType::Source);
+        let is_source = matches!(filter.filter_type, super::config::MacFilterType::Source);
         MacRegs::set_mac_filter(slot, &filter.address, is_source, filter.byte_mask);
 
         Ok(slot)

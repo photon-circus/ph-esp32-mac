@@ -80,7 +80,7 @@
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::OutputPin;
 
-use crate::error::Result;
+use crate::driver::error::Result;
 use crate::hal::mdio::MdioBus;
 use crate::internal::lan8720a_regs as regs_int;
 
@@ -542,13 +542,13 @@ impl<RST: OutputPin> Lan8720aWithReset<RST> {
         // Assert reset (low)
         self.reset_pin
             .set_low()
-            .map_err(|_| crate::error::ConfigError::GpioError)?;
+            .map_err(|_| crate::driver::error::ConfigError::GpioError)?;
         delay.delay_us(RESET_PULSE_US);
 
         // Deassert reset (high)
         self.reset_pin
             .set_high()
-            .map_err(|_| crate::error::ConfigError::GpioError)?;
+            .map_err(|_| crate::driver::error::ConfigError::GpioError)?;
         delay.delay_us(RESET_RECOVERY_US);
 
         Ok(())
@@ -560,7 +560,7 @@ impl<RST: OutputPin> Lan8720aWithReset<RST> {
     pub fn assert_reset(&mut self) -> Result<()> {
         self.reset_pin
             .set_low()
-            .map_err(|_| crate::error::ConfigError::GpioError)?;
+            .map_err(|_| crate::driver::error::ConfigError::GpioError)?;
         Ok(())
     }
 
@@ -571,7 +571,7 @@ impl<RST: OutputPin> Lan8720aWithReset<RST> {
     pub fn deassert_reset(&mut self) -> Result<()> {
         self.reset_pin
             .set_high()
-            .map_err(|_| crate::error::ConfigError::GpioError)?;
+            .map_err(|_| crate::driver::error::ConfigError::GpioError)?;
         Ok(())
     }
 
@@ -735,9 +735,9 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use crate::config::{Duplex, Speed};
+    use crate::driver::config::{Duplex, Speed};
     use crate::internal::phy_registers::{bmcr, phy_reg};
-    use crate::test_utils::MockMdioBus;
+    use crate::testing::MockMdioBus;
     use std::vec::Vec;
 
     // =========================================================================

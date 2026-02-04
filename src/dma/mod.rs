@@ -26,7 +26,7 @@
 mod descriptor;
 
 use descriptor::{RxDescriptor, TxDescriptor};
-use crate::error::{DmaError, IoError, Result};
+use crate::driver::error::{DmaError, IoError, Result};
 use crate::internal::register::dma::DmaRegs;
 
 // =============================================================================
@@ -961,11 +961,11 @@ mod tests {
     }
 
     // =========================================================================
-    // Mock Test Utilities (imported from test_utils)
+    // Mock Test Utilities (imported from testing)
     // =========================================================================
 
-    // Use the shared MockDescriptor from test_utils module
-    use crate::test_utils::MockDescriptor;
+    // Use the shared MockDescriptor from testing module
+    use crate::testing::MockDescriptor;
 
     // =========================================================================
     // DescriptorRing with MockDescriptor Tests

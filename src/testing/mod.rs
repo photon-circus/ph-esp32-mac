@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::vec;
 use std::vec::Vec;
 
-use crate::error::Result;
+use crate::driver::error::Result;
 use crate::hal::mdio::MdioBus;
 
 // Use the internal PHY register constants
@@ -226,7 +226,7 @@ impl embedded_hal::delay::DelayNs for MockDelay {
 /// # Example
 ///
 /// ```ignore
-/// use crate::test_utils::MockDescriptor;
+/// use crate::testing::MockDescriptor;
 /// use crate::dma::DescriptorRing;
 ///
 /// let mut ring: DescriptorRing<MockDescriptor, 4> = DescriptorRing::from_array(

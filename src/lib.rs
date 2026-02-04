@@ -123,11 +123,9 @@
 // Modules
 // =============================================================================
 
-pub mod config;
+pub mod driver;
 pub mod dma;
-pub mod error;
 pub mod hal;
-pub mod mac;
 pub mod phy;
 
 // Internal implementation details (pub(crate) only)
@@ -161,20 +159,20 @@ pub mod sync;
 
 // Test utilities (only available during testing)
 #[cfg(test)]
-pub mod test_utils;
+pub mod testing;
 
 // =============================================================================
 // Re-exports
 // =============================================================================
 
-pub use config::{
+pub use driver::config::{
     ChecksumConfig, DmaBurstLen, Duplex, EmacConfig, FlowControlConfig, MAC_FILTER_SLOTS,
     MacAddressFilter, MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State,
     TxChecksumMode,
 };
 pub use dma::{DescriptorRing, DmaEngine};
-pub use error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};
-pub use mac::{Emac, EmacDefault, EmacLarge, EmacSmall, InterruptStatus};
+pub use driver::error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};
+pub use driver::mac::{Emac, EmacDefault, EmacLarge, EmacSmall, InterruptStatus};
 
 // Re-export register access types
 pub use internal::register::dma::DmaRegs;

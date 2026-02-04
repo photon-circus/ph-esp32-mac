@@ -4,8 +4,8 @@
 //! It wraps the low-level register access from `register::ext` with a more
 //! user-friendly API.
 
-use crate::config::{PhyInterface, RmiiClockMode};
-use crate::error::{ConfigError, Result};
+use crate::driver::config::{PhyInterface, RmiiClockMode};
+use crate::driver::error::{ConfigError, Result};
 use crate::internal::register::ext::ExtRegs;
 
 /// Clock configuration state
