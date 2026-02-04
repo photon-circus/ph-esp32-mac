@@ -27,6 +27,7 @@ use crate::internal::register::dma::{
     DMABUSMODE_USP, DMAOPERATION_RSF, DMAOPERATION_TSF, DmaRegs,
 };
 use crate::internal::register::ext::ExtRegs;
+use crate::internal::register::gpio::GpioMatrix;
 use crate::internal::register::mac::{
     GMACCONFIG_ACS, GMACCONFIG_DM, GMACCONFIG_FES, GMACCONFIG_IPC, GMACCONFIG_JD, GMACCONFIG_PS,
     GMACCONFIG_WD, GMACFF_PM, GMACFF_PR, GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT, GMACMIIADDR_GB,
@@ -60,15 +61,35 @@ impl<D: DelayNs> DelayNs for BorrowedDelay<'_, D> {
 /// * `TX_BUFS` - Number of transmit buffers (typically 10)
 /// * `BUF_SIZE` - Size of each buffer in bytes (typically 1600)
 ///
+/// # Important: Self-Referential Descriptor Chain
+///
+/// **The EMAC must be placed in its final memory location BEFORE calling `init()`.**
+///
+/// The DMA engine uses a chain of descriptors that contain pointers to themselves
+/// and to their buffers. If you create an EMAC on the stack, call `init()`, and then
+/// move it to a static, the descriptor pointers will be invalid and DMA will fail.
+///
 /// # Example
 /// ```ignore
-/// // Static allocation
-/// #[link_section = ".dram1"]
-/// static mut EMAC: Emac<10, 10, 1600> = Emac::new();
+/// // CORRECT: Place in static first, then init in-place
+/// static EMAC: Mutex<RefCell<Option<Emac<10, 10, 1600>>>> = Mutex::new(RefCell::new(None));
 ///
-/// let emac = unsafe { &mut EMAC };
-/// emac.init(EmacConfig::default()).unwrap();
-/// emac.start().unwrap();
+/// // First, place the uninitialized EMAC in the static
+/// critical_section::with(|cs| {
+///     EMAC.borrow_ref_mut(cs).replace(Emac::new());
+/// });
+///
+/// // Then initialize it in-place
+/// critical_section::with(|cs| {
+///     if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
+///         emac.init(config, &mut delay).unwrap();
+///     }
+/// });
+///
+/// // WRONG: Don't do this - creates invalid descriptor pointers!
+/// // let mut emac = Emac::new();
+/// // emac.init(config, &mut delay).unwrap();  // Pointers point to stack!
+/// // EMAC.borrow_ref_mut(cs).replace(emac);   // Move invalidates pointers!
 /// ```
 ///
 /// # Module Organization
@@ -181,6 +202,20 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
             #[cfg(feature = "defmt")]
             defmt::info!("GPIO0 configured for external RMII clock input");
         }
+
+        // Configure SMI pins (MDC/MDIO) via GPIO Matrix
+        // This MUST be done before using MDIO to communicate with the PHY
+        GpioMatrix::configure_smi_pins();
+
+        #[cfg(feature = "defmt")]
+        defmt::info!("SMI pins configured: GPIO23=MDC, GPIO18=MDIO");
+
+        // Configure RMII data pins via IO_MUX (fixed pins, function 5)
+        // This MUST be done for TX/RX to work
+        GpioMatrix::configure_rmii_pins();
+
+        #[cfg(feature = "defmt")]
+        defmt::info!("RMII data pins configured via IO_MUX");
 
         // === STEP 2: Enable DPORT peripheral clock ===
         ExtRegs::enable_peripheral_clock();

@@ -251,19 +251,28 @@ fn main() -> ! {
         .with_phy_interface(PhyInterface::Rmii)
         .with_rmii_clock(rmii_clock_mode);
 
-    // Initialize EMAC in critical section
+    // IMPORTANT: We must place the EMAC in its final static location BEFORE
+    // calling init(), because init() sets up DMA descriptor chains that contain
+    // pointers to themselves. If we init() on the stack and then move, the
+    // pointers will be invalid!
+    
+    // First, place an uninitialized EMAC in the static
     critical_section::with(|cs| {
-        let mut emac = Emac::new();
-        let mut delay = esp_hal::delay::Delay::new();
-
-        match emac.init(config, &mut delay) {
-            Ok(()) => {
-                info!("EMAC initialized successfully");
-                EMAC.borrow_ref_mut(cs).replace(emac);
-            }
-            Err(e) => {
-                error!("EMAC init failed: {:?}", e);
-                panic!("Cannot continue without EMAC");
+        EMAC.borrow_ref_mut(cs).replace(Emac::new());
+    });
+    
+    // Now initialize it in-place through the static reference
+    critical_section::with(|cs| {
+        if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
+            let mut delay = esp_hal::delay::Delay::new();
+            match emac.init(config, &mut delay) {
+                Ok(()) => {
+                    info!("EMAC initialized successfully");
+                }
+                Err(e) => {
+                    error!("EMAC init failed: {:?}", e);
+                    panic!("Cannot continue without EMAC");
+                }
             }
         }
     });
@@ -369,7 +378,7 @@ fn main() -> ! {
     });
 
     // -------------------------------------------------------------------------
-    // Step 6: Main loop - Echo/ping responder test
+    // Step 6: Main loop - Packet reception test
     // -------------------------------------------------------------------------
     info!("");
     info!("=== INTEGRATION TEST ACTIVE ===");
@@ -418,7 +427,7 @@ fn main() -> ! {
                                     src_mac[5]
                                 );
 
-                                // Check for ARP (0x0806) or IPv4 (0x0800)
+                                // Check for common EtherTypes
                                 match ethertype {
                                     0x0806 => info!("  Type: ARP"),
                                     0x0800 => {
@@ -433,6 +442,7 @@ fn main() -> ! {
                                         }
                                     }
                                     0x86DD => info!("  Type: IPv6"),
+                                    0x88CC => info!("  Type: LLDP"),
                                     _ => {}
                                 }
                             }
@@ -451,10 +461,11 @@ fn main() -> ! {
             last_status_time = 0;
             info!("--- Status: {} packets received ---", packet_count);
 
-            // Re-check link status
-            match phy.poll_link(&mut mdio) {
-                Ok(Some(_)) => info!("Link: UP"),
-                Ok(None) => warn!("Link: DOWN"),
+            // Re-check link status using is_link_up() for current state
+            // Note: poll_link() only reports transitions, not current state
+            match phy.is_link_up(&mut mdio) {
+                Ok(true) => info!("Link: UP"),
+                Ok(false) => warn!("Link: DOWN"),
                 Err(e) => error!("Link check error: {:?}", e),
             }
         }

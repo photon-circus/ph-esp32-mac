@@ -5,6 +5,7 @@
 
 pub mod dma;
 pub mod ext;
+pub mod gpio;
 pub mod mac;
 
 // ESP32 and ESP32-P4 are mutually exclusive; if both are enabled, prefer ESP32
