@@ -139,8 +139,8 @@ impl GpioMatrix {
             let iomux_addr = Self::iomux_addr_for_gpio(gpio_num);
             if iomux_addr != 0 {
                 let iomux_val = read_reg(iomux_addr);
-                let new_iomux = (iomux_val & !IO_MUX_MCU_SEL_MASK)
-                    | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT);
+                let new_iomux =
+                    (iomux_val & !IO_MUX_MCU_SEL_MASK) | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT);
                 write_reg(iomux_addr, new_iomux);
             }
 
@@ -293,7 +293,12 @@ impl GpioMatrix {
             // Clear pull-up/pull-down (bits 7, 8)
             // For outputs, we still set FUN_IE=0 (bit 9) since it's output only
             // Also set FUN_DRV (bits 10-11) to maximum drive strength (3)
-            let new_val = (current & !IO_MUX_MCU_SEL_MASK & !(1 << 7) & !(1 << 8) & !IO_MUX_FUN_IE & !(3 << 10))
+            let new_val = (current
+                & !IO_MUX_MCU_SEL_MASK
+                & !(1 << 7)
+                & !(1 << 8)
+                & !IO_MUX_FUN_IE
+                & !(3 << 10))
                 | (func << IO_MUX_MCU_SEL_SHIFT)
                 | (3 << 10); // Maximum drive strength
             write_reg(iomux_addr, new_val);

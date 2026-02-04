@@ -2,10 +2,10 @@
 name = "ph-esp32-mac-integration-tests"
 version = "0.1.0"
 edition = "2024"
-authors = ["ph-esp32-mac contributors"]
+authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
 description = "Integration tests for ph-esp32-mac on real ESP32 hardware"
 publish = false
-rust-version = "1.88"
+rust-version = "1.92.0"
 
 [[bin]]
 name = "wt32_eth01"

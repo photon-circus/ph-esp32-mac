@@ -21,3 +21,6 @@ ESP_LOG = "info"
 [unstable]
 # Enable build-std for no_std targets
 build-std = ["core"]
+
+[alias]
+rrun = "run --release"
