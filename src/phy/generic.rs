@@ -192,18 +192,18 @@ pub trait PhyDriver {
 /// Helper functions using standard IEEE 802.3 registers
 pub mod ieee802_3 {
     use super::*;
-    use crate::hal::mdio::{anar, bmcr, bmsr, phy_reg};
+    use crate::internal::phy_registers::{anar, bmcr, bmsr, phy_reg};
 
     /// Read BMSR and check link status bit
     pub fn is_link_up<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<bool> {
-        let bmsr = mdio.read(phy_addr, phy_reg::BMSR)?;
-        Ok((bmsr & bmsr::LINK_STATUS) != 0)
+        let bmsr_val = mdio.read(phy_addr, phy_reg::BMSR)?;
+        Ok((bmsr_val & bmsr::LINK_STATUS) != 0)
     }
 
     /// Read BMSR and check AN complete bit
     pub fn is_an_complete<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<bool> {
-        let bmsr = mdio.read(phy_addr, phy_reg::BMSR)?;
-        Ok((bmsr & bmsr::AN_COMPLETE) != 0)
+        let bmsr_val = mdio.read(phy_addr, phy_reg::BMSR)?;
+        Ok((bmsr_val & bmsr::AN_COMPLETE) != 0)
     }
 
     /// Perform soft reset via BMCR
@@ -226,11 +226,11 @@ pub mod ieee802_3 {
 
     /// Enable auto-negotiation and restart
     pub fn enable_auto_negotiation<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<()> {
-        let bmcr = mdio.read(phy_addr, phy_reg::BMCR)?;
+        let bmcr_val = mdio.read(phy_addr, phy_reg::BMCR)?;
         mdio.write(
             phy_addr,
             phy_reg::BMCR,
-            (bmcr | bmcr::AN_ENABLE | bmcr::AN_RESTART) & !bmcr::ISOLATE,
+            (bmcr_val | bmcr::AN_ENABLE | bmcr::AN_RESTART) & !bmcr::ISOLATE,
         )
     }
 
@@ -268,14 +268,14 @@ pub mod ieee802_3 {
 
     /// Read capabilities from BMSR
     pub fn read_capabilities<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<PhyCapabilities> {
-        let bmsr = mdio.read(phy_addr, phy_reg::BMSR)?;
+        let bmsr_val = mdio.read(phy_addr, phy_reg::BMSR)?;
 
         Ok(PhyCapabilities {
-            speed_100_fd: (bmsr & bmsr::TX_FD_CAPABLE) != 0,
-            speed_100_hd: (bmsr & bmsr::TX_HD_CAPABLE) != 0,
-            speed_10_fd: (bmsr & bmsr::T10_FD_CAPABLE) != 0,
-            speed_10_hd: (bmsr & bmsr::T10_HD_CAPABLE) != 0,
-            auto_negotiation: (bmsr & bmsr::AN_ABILITY) != 0,
+            speed_100_fd: (bmsr_val & bmsr::TX_FD_CAPABLE) != 0,
+            speed_100_hd: (bmsr_val & bmsr::TX_HD_CAPABLE) != 0,
+            speed_10_fd: (bmsr_val & bmsr::T10_FD_CAPABLE) != 0,
+            speed_10_hd: (bmsr_val & bmsr::T10_HD_CAPABLE) != 0,
+            auto_negotiation: (bmsr_val & bmsr::AN_ABILITY) != 0,
             pause: false, // Need to check ANAR for this
             pause_asymmetric: false,
         })
@@ -283,30 +283,30 @@ pub mod ieee802_3 {
 
     /// Read link partner abilities from ANLPAR
     pub fn read_link_partner<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<PhyCapabilities> {
-        let anlpar = mdio.read(phy_addr, phy_reg::ANLPAR)?;
+        let anlpar_val = mdio.read(phy_addr, phy_reg::ANLPAR)?;
 
         Ok(PhyCapabilities {
-            speed_100_fd: (anlpar & anar::TX_FD) != 0,
-            speed_100_hd: (anlpar & anar::TX_HD) != 0,
-            speed_10_fd: (anlpar & anar::T10_FD) != 0,
-            speed_10_hd: (anlpar & anar::T10_HD) != 0,
+            speed_100_fd: (anlpar_val & anar::TX_FD) != 0,
+            speed_100_hd: (anlpar_val & anar::TX_HD) != 0,
+            speed_10_fd: (anlpar_val & anar::T10_FD) != 0,
+            speed_10_hd: (anlpar_val & anar::T10_HD) != 0,
             auto_negotiation: true, // If we have ANLPAR, partner supports AN
-            pause: (anlpar & anar::PAUSE) != 0,
+            pause: (anlpar_val & anar::PAUSE) != 0,
             pause_asymmetric: false,
         })
     }
 
     /// Get link status from BMCR (when AN is disabled or for current state)
     pub fn link_status_from_bmcr<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<LinkStatus> {
-        let bmcr = mdio.read(phy_addr, phy_reg::BMCR)?;
+        let bmcr_val = mdio.read(phy_addr, phy_reg::BMCR)?;
 
-        let speed = if (bmcr & bmcr::SPEED_100) != 0 {
+        let speed = if (bmcr_val & bmcr::SPEED_100) != 0 {
             Speed::Mbps100
         } else {
             Speed::Mbps10
         };
 
-        let duplex = if (bmcr & bmcr::DUPLEX_FULL) != 0 {
+        let duplex = if (bmcr_val & bmcr::DUPLEX_FULL) != 0 {
             Duplex::Full
         } else {
             Duplex::Half

@@ -66,5 +66,7 @@ pub mod lan8720a;
 pub use generic::{LinkStatus, PhyCapabilities, PhyDriver};
 pub use lan8720a::{Lan8720a, Lan8720aWithReset};
 
-// Re-export IEEE 802.3 standard register definitions from mdio
-pub use crate::hal::mdio::{anar, bmcr, bmsr, phy_reg};
+// Re-export IEEE 802.3 standard register definitions from internal module
+// These are implementation details for PHY drivers
+#[doc(hidden)]
+pub use crate::internal::phy_registers::{anar, anlpar, bmcr, bmsr, phy_reg};

@@ -3,119 +3,193 @@
 //! The TX descriptor controls frame transmission and reports status after completion.
 
 use super::VolatileCell;
+use crate::internal::descriptor_bits::{tdes0, tdes1};
 
 // =============================================================================
-// TDES0 (TX Descriptor Word 0) - Status/Control
+// Import Internal Constants
 // =============================================================================
 
-/// Deferred Bit - set when frame transmission is deferred
-pub const TDES0_DEFERRED: u32 = 1 << 0;
-/// Underflow Error - TX FIFO underflow during frame transmission
-pub const TDES0_UNDERFLOW_ERR: u32 = 1 << 1;
-/// Excessive Deferral - frame deferred for more than 24288 bit times
-pub const TDES0_EXCESSIVE_DEFERRAL: u32 = 1 << 2;
-/// Collision Count shift (4 bits)
-pub const TDES0_COLLISION_COUNT_SHIFT: u32 = 3;
-/// Collision Count mask
-pub const TDES0_COLLISION_COUNT_MASK: u32 = 0xF << 3;
-/// VLAN Frame - frame is a VLAN tagged frame
-pub const TDES0_VLAN_FRAME: u32 = 1 << 7;
-/// Excessive Collision - more than 16 collisions
-pub const TDES0_EXCESSIVE_COLLISION: u32 = 1 << 8;
-/// Late Collision - collision after 64 byte times
-pub const TDES0_LATE_COLLISION: u32 = 1 << 9;
-/// No Carrier - carrier sense signal not asserted
-pub const TDES0_NO_CARRIER: u32 = 1 << 10;
-/// Loss of Carrier - carrier lost during transmission
-pub const TDES0_LOSS_OF_CARRIER: u32 = 1 << 11;
-/// IP Payload Error - checksum error in payload
-pub const TDES0_IP_PAYLOAD_ERR: u32 = 1 << 12;
-/// Frame Flushed - frame flushed due to SW flush
-pub const TDES0_FRAME_FLUSHED: u32 = 1 << 13;
-/// Jabber Timeout - transmission continued beyond 2048 bytes
-pub const TDES0_JABBER_TIMEOUT: u32 = 1 << 14;
-/// Error Summary - logical OR of all error bits
-pub const TDES0_ERR_SUMMARY: u32 = 1 << 15;
-/// IP Header Error - checksum error in IP header
-pub const TDES0_IP_HEADER_ERR: u32 = 1 << 16;
-/// TX Timestamp Status - timestamp captured
-pub const TDES0_TX_TIMESTAMP_STATUS: u32 = 1 << 17;
-/// VLAN Insertion Control shift (2 bits)
-pub const TDES0_VLAN_INSERT_CTRL_SHIFT: u32 = 18;
-/// VLAN Insertion Control mask
-pub const TDES0_VLAN_INSERT_CTRL_MASK: u32 = 0x3 << 18;
-/// Second Address Chained - buffer2 contains next descriptor address
-pub const TDES0_SECOND_ADDR_CHAINED: u32 = 1 << 20;
-/// Transmit End of Ring - this is the last descriptor in the ring
-pub const TDES0_TX_END_OF_RING: u32 = 1 << 21;
-/// Checksum Insertion Control shift (2 bits)
-pub const TDES0_CHECKSUM_INSERT_SHIFT: u32 = 22;
-/// Checksum Insertion Control mask
-pub const TDES0_CHECKSUM_INSERT_MASK: u32 = 0x3 << 22;
-/// CRC Replacement Control - replace CRC with calculated value
-pub const TDES0_CRC_REPLACE: u32 = 1 << 24;
-/// Transmit Timestamp Enable - capture timestamp on transmission
-pub const TDES0_TX_TIMESTAMP_EN: u32 = 1 << 25;
-/// Disable Pad - do not add padding to short frames
-pub const TDES0_DISABLE_PAD: u32 = 1 << 26;
-/// Disable CRC - do not append CRC to frame
-pub const TDES0_DISABLE_CRC: u32 = 1 << 27;
-/// First Segment - buffer contains first segment of frame
-pub const TDES0_FIRST_SEGMENT: u32 = 1 << 28;
-/// Last Segment - buffer contains last segment of frame
-pub const TDES0_LAST_SEGMENT: u32 = 1 << 29;
-/// Interrupt on Completion - generate interrupt when transmission complete
-pub const TDES0_INTERRUPT_ON_COMPLETE: u32 = 1 << 30;
-/// OWN - when set, descriptor is owned by DMA; when clear, owned by CPU
-pub const TDES0_OWN: u32 = 1 << 31;
+use tdes0::ALL_ERRORS as TDES0_ALL_ERRORS_INT;
+use tdes0::CHECKSUM_INSERT_MASK as TDES0_CHECKSUM_INSERT_MASK_INT;
+use tdes0::CHECKSUM_INSERT_SHIFT as TDES0_CHECKSUM_INSERT_SHIFT_INT;
+use tdes0::COLLISION_COUNT_MASK as TDES0_COLLISION_COUNT_MASK_INT;
+use tdes0::COLLISION_COUNT_SHIFT as TDES0_COLLISION_COUNT_SHIFT_INT;
+use tdes0::CRC_REPLACE as TDES0_CRC_REPLACE_INT;
+use tdes0::DEFERRED as TDES0_DEFERRED_INT;
+use tdes0::DISABLE_CRC as TDES0_DISABLE_CRC_INT;
+use tdes0::DISABLE_PAD as TDES0_DISABLE_PAD_INT;
+use tdes0::ERR_SUMMARY as TDES0_ERR_SUMMARY_INT;
+use tdes0::EXCESSIVE_COLLISION as TDES0_EXCESSIVE_COLLISION_INT;
+use tdes0::EXCESSIVE_DEFERRAL as TDES0_EXCESSIVE_DEFERRAL_INT;
+use tdes0::FIRST_SEGMENT as TDES0_FIRST_SEGMENT_INT;
+use tdes0::FRAME_FLUSHED as TDES0_FRAME_FLUSHED_INT;
+use tdes0::FS_CTRL_FLAGS as TDES0_FS_CTRL_FLAGS_INT;
+use tdes0::INTERRUPT_ON_COMPLETE as TDES0_INTERRUPT_ON_COMPLETE_INT;
+use tdes0::IP_HEADER_ERR as TDES0_IP_HEADER_ERR_INT;
+use tdes0::IP_PAYLOAD_ERR as TDES0_IP_PAYLOAD_ERR_INT;
+use tdes0::JABBER_TIMEOUT as TDES0_JABBER_TIMEOUT_INT;
+use tdes0::LAST_SEGMENT as TDES0_LAST_SEGMENT_INT;
+use tdes0::LATE_COLLISION as TDES0_LATE_COLLISION_INT;
+use tdes0::LOSS_OF_CARRIER as TDES0_LOSS_OF_CARRIER_INT;
+use tdes0::LS_CTRL_FLAGS as TDES0_LS_CTRL_FLAGS_INT;
+use tdes0::NO_CARRIER as TDES0_NO_CARRIER_INT;
+use tdes0::OWN as TDES0_OWN_INT;
+use tdes0::SECOND_ADDR_CHAINED as TDES0_SECOND_ADDR_CHAINED_INT;
+use tdes0::TX_END_OF_RING as TDES0_TX_END_OF_RING_INT;
+use tdes0::TX_TIMESTAMP_EN as TDES0_TX_TIMESTAMP_EN_INT;
+use tdes0::TX_TIMESTAMP_STATUS as TDES0_TX_TIMESTAMP_STATUS_INT;
+use tdes0::UNDERFLOW_ERR as TDES0_UNDERFLOW_ERR_INT;
+use tdes0::VLAN_FRAME as TDES0_VLAN_FRAME_INT;
+use tdes0::VLAN_INSERT_CTRL_MASK as TDES0_VLAN_INSERT_CTRL_MASK_INT;
+use tdes0::VLAN_INSERT_CTRL_SHIFT as TDES0_VLAN_INSERT_CTRL_SHIFT_INT;
 
-/// Checksum insertion modes
+use tdes1::BUFFER1_SIZE_MASK as TDES1_BUFFER1_SIZE_MASK_INT;
+use tdes1::BUFFER1_SIZE_SHIFT as TDES1_BUFFER1_SIZE_SHIFT_INT;
+use tdes1::BUFFER2_SIZE_MASK as TDES1_BUFFER2_SIZE_MASK_INT;
+use tdes1::BUFFER2_SIZE_SHIFT as TDES1_BUFFER2_SIZE_SHIFT_INT;
+use tdes1::SA_INSERT_CTRL_MASK as TDES1_SA_INSERT_CTRL_MASK_INT;
+use tdes1::SA_INSERT_CTRL_SHIFT as TDES1_SA_INSERT_CTRL_SHIFT_INT;
+
+// =============================================================================
+// TDES0 (TX Descriptor Word 0) - Deprecated Re-exports
+// =============================================================================
+
+/// Deferred Bit (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::DEFERRED")]
+pub const TDES0_DEFERRED: u32 = TDES0_DEFERRED_INT;
+/// Underflow Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::UNDERFLOW_ERR")]
+pub const TDES0_UNDERFLOW_ERR: u32 = TDES0_UNDERFLOW_ERR_INT;
+/// Excessive Deferral (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::EXCESSIVE_DEFERRAL")]
+pub const TDES0_EXCESSIVE_DEFERRAL: u32 = TDES0_EXCESSIVE_DEFERRAL_INT;
+/// Collision Count shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::COLLISION_COUNT_SHIFT")]
+pub const TDES0_COLLISION_COUNT_SHIFT: u32 = TDES0_COLLISION_COUNT_SHIFT_INT;
+/// Collision Count mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::COLLISION_COUNT_MASK")]
+pub const TDES0_COLLISION_COUNT_MASK: u32 = TDES0_COLLISION_COUNT_MASK_INT;
+/// VLAN Frame (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::VLAN_FRAME")]
+pub const TDES0_VLAN_FRAME: u32 = TDES0_VLAN_FRAME_INT;
+/// Excessive Collision (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::EXCESSIVE_COLLISION")]
+pub const TDES0_EXCESSIVE_COLLISION: u32 = TDES0_EXCESSIVE_COLLISION_INT;
+/// Late Collision (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::LATE_COLLISION")]
+pub const TDES0_LATE_COLLISION: u32 = TDES0_LATE_COLLISION_INT;
+/// No Carrier (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::NO_CARRIER")]
+pub const TDES0_NO_CARRIER: u32 = TDES0_NO_CARRIER_INT;
+/// Loss of Carrier (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::LOSS_OF_CARRIER")]
+pub const TDES0_LOSS_OF_CARRIER: u32 = TDES0_LOSS_OF_CARRIER_INT;
+/// IP Payload Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::IP_PAYLOAD_ERR")]
+pub const TDES0_IP_PAYLOAD_ERR: u32 = TDES0_IP_PAYLOAD_ERR_INT;
+/// Frame Flushed (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::FRAME_FLUSHED")]
+pub const TDES0_FRAME_FLUSHED: u32 = TDES0_FRAME_FLUSHED_INT;
+/// Jabber Timeout (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::JABBER_TIMEOUT")]
+pub const TDES0_JABBER_TIMEOUT: u32 = TDES0_JABBER_TIMEOUT_INT;
+/// Error Summary (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::ERR_SUMMARY")]
+pub const TDES0_ERR_SUMMARY: u32 = TDES0_ERR_SUMMARY_INT;
+/// IP Header Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::IP_HEADER_ERR")]
+pub const TDES0_IP_HEADER_ERR: u32 = TDES0_IP_HEADER_ERR_INT;
+/// TX Timestamp Status (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::TX_TIMESTAMP_STATUS")]
+pub const TDES0_TX_TIMESTAMP_STATUS: u32 = TDES0_TX_TIMESTAMP_STATUS_INT;
+/// VLAN Insert Control shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::VLAN_INSERT_CTRL_SHIFT")]
+pub const TDES0_VLAN_INSERT_CTRL_SHIFT: u32 = TDES0_VLAN_INSERT_CTRL_SHIFT_INT;
+/// VLAN Insert Control mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::VLAN_INSERT_CTRL_MASK")]
+pub const TDES0_VLAN_INSERT_CTRL_MASK: u32 = TDES0_VLAN_INSERT_CTRL_MASK_INT;
+/// Second Address Chained (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::SECOND_ADDR_CHAINED")]
+pub const TDES0_SECOND_ADDR_CHAINED: u32 = TDES0_SECOND_ADDR_CHAINED_INT;
+/// TX End of Ring (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::TX_END_OF_RING")]
+pub const TDES0_TX_END_OF_RING: u32 = TDES0_TX_END_OF_RING_INT;
+/// Checksum Insert shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::CHECKSUM_INSERT_SHIFT")]
+pub const TDES0_CHECKSUM_INSERT_SHIFT: u32 = TDES0_CHECKSUM_INSERT_SHIFT_INT;
+/// Checksum Insert mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::CHECKSUM_INSERT_MASK")]
+pub const TDES0_CHECKSUM_INSERT_MASK: u32 = TDES0_CHECKSUM_INSERT_MASK_INT;
+/// CRC Replace (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::CRC_REPLACE")]
+pub const TDES0_CRC_REPLACE: u32 = TDES0_CRC_REPLACE_INT;
+/// TX Timestamp Enable (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::TX_TIMESTAMP_EN")]
+pub const TDES0_TX_TIMESTAMP_EN: u32 = TDES0_TX_TIMESTAMP_EN_INT;
+/// Disable Pad (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::DISABLE_PAD")]
+pub const TDES0_DISABLE_PAD: u32 = TDES0_DISABLE_PAD_INT;
+/// Disable CRC (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::DISABLE_CRC")]
+pub const TDES0_DISABLE_CRC: u32 = TDES0_DISABLE_CRC_INT;
+/// First Segment (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::FIRST_SEGMENT")]
+pub const TDES0_FIRST_SEGMENT: u32 = TDES0_FIRST_SEGMENT_INT;
+/// Last Segment (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::LAST_SEGMENT")]
+pub const TDES0_LAST_SEGMENT: u32 = TDES0_LAST_SEGMENT_INT;
+/// Interrupt on Completion (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::INTERRUPT_ON_COMPLETE")]
+pub const TDES0_INTERRUPT_ON_COMPLETE: u32 = TDES0_INTERRUPT_ON_COMPLETE_INT;
+/// OWN bit (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::OWN")]
+pub const TDES0_OWN: u32 = TDES0_OWN_INT;
+/// All error bits (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::ALL_ERRORS")]
+pub const TDES0_ALL_ERRORS: u32 = TDES0_ALL_ERRORS_INT;
+/// First segment control flags (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::FS_CTRL_FLAGS")]
+pub const TDES0_FS_CTRL_FLAGS: u32 = TDES0_FS_CTRL_FLAGS_INT;
+/// Last segment control flags (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes0::LS_CTRL_FLAGS")]
+pub const TDES0_LS_CTRL_FLAGS: u32 = TDES0_LS_CTRL_FLAGS_INT;
+
+/// Checksum insertion modes (deprecated - use internal::descriptor_bits::checksum_mode)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::checksum_mode")]
 pub mod checksum_mode {
+    use crate::internal::descriptor_bits::checksum_mode as int_cm;
     /// Checksum insertion disabled
-    pub const DISABLED: u32 = 0;
+    pub const DISABLED: u32 = int_cm::DISABLED;
     /// Insert IP header checksum only
-    pub const IP_ONLY: u32 = 1;
+    pub const IP_ONLY: u32 = int_cm::IP_ONLY;
     /// Insert IP header and payload checksum (no pseudo-header)
-    pub const IP_AND_PAYLOAD: u32 = 2;
+    pub const IP_AND_PAYLOAD: u32 = int_cm::IP_AND_PAYLOAD;
     /// Insert IP header and payload checksum with pseudo-header
-    pub const FULL: u32 = 3;
+    pub const FULL: u32 = int_cm::FULL;
 }
 
-/// All possible TX error bits
-pub const TDES0_ALL_ERRORS: u32 = TDES0_UNDERFLOW_ERR
-    | TDES0_EXCESSIVE_DEFERRAL
-    | TDES0_EXCESSIVE_COLLISION
-    | TDES0_LATE_COLLISION
-    | TDES0_NO_CARRIER
-    | TDES0_LOSS_OF_CARRIER
-    | TDES0_IP_PAYLOAD_ERR
-    | TDES0_JABBER_TIMEOUT
-    | TDES0_IP_HEADER_ERR;
-
-/// Control flags that should be preserved on first segment
-pub const TDES0_FS_CTRL_FLAGS: u32 =
-    TDES0_VLAN_INSERT_CTRL_MASK | TDES0_TX_TIMESTAMP_EN | TDES0_DISABLE_PAD | TDES0_DISABLE_CRC;
-
-/// Control flags that should be preserved on last segment
-pub const TDES0_LS_CTRL_FLAGS: u32 =
-    TDES0_CHECKSUM_INSERT_MASK | TDES0_CRC_REPLACE | TDES0_INTERRUPT_ON_COMPLETE;
-
 // =============================================================================
-// TDES1 (TX Descriptor Word 1) - Buffer Sizes
+// TDES1 (TX Descriptor Word 1) - Deprecated Re-exports
 // =============================================================================
 
-/// TX Buffer 1 Size mask (13 bits)
-pub const TDES1_BUFFER1_SIZE_MASK: u32 = 0x1FFF;
-/// TX Buffer 1 Size shift
-pub const TDES1_BUFFER1_SIZE_SHIFT: u32 = 0;
-/// TX Buffer 2 Size mask (13 bits)
-pub const TDES1_BUFFER2_SIZE_MASK: u32 = 0x1FFF << 16;
-/// TX Buffer 2 Size shift
-pub const TDES1_BUFFER2_SIZE_SHIFT: u32 = 16;
-/// Source Address Insertion/Replacement Control shift (3 bits)
-pub const TDES1_SA_INSERT_CTRL_SHIFT: u32 = 29;
-/// Source Address Insertion/Replacement Control mask
-pub const TDES1_SA_INSERT_CTRL_MASK: u32 = 0x7 << 29;
+/// Buffer 1 size mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes1::BUFFER1_SIZE_MASK")]
+pub const TDES1_BUFFER1_SIZE_MASK: u32 = TDES1_BUFFER1_SIZE_MASK_INT;
+/// Buffer 1 size shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes1::BUFFER1_SIZE_SHIFT")]
+pub const TDES1_BUFFER1_SIZE_SHIFT: u32 = TDES1_BUFFER1_SIZE_SHIFT_INT;
+/// Buffer 2 size mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes1::BUFFER2_SIZE_MASK")]
+pub const TDES1_BUFFER2_SIZE_MASK: u32 = TDES1_BUFFER2_SIZE_MASK_INT;
+/// Buffer 2 size shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes1::BUFFER2_SIZE_SHIFT")]
+pub const TDES1_BUFFER2_SIZE_SHIFT: u32 = TDES1_BUFFER2_SIZE_SHIFT_INT;
+/// SA Insert Control shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes1::SA_INSERT_CTRL_SHIFT")]
+pub const TDES1_SA_INSERT_CTRL_SHIFT: u32 = TDES1_SA_INSERT_CTRL_SHIFT_INT;
+/// SA Insert Control mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::tdes1::SA_INSERT_CTRL_MASK")]
+pub const TDES1_SA_INSERT_CTRL_MASK: u32 = TDES1_SA_INSERT_CTRL_MASK_INT;
 
 // =============================================================================
 // TxDescriptor Structure
@@ -181,7 +255,7 @@ impl TxDescriptor {
     pub fn setup_chained(&self, buffer: *const u8, next_desc: *const TxDescriptor) {
         self.buffer1_addr.set(buffer as u32);
         self.buffer2_next_desc.set(next_desc as u32);
-        self.tdes0.set(TDES0_SECOND_ADDR_CHAINED);
+        self.tdes0.set(TDES0_SECOND_ADDR_CHAINED_INT);
         self.tdes1.set(0);
     }
 
@@ -190,7 +264,7 @@ impl TxDescriptor {
         self.buffer1_addr.set(buffer as u32);
         self.buffer2_next_desc.set(first_desc as u32);
         self.tdes0
-            .set(TDES0_SECOND_ADDR_CHAINED | TDES0_TX_END_OF_RING);
+            .set(TDES0_SECOND_ADDR_CHAINED_INT | TDES0_TX_END_OF_RING_INT);
         self.tdes1.set(0);
     }
 
@@ -198,19 +272,19 @@ impl TxDescriptor {
     #[inline(always)]
     #[must_use]
     pub fn is_owned(&self) -> bool {
-        (self.tdes0.get() & TDES0_OWN) != 0
+        (self.tdes0.get() & TDES0_OWN_INT) != 0
     }
 
     /// Give descriptor ownership to DMA
     #[inline(always)]
     pub fn set_owned(&self) {
-        self.tdes0.update(|v| v | TDES0_OWN);
+        self.tdes0.update(|v| v | TDES0_OWN_INT);
     }
 
     /// Take ownership from DMA (for CPU use)
     #[inline(always)]
     pub fn clear_owned(&self) {
-        self.tdes0.update(|v| v & !TDES0_OWN);
+        self.tdes0.update(|v| v & !TDES0_OWN_INT);
     }
 
     /// Prepare descriptor for transmission
@@ -220,17 +294,17 @@ impl TxDescriptor {
     /// * `first` - True if this is the first segment of the frame
     /// * `last` - True if this is the last segment of the frame
     pub fn prepare(&self, len: usize, first: bool, last: bool) {
-        let mut flags = TDES0_SECOND_ADDR_CHAINED;
+        let mut flags = TDES0_SECOND_ADDR_CHAINED_INT;
 
         if first {
-            flags |= TDES0_FIRST_SEGMENT;
+            flags |= TDES0_FIRST_SEGMENT_INT;
         }
         if last {
-            flags |= TDES0_LAST_SEGMENT | TDES0_INTERRUPT_ON_COMPLETE;
+            flags |= TDES0_LAST_SEGMENT_INT | TDES0_INTERRUPT_ON_COMPLETE_INT;
         }
 
         // Set buffer size
-        self.tdes1.set((len as u32) & TDES1_BUFFER1_SIZE_MASK);
+        self.tdes1.set((len as u32) & TDES1_BUFFER1_SIZE_MASK_INT);
 
         // Set flags (but not OWN yet)
         self.tdes0.set(flags);
@@ -245,42 +319,43 @@ impl TxDescriptor {
     /// Set checksum insertion mode
     pub fn set_checksum_mode(&self, mode: u32) {
         self.tdes0.update(|v| {
-            (v & !TDES0_CHECKSUM_INSERT_MASK)
-                | ((mode << TDES0_CHECKSUM_INSERT_SHIFT) & TDES0_CHECKSUM_INSERT_MASK)
+            (v & !TDES0_CHECKSUM_INSERT_MASK_INT)
+                | ((mode << TDES0_CHECKSUM_INSERT_SHIFT_INT) & TDES0_CHECKSUM_INSERT_MASK_INT)
         });
     }
 
     /// Enable timestamp capture for this frame
     pub fn enable_timestamp(&self) {
-        self.tdes0.update(|v| v | TDES0_TX_TIMESTAMP_EN);
+        self.tdes0.update(|v| v | TDES0_TX_TIMESTAMP_EN_INT);
     }
 
     /// Check if transmission had errors
     #[inline(always)]
     #[must_use]
     pub fn has_error(&self) -> bool {
-        (self.tdes0.get() & TDES0_ERR_SUMMARY) != 0
+        (self.tdes0.get() & TDES0_ERR_SUMMARY_INT) != 0
     }
 
     /// Get all error flags
     #[inline(always)]
     #[must_use]
     pub fn error_flags(&self) -> u32 {
-        self.tdes0.get() & TDES0_ALL_ERRORS
+        self.tdes0.get() & TDES0_ALL_ERRORS_INT
     }
 
     /// Get collision count (for half-duplex)
     #[inline(always)]
     #[must_use]
     pub fn collision_count(&self) -> u8 {
-        ((self.tdes0.get() & TDES0_COLLISION_COUNT_MASK) >> TDES0_COLLISION_COUNT_SHIFT) as u8
+        ((self.tdes0.get() & TDES0_COLLISION_COUNT_MASK_INT) >> TDES0_COLLISION_COUNT_SHIFT_INT)
+            as u8
     }
 
     /// Check if timestamp was captured
     #[inline(always)]
     #[must_use]
     pub fn has_timestamp(&self) -> bool {
-        (self.tdes0.get() & TDES0_TX_TIMESTAMP_STATUS) != 0
+        (self.tdes0.get() & TDES0_TX_TIMESTAMP_STATUS_INT) != 0
     }
 
     /// Get captured timestamp (low 32 bits)
@@ -321,7 +396,7 @@ impl TxDescriptor {
     /// Reset descriptor to initial state
     pub fn reset(&self) {
         let next = self.buffer2_next_desc.get();
-        self.tdes0.set(TDES0_SECOND_ADDR_CHAINED);
+        self.tdes0.set(TDES0_SECOND_ADDR_CHAINED_INT);
         self.tdes1.set(0);
         self.buffer2_next_desc.set(next);
     }
@@ -356,6 +431,7 @@ unsafe impl Send for TxDescriptor {}
 // =============================================================================
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

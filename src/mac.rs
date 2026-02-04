@@ -8,20 +8,20 @@ use embedded_hal::delay::DelayNs;
 use crate::config::{
     Duplex, EmacConfig, FlowControlConfig, PhyInterface, RmiiClockMode, Speed, State,
 };
-use crate::constants::{
+use crate::internal::constants::{
     CSR_CLOCK_DIV_42, FLUSH_TIMEOUT, MII_BUSY_TIMEOUT, TX_DMA_STATE_MASK, TX_DMA_STATE_SHIFT,
 };
 use crate::dma::DmaEngine;
 use crate::error::{ConfigError, DmaError, IoError, Result};
 use crate::hal::reset::ResetController;
-use crate::register::dma::{
+use crate::internal::register::dma::{
     DMABUSMODE_AAL, DMABUSMODE_ATDS, DMABUSMODE_FB, DMABUSMODE_PBL_MASK, DMABUSMODE_PBL_SHIFT,
     DMABUSMODE_USP, DMAOPERATION_RSF, DMAOPERATION_TSF, DMASTATUS_AIS, DMASTATUS_FBI,
     DMASTATUS_NIS, DMASTATUS_OVF, DMASTATUS_RI, DMASTATUS_RPS, DMASTATUS_RU, DMASTATUS_TI,
     DMASTATUS_TPS, DMASTATUS_TU, DMASTATUS_UNF, DmaRegs,
 };
-use crate::register::ext::ExtRegs;
-use crate::register::mac::{
+use crate::internal::register::ext::ExtRegs;
+use crate::internal::register::mac::{
     GMACCONFIG_ACS, GMACCONFIG_DM, GMACCONFIG_FES, GMACCONFIG_IPC, GMACCONFIG_JD, GMACCONFIG_PS,
     GMACCONFIG_WD, GMACFF_PM, GMACFF_PR, GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT, GMACMIIADDR_GB,
     GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_SHIFT, MacRegs,

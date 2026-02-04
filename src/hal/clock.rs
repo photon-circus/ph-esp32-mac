@@ -6,7 +6,7 @@
 
 use crate::config::{PhyInterface, RmiiClockMode};
 use crate::error::{ConfigError, Result};
-use crate::register::ext::ExtRegs;
+use crate::internal::register::ext::ExtRegs;
 
 /// Clock configuration state
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

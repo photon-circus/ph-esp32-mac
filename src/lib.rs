@@ -124,14 +124,35 @@
 // =============================================================================
 
 pub mod config;
-pub mod constants;
 pub mod descriptor;
 pub mod dma;
 pub mod error;
 pub mod hal;
 pub mod mac;
 pub mod phy;
-pub mod register;
+
+// Internal implementation details (pub(crate) only)
+mod internal;
+
+// Deprecated public re-exports for backward compatibility
+// These will be removed in a future version
+#[deprecated(since = "0.2.0", note = "use crate internals directly; this module will become private")]
+#[doc(hidden)]
+pub mod constants {
+    //! Re-export of constants for backward compatibility.
+    //!
+    //! This module is deprecated. Constants are now internal implementation details.
+    pub use crate::internal::constants::*;
+}
+
+#[deprecated(since = "0.2.0", note = "use crate internals directly; this module will become private")]
+#[doc(hidden)]
+pub mod register {
+    //! Re-export of registers for backward compatibility.
+    //!
+    //! This module is deprecated. Register access is now internal implementation details.
+    pub use crate::internal::register::*;
+}
 
 #[cfg(feature = "smoltcp")]
 pub mod smoltcp;
@@ -167,9 +188,9 @@ pub use error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, 
 pub use mac::{Emac, EmacDefault, EmacLarge, EmacSmall, InterruptStatus};
 
 // Re-export register access types
-pub use register::dma::DmaRegs;
-pub use register::ext::ExtRegs;
-pub use register::mac::MacRegs;
+pub use internal::register::dma::DmaRegs;
+pub use internal::register::ext::ExtRegs;
+pub use internal::register::mac::MacRegs;
 
 // Re-export HAL types
 pub use hal::{
@@ -189,10 +210,10 @@ pub use sync::{SharedEmac, SharedEmacDefault, SharedEmacLarge, SharedEmacSmall};
 pub use asynch::{AsyncEmacExt, RX_WAKER, TX_WAKER, async_interrupt_handler};
 
 // =============================================================================
-// Constants (re-exported from constants module)
+// Constants (re-exported from internal constants module)
 // =============================================================================
 
-pub use constants::{
+pub use internal::constants::{
     // Frame/buffer sizes
     CRC_SIZE,
     DEFAULT_BUFFER_SIZE,

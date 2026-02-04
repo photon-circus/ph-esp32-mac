@@ -82,6 +82,7 @@ use embedded_hal::digital::OutputPin;
 
 use crate::error::Result;
 use crate::hal::mdio::MdioBus;
+use crate::internal::lan8720a_regs as regs_int;
 
 use super::generic::{LinkStatus, PhyCapabilities, PhyDriver, ieee802_3};
 
@@ -96,124 +97,160 @@ use super::generic::{LinkStatus, PhyCapabilities, PhyDriver, ieee802_3};
 /// - PHYIDR2 (reg 3): 0xC0Fx (x = revision)
 ///
 /// Full ID: 0x0007C0Fx
-pub const LAN8720A_PHY_ID: u32 = 0x0007_C0F0;
+pub const LAN8720A_PHY_ID: u32 = regs_int::phy_id::ID;
 /// PHY ID mask (ignores revision bits)
-pub const LAN8720A_PHY_ID_MASK: u32 = 0xFFFF_FFF0;
+pub const LAN8720A_PHY_ID_MASK: u32 = regs_int::phy_id::MASK;
 
-/// Maximum reset attempts
-const RESET_MAX_ATTEMPTS: u32 = 1000;
-
-/// Maximum auto-negotiation polling iterations
-const AN_MAX_ATTEMPTS: u32 = 5000;
-
-/// Hardware reset pulse duration in microseconds (minimum 100µs per datasheet)
-const RESET_PULSE_US: u32 = 200;
-
-/// Hardware reset recovery time in microseconds (minimum 800µs per datasheet)
-const RESET_RECOVERY_US: u32 = 1000;
+// Internal timing constants
+use regs_int::timing::AN_MAX_ATTEMPTS;
+use regs_int::timing::RESET_MAX_ATTEMPTS;
+use regs_int::timing::RESET_PULSE_US;
+use regs_int::timing::RESET_RECOVERY_US;
 
 // =============================================================================
 // LAN8720A Vendor-Specific Registers
 // =============================================================================
 
 /// LAN8720A vendor-specific register addresses
+///
+/// # Note
+///
+/// These constants are re-exported for backward compatibility.
+/// New code should use the internal module directly.
 pub mod reg {
+    use super::regs_int::reg as reg_int;
+
     /// Mode Control/Status Register
-    pub const MCSR: u8 = 17;
+    pub const MCSR: u8 = reg_int::MCSR;
     /// Special Modes Register
-    pub const SMR: u8 = 18;
+    pub const SMR: u8 = reg_int::SMR;
     /// Symbol Error Counter Register
-    pub const SECR: u8 = 26;
+    pub const SECR: u8 = reg_int::SECR;
     /// Special Control/Status Indication Register
-    pub const SCSIR: u8 = 27;
+    pub const SCSIR: u8 = reg_int::SCSIR;
     /// Interrupt Source Register
-    pub const ISR: u8 = 29;
+    pub const ISR: u8 = reg_int::ISR;
     /// Interrupt Mask Register
-    pub const IMR: u8 = 30;
+    pub const IMR: u8 = reg_int::IMR;
     /// PHY Special Control/Status Register
-    pub const PSCSR: u8 = 31;
+    pub const PSCSR: u8 = reg_int::PSCSR;
 }
 
 /// Mode Control/Status Register (17) bits
+///
+/// # Note
+///
+/// These constants are re-exported for backward compatibility.
+/// New code should use the internal module directly.
 pub mod mcsr {
+    use super::regs_int::mcsr as mcsr_int;
+
     /// EDPWRDOWN - Enable Energy Detect Power Down mode
-    pub const EDPWRDOWN: u16 = 1 << 13;
+    pub const EDPWRDOWN: u16 = mcsr_int::EDPWRDOWN;
     /// FARLOOPBACK - Enable far loopback
-    pub const FARLOOPBACK: u16 = 1 << 9;
+    pub const FARLOOPBACK: u16 = mcsr_int::FARLOOPBACK;
     /// ALTINT - Alternate interrupt mode
-    pub const ALTINT: u16 = 1 << 6;
+    pub const ALTINT: u16 = mcsr_int::ALTINT;
     /// ENERGYON - PHY is awake (read-only)
-    pub const ENERGYON: u16 = 1 << 1;
+    pub const ENERGYON: u16 = mcsr_int::ENERGYON;
 }
 
 /// Special Modes Register (18) bits
+///
+/// # Note
+///
+/// These constants are re-exported for backward compatibility.
+/// New code should use the internal module directly.
 pub mod smr {
+    use super::regs_int::smr as smr_int;
+
     /// MODE mask (bits 7:5) - PHY mode selection
-    pub const MODE_MASK: u16 = 0x7 << 5;
+    pub const MODE_MASK: u16 = smr_int::MODE_MASK;
     /// Mode: 10BASE-T Half Duplex
-    pub const MODE_10HD: u16 = 0x0 << 5;
+    pub const MODE_10HD: u16 = smr_int::MODE_10HD;
     /// Mode: 10BASE-T Full Duplex
-    pub const MODE_10FD: u16 = 0x1 << 5;
+    pub const MODE_10FD: u16 = smr_int::MODE_10FD;
     /// Mode: 100BASE-TX Half Duplex
-    pub const MODE_100HD: u16 = 0x2 << 5;
+    pub const MODE_100HD: u16 = smr_int::MODE_100HD;
     /// Mode: 100BASE-TX Full Duplex
-    pub const MODE_100FD: u16 = 0x3 << 5;
+    pub const MODE_100FD: u16 = smr_int::MODE_100FD;
     /// Mode: 100BASE-TX Half Duplex (auto-neg advertised)
-    pub const MODE_100HD_AN: u16 = 0x4 << 5;
+    pub const MODE_100HD_AN: u16 = smr_int::MODE_100HD_AN;
     /// Mode: Repeater mode
-    pub const MODE_REPEATER: u16 = 0x5 << 5;
+    pub const MODE_REPEATER: u16 = smr_int::MODE_REPEATER;
     /// Mode: Power down
-    pub const MODE_PWRDOWN: u16 = 0x6 << 5;
+    pub const MODE_PWRDOWN: u16 = smr_int::MODE_PWRDOWN;
     /// Mode: All capable, auto-neg enabled (default)
-    pub const MODE_ALL_AN: u16 = 0x7 << 5;
+    pub const MODE_ALL_AN: u16 = smr_int::MODE_ALL_AN;
     /// PHYAD mask (bits 4:0) - PHY address
-    pub const PHYAD_MASK: u16 = 0x1F;
+    pub const PHYAD_MASK: u16 = smr_int::PHYAD_MASK;
 }
 
 /// Special Control/Status Indication Register (27) bits
+///
+/// # Note
+///
+/// These constants are re-exported for backward compatibility.
+/// New code should use the internal module directly.
 pub mod scsir {
+    use super::regs_int::scsir as scsir_int;
+
     /// AMDIXCTRL - Auto-MDIX control
-    pub const AMDIXCTRL: u16 = 1 << 15;
+    pub const AMDIXCTRL: u16 = scsir_int::AMDIXCTRL;
     /// CH_SELECT - Manual crossover (when AMDIXCTRL=1)
-    pub const CH_SELECT: u16 = 1 << 13;
+    pub const CH_SELECT: u16 = scsir_int::CH_SELECT;
     /// SQEOFF - Disable SQE test
-    pub const SQEOFF: u16 = 1 << 11;
+    pub const SQEOFF: u16 = scsir_int::SQEOFF;
     /// XPOL - Invert polarity (10BASE-T only)
-    pub const XPOL: u16 = 1 << 4;
+    pub const XPOL: u16 = scsir_int::XPOL;
 }
 
 /// Interrupt Source Register (29) bits
+///
+/// # Note
+///
+/// These constants are re-exported for backward compatibility.
+/// New code should use the internal module directly.
 pub mod isr {
+    use super::regs_int::isr as isr_int;
+
     /// ENERGYON interrupt
-    pub const ENERGYON: u16 = 1 << 7;
+    pub const ENERGYON: u16 = isr_int::ENERGYON;
     /// Auto-negotiation complete
-    pub const AN_COMPLETE: u16 = 1 << 6;
+    pub const AN_COMPLETE: u16 = isr_int::AN_COMPLETE;
     /// Remote fault detected
-    pub const REMOTE_FAULT: u16 = 1 << 5;
+    pub const REMOTE_FAULT: u16 = isr_int::REMOTE_FAULT;
     /// Link down
-    pub const LINK_DOWN: u16 = 1 << 4;
+    pub const LINK_DOWN: u16 = isr_int::LINK_DOWN;
     /// Auto-negotiation LP acknowledge
-    pub const AN_LP_ACK: u16 = 1 << 3;
+    pub const AN_LP_ACK: u16 = isr_int::AN_LP_ACK;
     /// Parallel detection fault
-    pub const PD_FAULT: u16 = 1 << 2;
+    pub const PD_FAULT: u16 = isr_int::PD_FAULT;
     /// Auto-negotiation page received
-    pub const AN_PAGE_RX: u16 = 1 << 1;
+    pub const AN_PAGE_RX: u16 = isr_int::AN_PAGE_RX;
 }
 
 /// PHY Special Control/Status Register (31) bits
+///
+/// # Note
+///
+/// These constants are re-exported for backward compatibility.
+/// New code should use the internal module directly.
 pub mod pscsr {
+    use super::regs_int::pscsr as pscsr_int;
+
     /// AUTODONE - Auto-negotiation done (read-only)
-    pub const AUTODONE: u16 = 1 << 12;
+    pub const AUTODONE: u16 = pscsr_int::AUTODONE;
     /// HCDSPEED mask (bits 4:2) - Speed indication
-    pub const HCDSPEED_MASK: u16 = 0x7 << 2;
+    pub const HCDSPEED_MASK: u16 = pscsr_int::HCDSPEED_MASK;
     /// Speed: 10BASE-T Half Duplex
-    pub const HCDSPEED_10HD: u16 = 0x1 << 2;
+    pub const HCDSPEED_10HD: u16 = pscsr_int::HCDSPEED_10HD;
     /// Speed: 10BASE-T Full Duplex
-    pub const HCDSPEED_10FD: u16 = 0x5 << 2;
+    pub const HCDSPEED_10FD: u16 = pscsr_int::HCDSPEED_10FD;
     /// Speed: 100BASE-TX Half Duplex
-    pub const HCDSPEED_100HD: u16 = 0x2 << 2;
+    pub const HCDSPEED_100HD: u16 = pscsr_int::HCDSPEED_100HD;
     /// Speed: 100BASE-TX Full Duplex
-    pub const HCDSPEED_100FD: u16 = 0x6 << 2;
+    pub const HCDSPEED_100FD: u16 = pscsr_int::HCDSPEED_100FD;
 }
 
 // =============================================================================
@@ -337,7 +374,7 @@ impl Lan8720a {
         mdio: &mut M,
         caps: &PhyCapabilities,
     ) -> Result<()> {
-        use crate::hal::mdio::{anar, phy_reg};
+        use crate::internal::phy_registers::{anar, phy_reg};
 
         let mut anar_val = anar::SELECTOR_IEEE802_3;
 
@@ -699,7 +736,7 @@ mod tests {
 
     use super::*;
     use crate::config::{Duplex, Speed};
-    use crate::hal::mdio::{bmcr, phy_reg};
+    use crate::internal::phy_registers::{bmcr, phy_reg};
     use crate::test_utils::MockMdioBus;
     use std::vec::Vec;
 
@@ -1361,7 +1398,7 @@ mod tests {
         phy.configure_advertisement(&mut mdio, &caps).unwrap();
 
         let anar = mdio.get_register(0, phy_reg::ANAR).unwrap();
-        use crate::hal::mdio::anar;
+        use crate::internal::phy_registers::anar;
         assert!(anar & anar::TX_FD != 0, "Should advertise 100FD");
         assert_eq!(anar & anar::TX_HD, 0, "Should not advertise 100HD");
         assert!(anar & anar::T10_FD != 0, "Should advertise 10FD");

@@ -1,6 +1,6 @@
 //! Configuration types for ESP32 EMAC driver
 
-use crate::constants::{
+use crate::internal::constants::{
     DEFAULT_FLOW_HIGH_WATER, DEFAULT_FLOW_LOW_WATER, DEFAULT_MAC_ADDR, MDC_MAX_FREQ_HZ,
     PAUSE_TIME_MAX, SOFT_RESET_TIMEOUT_MS,
 };
@@ -448,7 +448,7 @@ pub enum State {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::DEFAULT_MAC_ADDR;
+    use crate::internal::constants::DEFAULT_MAC_ADDR;
 
     // =========================================================================
     // Default Value Tests

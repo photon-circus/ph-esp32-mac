@@ -5,7 +5,7 @@
 
 use crate::descriptor::{RxDescriptor, TxDescriptor};
 use crate::error::{DmaError, IoError, Result};
-use crate::register::dma::DmaRegs;
+use crate::internal::register::dma::DmaRegs;
 
 // =============================================================================
 // Descriptor Ring

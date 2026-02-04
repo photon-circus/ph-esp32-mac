@@ -7,9 +7,14 @@
 use embedded_hal::delay::DelayNs;
 
 use crate::error::{ConfigError, IoError, Result};
-use crate::register::mac::{
+use crate::internal::register::mac::{
     GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT, GMACMIIADDR_GB, GMACMIIADDR_GR_MASK,
     GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_MASK, GMACMIIADDR_PA_SHIFT, MacRegs,
+};
+
+// Import internal PHY register definitions for use in helper functions
+use crate::internal::phy_registers::{
+    bmcr as int_bmcr, bmsr as int_bmsr, phy_reg as int_phy_reg,
 };
 
 // =============================================================================
@@ -229,141 +234,50 @@ impl<D: DelayNs> MdioBus for MdioController<D> {
 }
 
 // =============================================================================
-// PHY Register Definitions (IEEE 802.3 standard registers)
+// PHY Register Definitions - Deprecated Re-exports
 // =============================================================================
+// These are re-exported for backward compatibility but are now defined in
+// crate::internal::phy_registers
 
 /// Standard PHY register addresses (IEEE 802.3 Clause 22)
+///
+/// **Deprecated:** This module is re-exported for backward compatibility.
+/// The canonical location is now `crate::internal::phy_registers::phy_reg`.
+#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod phy_reg {
-    /// Basic Mode Control Register
-    pub const BMCR: u8 = 0;
-    /// Basic Mode Status Register
-    pub const BMSR: u8 = 1;
-    /// PHY Identifier 1
-    pub const PHYIDR1: u8 = 2;
-    /// PHY Identifier 2
-    pub const PHYIDR2: u8 = 3;
-    /// Auto-Negotiation Advertisement Register
-    pub const ANAR: u8 = 4;
-    /// Auto-Negotiation Link Partner Ability Register
-    pub const ANLPAR: u8 = 5;
-    /// Auto-Negotiation Expansion Register
-    pub const ANER: u8 = 6;
-    /// Auto-Negotiation Next Page Transmit Register
-    pub const ANNPTR: u8 = 7;
-    /// Auto-Negotiation Next Page Receive Register
-    pub const ANNPRR: u8 = 8;
-    /// MMD Access Control Register
-    pub const MMD_CTRL: u8 = 13;
-    /// MMD Access Data Register
-    pub const MMD_DATA: u8 = 14;
-    /// Extended Status Register
-    pub const ESTATUS: u8 = 15;
+    pub use crate::internal::phy_registers::phy_reg::*;
 }
 
 /// BMCR (Basic Mode Control Register) bits
+///
+/// **Deprecated:** This module is re-exported for backward compatibility.
+#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod bmcr {
-    /// Soft reset
-    pub const RESET: u16 = 1 << 15;
-    /// Loopback mode
-    pub const LOOPBACK: u16 = 1 << 14;
-    /// Speed select (100 Mbps if set)
-    pub const SPEED_100: u16 = 1 << 13;
-    /// Auto-negotiation enable
-    pub const AN_ENABLE: u16 = 1 << 12;
-    /// Power down
-    pub const POWER_DOWN: u16 = 1 << 11;
-    /// Isolate
-    pub const ISOLATE: u16 = 1 << 10;
-    /// Restart auto-negotiation
-    pub const AN_RESTART: u16 = 1 << 9;
-    /// Duplex mode (full duplex if set)
-    pub const DUPLEX_FULL: u16 = 1 << 8;
+    pub use crate::internal::phy_registers::bmcr::*;
 }
 
 /// BMSR (Basic Mode Status Register) bits
+///
+/// **Deprecated:** This module is re-exported for backward compatibility.
+#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod bmsr {
-    /// 100BASE-T4 capable
-    pub const T4_CAPABLE: u16 = 1 << 15;
-    /// 100BASE-TX full duplex capable
-    pub const TX_FD_CAPABLE: u16 = 1 << 14;
-    /// 100BASE-TX half duplex capable
-    pub const TX_HD_CAPABLE: u16 = 1 << 13;
-    /// 10BASE-T full duplex capable
-    pub const T10_FD_CAPABLE: u16 = 1 << 12;
-    /// 10BASE-T half duplex capable
-    pub const T10_HD_CAPABLE: u16 = 1 << 11;
-    /// Extended status register present
-    pub const ESTATUS: u16 = 1 << 8;
-    /// MF preamble suppression
-    pub const MF_PREAMBLE_SUPP: u16 = 1 << 6;
-    /// Auto-negotiation complete
-    pub const AN_COMPLETE: u16 = 1 << 5;
-    /// Remote fault
-    pub const REMOTE_FAULT: u16 = 1 << 4;
-    /// Auto-negotiation ability
-    pub const AN_ABILITY: u16 = 1 << 3;
-    /// Link status
-    pub const LINK_STATUS: u16 = 1 << 2;
-    /// Jabber detect
-    pub const JABBER_DETECT: u16 = 1 << 1;
-    /// Extended capabilities
-    pub const EXT_CAPABLE: u16 = 1 << 0;
+    pub use crate::internal::phy_registers::bmsr::*;
 }
 
 /// ANAR (Auto-Negotiation Advertisement Register) bits
+///
+/// **Deprecated:** This module is re-exported for backward compatibility.
+#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod anar {
-    /// Next page
-    pub const NEXT_PAGE: u16 = 1 << 15;
-    /// Acknowledge
-    pub const ACK: u16 = 1 << 14;
-    /// Remote fault
-    pub const REMOTE_FAULT: u16 = 1 << 13;
-    /// Pause capable
-    pub const PAUSE: u16 = 1 << 10;
-    /// 100BASE-T4
-    pub const T4: u16 = 1 << 9;
-    /// 100BASE-TX full duplex
-    pub const TX_FD: u16 = 1 << 8;
-    /// 100BASE-TX half duplex
-    pub const TX_HD: u16 = 1 << 7;
-    /// 10BASE-T full duplex
-    pub const T10_FD: u16 = 1 << 6;
-    /// 10BASE-T half duplex
-    pub const T10_HD: u16 = 1 << 5;
-    /// Selector field (IEEE 802.3)
-    pub const SELECTOR: u16 = 0x001F;
-    /// IEEE 802.3 selector value
-    pub const SELECTOR_IEEE802_3: u16 = 0x0001;
+    pub use crate::internal::phy_registers::anar::*;
 }
 
 /// ANLPAR (Auto-Negotiation Link Partner Ability Register) bits
 ///
-/// Same bit layout as ANAR, but represents what the link partner advertises.
+/// **Deprecated:** This module is re-exported for backward compatibility.
+#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod anlpar {
-    /// Next page
-    pub const NEXT_PAGE: u16 = 1 << 15;
-    /// Acknowledge
-    pub const ACK: u16 = 1 << 14;
-    /// Remote fault
-    pub const REMOTE_FAULT: u16 = 1 << 13;
-    /// Pause capable
-    pub const PAUSE: u16 = 1 << 10;
-    /// Asymmetric pause
-    pub const PAUSE_ASYM: u16 = 1 << 11;
-    /// 100BASE-T4
-    pub const CAN_100_T4: u16 = 1 << 9;
-    /// 100BASE-TX full duplex
-    pub const CAN_100_FD: u16 = 1 << 8;
-    /// 100BASE-TX half duplex
-    pub const CAN_100_HD: u16 = 1 << 7;
-    /// 10BASE-T full duplex
-    pub const CAN_10_FD: u16 = 1 << 6;
-    /// 10BASE-T half duplex
-    pub const CAN_10_HD: u16 = 1 << 5;
-    /// Selector field mask
-    pub const SELECTOR_MASK: u16 = 0x001F;
-    /// IEEE 802.3 selector value
-    pub const SELECTOR_802_3: u16 = 0x0001;
+    pub use crate::internal::phy_registers::anlpar::*;
 }
 
 // =============================================================================
@@ -386,36 +300,36 @@ pub struct PhyStatus {
 
 /// Read PHY status from standard registers
 pub fn read_phy_status<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<PhyStatus> {
-    let bmsr = mdio.read(phy_addr, phy_reg::BMSR)?;
-    let bmcr = mdio.read(phy_addr, phy_reg::BMCR)?;
+    let bmsr_val = mdio.read(phy_addr, int_phy_reg::BMSR)?;
+    let bmcr_val = mdio.read(phy_addr, int_phy_reg::BMCR)?;
 
     Ok(PhyStatus {
-        link_up: (bmsr & bmsr::LINK_STATUS) != 0,
-        an_complete: (bmsr & bmsr::AN_COMPLETE) != 0,
-        speed_100: (bmcr & bmcr::SPEED_100) != 0,
-        full_duplex: (bmcr & bmcr::DUPLEX_FULL) != 0,
+        link_up: (bmsr_val & int_bmsr::LINK_STATUS) != 0,
+        an_complete: (bmsr_val & int_bmsr::AN_COMPLETE) != 0,
+        speed_100: (bmcr_val & int_bmcr::SPEED_100) != 0,
+        full_duplex: (bmcr_val & int_bmcr::DUPLEX_FULL) != 0,
     })
 }
 
 /// Perform a soft reset on the PHY
 pub fn reset_phy<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<()> {
-    mdio.write(phy_addr, phy_reg::BMCR, bmcr::RESET)
+    mdio.write(phy_addr, int_phy_reg::BMCR, int_bmcr::RESET)
 }
 
 /// Read the PHY identifier
 pub fn read_phy_id<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<u32> {
-    let id1 = mdio.read(phy_addr, phy_reg::PHYIDR1)? as u32;
-    let id2 = mdio.read(phy_addr, phy_reg::PHYIDR2)? as u32;
+    let id1 = mdio.read(phy_addr, int_phy_reg::PHYIDR1)? as u32;
+    let id2 = mdio.read(phy_addr, int_phy_reg::PHYIDR2)? as u32;
     Ok((id1 << 16) | id2)
 }
 
 /// Enable auto-negotiation on the PHY
 pub fn enable_auto_negotiation<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<()> {
-    let bmcr = mdio.read(phy_addr, phy_reg::BMCR)?;
+    let bmcr_val = mdio.read(phy_addr, int_phy_reg::BMCR)?;
     mdio.write(
         phy_addr,
-        phy_reg::BMCR,
-        (bmcr | bmcr::AN_ENABLE | bmcr::AN_RESTART) & !bmcr::ISOLATE,
+        int_phy_reg::BMCR,
+        (bmcr_val | int_bmcr::AN_ENABLE | int_bmcr::AN_RESTART) & !int_bmcr::ISOLATE,
     )
 }
 
@@ -426,27 +340,27 @@ pub fn force_speed_duplex<M: MdioBus>(
     speed_100: bool,
     full_duplex: bool,
 ) -> Result<()> {
-    let mut bmcr = mdio.read(phy_addr, phy_reg::BMCR)?;
+    let mut bmcr_val = mdio.read(phy_addr, int_phy_reg::BMCR)?;
 
     // Disable auto-negotiation
-    bmcr &= !bmcr::AN_ENABLE;
-    bmcr &= !bmcr::ISOLATE;
+    bmcr_val &= !int_bmcr::AN_ENABLE;
+    bmcr_val &= !int_bmcr::ISOLATE;
 
     // Set speed
     if speed_100 {
-        bmcr |= bmcr::SPEED_100;
+        bmcr_val |= int_bmcr::SPEED_100;
     } else {
-        bmcr &= !bmcr::SPEED_100;
+        bmcr_val &= !int_bmcr::SPEED_100;
     }
 
     // Set duplex
     if full_duplex {
-        bmcr |= bmcr::DUPLEX_FULL;
+        bmcr_val |= int_bmcr::DUPLEX_FULL;
     } else {
-        bmcr &= !bmcr::DUPLEX_FULL;
+        bmcr_val &= !int_bmcr::DUPLEX_FULL;
     }
 
-    mdio.write(phy_addr, phy_reg::BMCR, bmcr)
+    mdio.write(phy_addr, int_phy_reg::BMCR, bmcr_val)
 }
 
 // =============================================================================

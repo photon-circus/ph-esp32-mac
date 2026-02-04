@@ -139,13 +139,13 @@ macro_rules! reg_rw {
         #[doc = concat!("Read ", $doc)]
         #[inline(always)]
         pub fn $read_fn() -> u32 {
-            unsafe { $crate::register::read_reg($base + $offset) }
+            unsafe { $crate::internal::register::read_reg($base + $offset) }
         }
 
         #[doc = concat!("Write ", $doc)]
         #[inline(always)]
         pub fn $write_fn(value: u32) {
-            unsafe { $crate::register::write_reg($base + $offset, value) }
+            unsafe { $crate::internal::register::write_reg($base + $offset, value) }
         }
     };
 }
@@ -156,7 +156,7 @@ macro_rules! reg_ro {
         #[doc = concat!("Read ", $doc)]
         #[inline(always)]
         pub fn $read_fn() -> u32 {
-            unsafe { $crate::register::read_reg($base + $offset) }
+            unsafe { $crate::internal::register::read_reg($base + $offset) }
         }
     };
 }
@@ -175,13 +175,13 @@ macro_rules! reg_bit_ops {
         #[doc = concat!($set_verb, " ", $what)]
         #[inline(always)]
         pub fn $set_fn() {
-            unsafe { $crate::register::set_bits($base + $offset, $bit) }
+            unsafe { $crate::internal::register::set_bits($base + $offset, $bit) }
         }
 
         #[doc = concat!($clear_verb, " ", $what)]
         #[inline(always)]
         pub fn $clear_fn() {
-            unsafe { $crate::register::clear_bits($base + $offset, $bit) }
+            unsafe { $crate::internal::register::clear_bits($base + $offset, $bit) }
         }
     };
 }
@@ -192,7 +192,7 @@ macro_rules! reg_bit_check_clear {
         #[doc = $doc]
         #[inline(always)]
         pub fn $fn() -> bool {
-            unsafe { ($crate::register::read_reg($base + $offset) & $bit) == 0 }
+            unsafe { ($crate::internal::register::read_reg($base + $offset) & $bit) == 0 }
         }
     };
 }

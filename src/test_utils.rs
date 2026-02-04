@@ -19,8 +19,8 @@ use std::vec::Vec;
 use crate::error::Result;
 use crate::hal::mdio::MdioBus;
 
-// Use the actual bmsr module constants
-use crate::hal::mdio::{anlpar, bmsr, phy_reg};
+// Use the internal PHY register constants
+use crate::internal::phy_registers::{anlpar, bmsr, phy_reg};
 
 // =============================================================================
 // Mock MDIO Bus

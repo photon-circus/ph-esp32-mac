@@ -3,121 +3,196 @@
 //! The RX descriptor controls frame reception and reports status after completion.
 
 use super::VolatileCell;
+use crate::internal::descriptor_bits::{rdes0, rdes1, rdes4};
 
 // =============================================================================
 // RDES0 (RX Descriptor Word 0) - Status
 // =============================================================================
 
-/// Extended Status Available - extended status in RDES4 is valid
-pub const RDES0_EXT_STATUS: u32 = 1 << 0;
-/// CRC Error - frame has CRC error
-pub const RDES0_CRC_ERR: u32 = 1 << 1;
-/// Dribble Bit Error - frame contains non-integer multiple of 8 bits
-pub const RDES0_DRIBBLE_ERR: u32 = 1 << 2;
-/// Receive Error - error reported by PHY (RX_ER signal)
-pub const RDES0_RX_ERR: u32 = 1 << 3;
-/// Receive Watchdog Timeout - frame truncated due to watchdog
-pub const RDES0_RX_WATCHDOG: u32 = 1 << 4;
-/// Frame Type - 1 = Ethernet frame (length/type > 0x600)
-pub const RDES0_FRAME_TYPE: u32 = 1 << 5;
-/// Late Collision - collision detected after 64 bytes
-pub const RDES0_LATE_COLLISION: u32 = 1 << 6;
-/// Timestamp Available - IEEE 1588 timestamp captured in RDES6/RDES7
-pub const RDES0_TIMESTAMP_AVAIL: u32 = 1 << 7;
-/// Last Descriptor - this is the last descriptor for the frame
-pub const RDES0_LAST_DESC: u32 = 1 << 8;
-/// First Descriptor - this is the first descriptor for the frame
-pub const RDES0_FIRST_DESC: u32 = 1 << 9;
-/// VLAN Tag - frame is VLAN tagged
-pub const RDES0_VLAN_TAG: u32 = 1 << 10;
-/// Overflow Error - DMA buffer overflow
-pub const RDES0_OVERFLOW_ERR: u32 = 1 << 11;
-/// Length Error - actual length doesn't match length/type field
-pub const RDES0_LENGTH_ERR: u32 = 1 << 12;
-/// Source Address Filter Fail - frame failed SA filter
-pub const RDES0_SA_FILTER_FAIL: u32 = 1 << 13;
-/// Descriptor Error - descriptor not available or bus error
-pub const RDES0_DESC_ERR: u32 = 1 << 14;
-/// Error Summary - logical OR of error bits
-pub const RDES0_ERR_SUMMARY: u32 = 1 << 15;
-/// Frame Length shift (14 bits)
-pub const RDES0_FRAME_LEN_SHIFT: u32 = 16;
-/// Frame Length mask
-pub const RDES0_FRAME_LEN_MASK: u32 = 0x3FFF << 16;
-/// Destination Address Filter Fail - frame failed DA filter
-pub const RDES0_DA_FILTER_FAIL: u32 = 1 << 30;
-/// OWN - when set, descriptor owned by DMA; when clear, owned by CPU
-pub const RDES0_OWN: u32 = 1 << 31;
+// Import constants from internal module for use within this module
+use rdes0::ALL_ERRORS as RDES0_ALL_ERRORS_INT;
+use rdes0::CRC_ERR as RDES0_CRC_ERR_INT;
+use rdes0::DA_FILTER_FAIL as RDES0_DA_FILTER_FAIL_INT;
+use rdes0::DESC_ERR as RDES0_DESC_ERR_INT;
+use rdes0::DRIBBLE_ERR as RDES0_DRIBBLE_ERR_INT;
+use rdes0::ERR_SUMMARY as RDES0_ERR_SUMMARY_INT;
+use rdes0::EXT_STATUS as RDES0_EXT_STATUS_INT;
+use rdes0::FIRST_DESC as RDES0_FIRST_DESC_INT;
+use rdes0::FRAME_LEN_MASK as RDES0_FRAME_LEN_MASK_INT;
+use rdes0::FRAME_LEN_SHIFT as RDES0_FRAME_LEN_SHIFT_INT;
+use rdes0::FRAME_TYPE as RDES0_FRAME_TYPE_INT;
+use rdes0::LAST_DESC as RDES0_LAST_DESC_INT;
+use rdes0::LATE_COLLISION as RDES0_LATE_COLLISION_INT;
+use rdes0::LENGTH_ERR as RDES0_LENGTH_ERR_INT;
+use rdes0::OVERFLOW_ERR as RDES0_OVERFLOW_ERR_INT;
+use rdes0::OWN as RDES0_OWN_INT;
+use rdes0::RX_ERR as RDES0_RX_ERR_INT;
+use rdes0::RX_WATCHDOG as RDES0_RX_WATCHDOG_INT;
+use rdes0::SA_FILTER_FAIL as RDES0_SA_FILTER_FAIL_INT;
+use rdes0::TIMESTAMP_AVAIL as RDES0_TIMESTAMP_AVAIL_INT;
+use rdes0::VLAN_TAG as RDES0_VLAN_TAG_INT;
 
-/// All possible RX error bits
-pub const RDES0_ALL_ERRORS: u32 = RDES0_CRC_ERR
-    | RDES0_DRIBBLE_ERR
-    | RDES0_RX_ERR
-    | RDES0_RX_WATCHDOG
-    | RDES0_LATE_COLLISION
-    | RDES0_OVERFLOW_ERR
-    | RDES0_LENGTH_ERR
-    | RDES0_DESC_ERR;
+use rdes1::BUFFER1_SIZE_MASK as RDES1_BUFFER1_SIZE_MASK_INT;
+use rdes1::BUFFER1_SIZE_SHIFT as RDES1_BUFFER1_SIZE_SHIFT_INT;
+use rdes1::BUFFER2_SIZE_MASK as RDES1_BUFFER2_SIZE_MASK_INT;
+use rdes1::BUFFER2_SIZE_SHIFT as RDES1_BUFFER2_SIZE_SHIFT_INT;
+use rdes1::DISABLE_IRQ as RDES1_DISABLE_IRQ_INT;
+use rdes1::RX_END_OF_RING as RDES1_RX_END_OF_RING_INT;
+use rdes1::SECOND_ADDR_CHAINED as RDES1_SECOND_ADDR_CHAINED_INT;
+
+// =============================================================================
+// Deprecated Re-exports for Backward Compatibility
+// =============================================================================
+// These constants are deprecated. Use `crate::internal::descriptor_bits::rdes0::*` instead.
+
+/// Extended Status Available (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::EXT_STATUS")]
+pub const RDES0_EXT_STATUS: u32 = RDES0_EXT_STATUS_INT;
+/// CRC Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::CRC_ERR")]
+pub const RDES0_CRC_ERR: u32 = RDES0_CRC_ERR_INT;
+/// Dribble Bit Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::DRIBBLE_ERR")]
+pub const RDES0_DRIBBLE_ERR: u32 = RDES0_DRIBBLE_ERR_INT;
+/// Receive Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::RX_ERR")]
+pub const RDES0_RX_ERR: u32 = RDES0_RX_ERR_INT;
+/// Receive Watchdog Timeout (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::RX_WATCHDOG")]
+pub const RDES0_RX_WATCHDOG: u32 = RDES0_RX_WATCHDOG_INT;
+/// Frame Type (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::FRAME_TYPE")]
+pub const RDES0_FRAME_TYPE: u32 = RDES0_FRAME_TYPE_INT;
+/// Late Collision (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::LATE_COLLISION")]
+pub const RDES0_LATE_COLLISION: u32 = RDES0_LATE_COLLISION_INT;
+/// Timestamp Available (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::TIMESTAMP_AVAIL")]
+pub const RDES0_TIMESTAMP_AVAIL: u32 = RDES0_TIMESTAMP_AVAIL_INT;
+/// Last Descriptor (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::LAST_DESC")]
+pub const RDES0_LAST_DESC: u32 = RDES0_LAST_DESC_INT;
+/// First Descriptor (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::FIRST_DESC")]
+pub const RDES0_FIRST_DESC: u32 = RDES0_FIRST_DESC_INT;
+/// VLAN Tag (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::VLAN_TAG")]
+pub const RDES0_VLAN_TAG: u32 = RDES0_VLAN_TAG_INT;
+/// Overflow Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::OVERFLOW_ERR")]
+pub const RDES0_OVERFLOW_ERR: u32 = RDES0_OVERFLOW_ERR_INT;
+/// Length Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::LENGTH_ERR")]
+pub const RDES0_LENGTH_ERR: u32 = RDES0_LENGTH_ERR_INT;
+/// Source Address Filter Fail (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::SA_FILTER_FAIL")]
+pub const RDES0_SA_FILTER_FAIL: u32 = RDES0_SA_FILTER_FAIL_INT;
+/// Descriptor Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::DESC_ERR")]
+pub const RDES0_DESC_ERR: u32 = RDES0_DESC_ERR_INT;
+/// Error Summary (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::ERR_SUMMARY")]
+pub const RDES0_ERR_SUMMARY: u32 = RDES0_ERR_SUMMARY_INT;
+/// Frame Length shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::FRAME_LEN_SHIFT")]
+pub const RDES0_FRAME_LEN_SHIFT: u32 = RDES0_FRAME_LEN_SHIFT_INT;
+/// Frame Length mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::FRAME_LEN_MASK")]
+pub const RDES0_FRAME_LEN_MASK: u32 = RDES0_FRAME_LEN_MASK_INT;
+/// Destination Address Filter Fail (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::DA_FILTER_FAIL")]
+pub const RDES0_DA_FILTER_FAIL: u32 = RDES0_DA_FILTER_FAIL_INT;
+/// OWN bit (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::OWN")]
+pub const RDES0_OWN: u32 = RDES0_OWN_INT;
+/// All error bits (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes0::ALL_ERRORS")]
+pub const RDES0_ALL_ERRORS: u32 = RDES0_ALL_ERRORS_INT;
 
 // =============================================================================
 // RDES1 (RX Descriptor Word 1) - Control
 // =============================================================================
 
-/// RX Buffer 1 Size mask (13 bits)
-pub const RDES1_BUFFER1_SIZE_MASK: u32 = 0x1FFF;
-/// RX Buffer 1 Size shift
-pub const RDES1_BUFFER1_SIZE_SHIFT: u32 = 0;
-/// Second Address Chained - buffer2 contains next descriptor address
-pub const RDES1_SECOND_ADDR_CHAINED: u32 = 1 << 14;
-/// Receive End of Ring - this is the last descriptor in the ring
-pub const RDES1_RX_END_OF_RING: u32 = 1 << 15;
-/// RX Buffer 2 Size mask (13 bits)
-pub const RDES1_BUFFER2_SIZE_MASK: u32 = 0x1FFF << 16;
-/// RX Buffer 2 Size shift
-pub const RDES1_BUFFER2_SIZE_SHIFT: u32 = 16;
-/// Disable Interrupt on Completion
-pub const RDES1_DISABLE_IRQ: u32 = 1 << 31;
+/// Buffer 1 size mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes1::BUFFER1_SIZE_MASK")]
+pub const RDES1_BUFFER1_SIZE_MASK: u32 = RDES1_BUFFER1_SIZE_MASK_INT;
+/// Buffer 1 size shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes1::BUFFER1_SIZE_SHIFT")]
+pub const RDES1_BUFFER1_SIZE_SHIFT: u32 = RDES1_BUFFER1_SIZE_SHIFT_INT;
+/// Second address chained (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes1::SECOND_ADDR_CHAINED")]
+pub const RDES1_SECOND_ADDR_CHAINED: u32 = RDES1_SECOND_ADDR_CHAINED_INT;
+/// End of ring (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes1::RX_END_OF_RING")]
+pub const RDES1_RX_END_OF_RING: u32 = RDES1_RX_END_OF_RING_INT;
+/// Buffer 2 size mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes1::BUFFER2_SIZE_MASK")]
+pub const RDES1_BUFFER2_SIZE_MASK: u32 = RDES1_BUFFER2_SIZE_MASK_INT;
+/// Buffer 2 size shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes1::BUFFER2_SIZE_SHIFT")]
+pub const RDES1_BUFFER2_SIZE_SHIFT: u32 = RDES1_BUFFER2_SIZE_SHIFT_INT;
+/// Disable IRQ (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes1::DISABLE_IRQ")]
+pub const RDES1_DISABLE_IRQ: u32 = RDES1_DISABLE_IRQ_INT;
 
 // =============================================================================
 // RDES4 (Extended Status) - when RDES0.EXT_STATUS is set
 // =============================================================================
 
-/// IP Payload Type shift (3 bits)
-pub const RDES4_IP_PAYLOAD_TYPE_SHIFT: u32 = 0;
-/// IP Payload Type mask
-pub const RDES4_IP_PAYLOAD_TYPE_MASK: u32 = 0x7;
-/// IP Header Error
-pub const RDES4_IP_HEADER_ERR: u32 = 1 << 3;
-/// IP Payload Error
-pub const RDES4_IP_PAYLOAD_ERR: u32 = 1 << 4;
-/// IP Checksum Bypassed
-pub const RDES4_IP_CHECKSUM_BYPASS: u32 = 1 << 5;
-/// IPv4 Packet Received
-pub const RDES4_IPV4_PKT: u32 = 1 << 6;
-/// IPv6 Packet Received
-pub const RDES4_IPV6_PKT: u32 = 1 << 7;
-/// PTP Message Type shift (4 bits)
-pub const RDES4_PTP_MSG_TYPE_SHIFT: u32 = 8;
-/// PTP Message Type mask
-pub const RDES4_PTP_MSG_TYPE_MASK: u32 = 0xF << 8;
-/// PTP Frame Type (1 = PTPv2, 0 = PTPv1)
-pub const RDES4_PTP_FRAME_TYPE: u32 = 1 << 12;
-/// PTP Version (within PTPv2)
-pub const RDES4_PTP_VERSION: u32 = 1 << 13;
-/// Timestamp Dropped
-pub const RDES4_TIMESTAMP_DROPPED: u32 = 1 << 14;
-/// AV Tagged Packet
-pub const RDES4_AV_TAGGED: u32 = 1 << 16;
-/// AV Tagged Packet control/data
-pub const RDES4_AV_CTRL_DATA: u32 = 1 << 17;
-/// Layer 3 Filter Match
-pub const RDES4_L3_FILTER_MATCH: u32 = 1 << 24;
-/// Layer 4 Filter Match
-pub const RDES4_L4_FILTER_MATCH: u32 = 1 << 25;
-/// Layer 3/4 Filter Number Matched shift
-pub const RDES4_L3_L4_FILTER_NUM_SHIFT: u32 = 26;
-/// Layer 3/4 Filter Number Matched mask
-pub const RDES4_L3_L4_FILTER_NUM_MASK: u32 = 0x3 << 26;
+/// IP Payload Type shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::IP_PAYLOAD_TYPE_SHIFT")]
+pub const RDES4_IP_PAYLOAD_TYPE_SHIFT: u32 = rdes4::IP_PAYLOAD_TYPE_SHIFT;
+/// IP Payload Type mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::IP_PAYLOAD_TYPE_MASK")]
+pub const RDES4_IP_PAYLOAD_TYPE_MASK: u32 = rdes4::IP_PAYLOAD_TYPE_MASK;
+/// IP Header Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::IP_HEADER_ERR")]
+pub const RDES4_IP_HEADER_ERR: u32 = rdes4::IP_HEADER_ERR;
+/// IP Payload Error (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::IP_PAYLOAD_ERR")]
+pub const RDES4_IP_PAYLOAD_ERR: u32 = rdes4::IP_PAYLOAD_ERR;
+/// IP Checksum Bypass (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::IP_CHECKSUM_BYPASS")]
+pub const RDES4_IP_CHECKSUM_BYPASS: u32 = rdes4::IP_CHECKSUM_BYPASS;
+/// IPv4 Packet (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::IPV4_PKT")]
+pub const RDES4_IPV4_PKT: u32 = rdes4::IPV4_PKT;
+/// IPv6 Packet (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::IPV6_PKT")]
+pub const RDES4_IPV6_PKT: u32 = rdes4::IPV6_PKT;
+/// PTP Message Type shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::PTP_MSG_TYPE_SHIFT")]
+pub const RDES4_PTP_MSG_TYPE_SHIFT: u32 = rdes4::PTP_MSG_TYPE_SHIFT;
+/// PTP Message Type mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::PTP_MSG_TYPE_MASK")]
+pub const RDES4_PTP_MSG_TYPE_MASK: u32 = rdes4::PTP_MSG_TYPE_MASK;
+/// PTP Frame Type (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::PTP_FRAME_TYPE")]
+pub const RDES4_PTP_FRAME_TYPE: u32 = rdes4::PTP_FRAME_TYPE;
+/// PTP Version (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::PTP_VERSION")]
+pub const RDES4_PTP_VERSION: u32 = rdes4::PTP_VERSION;
+/// Timestamp Dropped (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::TIMESTAMP_DROPPED")]
+pub const RDES4_TIMESTAMP_DROPPED: u32 = rdes4::TIMESTAMP_DROPPED;
+/// AV Tagged (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::AV_TAGGED")]
+pub const RDES4_AV_TAGGED: u32 = rdes4::AV_TAGGED;
+/// AV Control/Data (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::AV_CTRL_DATA")]
+pub const RDES4_AV_CTRL_DATA: u32 = rdes4::AV_CTRL_DATA;
+/// L3 Filter Match (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::L3_FILTER_MATCH")]
+pub const RDES4_L3_FILTER_MATCH: u32 = rdes4::L3_FILTER_MATCH;
+/// L4 Filter Match (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::L4_FILTER_MATCH")]
+pub const RDES4_L4_FILTER_MATCH: u32 = rdes4::L4_FILTER_MATCH;
+/// L3/L4 Filter Number shift (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::L3_L4_FILTER_NUM_SHIFT")]
+pub const RDES4_L3_L4_FILTER_NUM_SHIFT: u32 = rdes4::L3_L4_FILTER_NUM_SHIFT;
+/// L3/L4 Filter Number mask (deprecated)
+#[deprecated(since = "0.2.0", note = "use internal::descriptor_bits::rdes4::L3_L4_FILTER_NUM_MASK")]
+pub const RDES4_L3_L4_FILTER_NUM_MASK: u32 = rdes4::L3_L4_FILTER_NUM_MASK;
 
 // =============================================================================
 // RxDescriptor Structure
@@ -189,10 +264,11 @@ impl RxDescriptor {
     ) {
         self.buffer1_addr.set(buffer as u32);
         self.buffer2_next_desc.set(next_desc as u32);
-        self.rdes1
-            .set(RDES1_SECOND_ADDR_CHAINED | ((buffer_size as u32) & RDES1_BUFFER1_SIZE_MASK));
+        self.rdes1.set(
+            RDES1_SECOND_ADDR_CHAINED_INT | ((buffer_size as u32) & RDES1_BUFFER1_SIZE_MASK_INT),
+        );
         // Give ownership to DMA
-        self.rdes0.set(RDES0_OWN);
+        self.rdes0.set(RDES0_OWN_INT);
     }
 
     /// Initialize as end of ring (last descriptor wraps to first)
@@ -205,45 +281,45 @@ impl RxDescriptor {
         self.buffer1_addr.set(buffer as u32);
         self.buffer2_next_desc.set(first_desc as u32);
         self.rdes1.set(
-            RDES1_SECOND_ADDR_CHAINED
-                | RDES1_RX_END_OF_RING
-                | ((buffer_size as u32) & RDES1_BUFFER1_SIZE_MASK),
+            RDES1_SECOND_ADDR_CHAINED_INT
+                | RDES1_RX_END_OF_RING_INT
+                | ((buffer_size as u32) & RDES1_BUFFER1_SIZE_MASK_INT),
         );
         // Give ownership to DMA
-        self.rdes0.set(RDES0_OWN);
+        self.rdes0.set(RDES0_OWN_INT);
     }
 
     /// Check if descriptor is owned by DMA
     #[inline(always)]
     #[must_use]
     pub fn is_owned(&self) -> bool {
-        (self.rdes0.get() & RDES0_OWN) != 0
+        (self.rdes0.get() & RDES0_OWN_INT) != 0
     }
 
     /// Give descriptor ownership to DMA
     #[inline(always)]
     pub fn set_owned(&self) {
-        self.rdes0.set(RDES0_OWN);
+        self.rdes0.set(RDES0_OWN_INT);
     }
 
     /// Take ownership from DMA (for CPU use)
     #[inline(always)]
     pub fn clear_owned(&self) {
-        self.rdes0.update(|v| v & !RDES0_OWN);
+        self.rdes0.update(|v| v & !RDES0_OWN_INT);
     }
 
     /// Check if this is the first descriptor of a frame
     #[inline(always)]
     #[must_use]
     pub fn is_first(&self) -> bool {
-        (self.rdes0.get() & RDES0_FIRST_DESC) != 0
+        (self.rdes0.get() & RDES0_FIRST_DESC_INT) != 0
     }
 
     /// Check if this is the last descriptor of a frame
     #[inline(always)]
     #[must_use]
     pub fn is_last(&self) -> bool {
-        (self.rdes0.get() & RDES0_LAST_DESC) != 0
+        (self.rdes0.get() & RDES0_LAST_DESC_INT) != 0
     }
 
     /// Check if this descriptor contains a complete frame (first and last)
@@ -251,21 +327,22 @@ impl RxDescriptor {
     #[must_use]
     pub fn is_complete_frame(&self) -> bool {
         let status = self.rdes0.get();
-        (status & (RDES0_FIRST_DESC | RDES0_LAST_DESC)) == (RDES0_FIRST_DESC | RDES0_LAST_DESC)
+        (status & (RDES0_FIRST_DESC_INT | RDES0_LAST_DESC_INT))
+            == (RDES0_FIRST_DESC_INT | RDES0_LAST_DESC_INT)
     }
 
     /// Check if frame has any errors
     #[inline(always)]
     #[must_use]
     pub fn has_error(&self) -> bool {
-        (self.rdes0.get() & RDES0_ERR_SUMMARY) != 0
+        (self.rdes0.get() & RDES0_ERR_SUMMARY_INT) != 0
     }
 
     /// Get all error flags
     #[inline(always)]
     #[must_use]
     pub fn error_flags(&self) -> u32 {
-        self.rdes0.get() & RDES0_ALL_ERRORS
+        self.rdes0.get() & RDES0_ALL_ERRORS_INT
     }
 
     /// Get received frame length (only valid if this is the last descriptor)
@@ -274,7 +351,7 @@ impl RxDescriptor {
     #[inline(always)]
     #[must_use]
     pub fn frame_length(&self) -> usize {
-        ((self.rdes0.get() & RDES0_FRAME_LEN_MASK) >> RDES0_FRAME_LEN_SHIFT) as usize
+        ((self.rdes0.get() & RDES0_FRAME_LEN_MASK_INT) >> RDES0_FRAME_LEN_SHIFT_INT) as usize
     }
 
     /// Get received frame length excluding CRC
@@ -288,21 +365,21 @@ impl RxDescriptor {
     #[inline(always)]
     #[must_use]
     pub fn has_vlan_tag(&self) -> bool {
-        (self.rdes0.get() & RDES0_VLAN_TAG) != 0
+        (self.rdes0.get() & RDES0_VLAN_TAG_INT) != 0
     }
 
     /// Check if frame is an Ethernet type frame (vs 802.3)
     #[inline(always)]
     #[must_use]
     pub fn is_ethernet_frame(&self) -> bool {
-        (self.rdes0.get() & RDES0_FRAME_TYPE) != 0
+        (self.rdes0.get() & RDES0_FRAME_TYPE_INT) != 0
     }
 
     /// Check if timestamp is available
     #[inline(always)]
     #[must_use]
     pub fn has_timestamp(&self) -> bool {
-        (self.rdes0.get() & RDES0_TIMESTAMP_AVAIL) != 0
+        (self.rdes0.get() & RDES0_TIMESTAMP_AVAIL_INT) != 0
     }
 
     /// Get captured timestamp (low 32 bits)
@@ -337,35 +414,35 @@ impl RxDescriptor {
     #[inline(always)]
     #[must_use]
     pub fn has_extended_status(&self) -> bool {
-        (self.rdes0.get() & RDES0_EXT_STATUS) != 0
+        (self.rdes0.get() & RDES0_EXT_STATUS_INT) != 0
     }
 
     /// Check if this is an IPv4 packet (from extended status)
     #[inline(always)]
     #[must_use]
     pub fn is_ipv4(&self) -> bool {
-        self.has_extended_status() && (self.extended_status.get() & RDES4_IPV4_PKT) != 0
+        self.has_extended_status() && (self.extended_status.get() & rdes4::IPV4_PKT) != 0
     }
 
     /// Check if this is an IPv6 packet (from extended status)
     #[inline(always)]
     #[must_use]
     pub fn is_ipv6(&self) -> bool {
-        self.has_extended_status() && (self.extended_status.get() & RDES4_IPV6_PKT) != 0
+        self.has_extended_status() && (self.extended_status.get() & rdes4::IPV6_PKT) != 0
     }
 
     /// Check for IP header checksum error (from extended status)
     #[inline(always)]
     #[must_use]
     pub fn has_ip_header_error(&self) -> bool {
-        self.has_extended_status() && (self.extended_status.get() & RDES4_IP_HEADER_ERR) != 0
+        self.has_extended_status() && (self.extended_status.get() & rdes4::IP_HEADER_ERR) != 0
     }
 
     /// Check for IP payload checksum error (from extended status)
     #[inline(always)]
     #[must_use]
     pub fn has_ip_payload_error(&self) -> bool {
-        self.has_extended_status() && (self.extended_status.get() & RDES4_IP_PAYLOAD_ERR) != 0
+        self.has_extended_status() && (self.extended_status.get() & rdes4::IP_PAYLOAD_ERR) != 0
     }
 
     /// Get buffer address
@@ -386,7 +463,7 @@ impl RxDescriptor {
     #[inline(always)]
     #[must_use]
     pub fn buffer_size(&self) -> usize {
-        (self.rdes1.get() & RDES1_BUFFER1_SIZE_MASK) as usize
+        (self.rdes1.get() & RDES1_BUFFER1_SIZE_MASK_INT) as usize
     }
 
     /// Reset descriptor and give back to DMA
@@ -394,7 +471,7 @@ impl RxDescriptor {
     /// Preserves buffer address, size, and chain pointer
     pub fn recycle(&self) {
         // Clear status, keep control bits, give to DMA
-        self.rdes0.set(RDES0_OWN);
+        self.rdes0.set(RDES0_OWN_INT);
     }
 
     /// Get raw RDES0 value (for debugging)
@@ -427,6 +504,7 @@ unsafe impl Send for RxDescriptor {}
 // =============================================================================
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

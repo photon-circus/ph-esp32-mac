@@ -136,7 +136,7 @@ pub static ERR_WAKER: AtomicWaker = AtomicWaker::new();
 #[inline]
 pub fn async_interrupt_handler() {
     // Read status
-    let status = InterruptStatus::from_raw(crate::register::dma::DmaRegs::status());
+    let status = InterruptStatus::from_raw(crate::internal::register::dma::DmaRegs::status());
 
     // Wake appropriate wakers based on status
     if status.rx_complete || status.rx_buf_unavailable {
@@ -155,7 +155,7 @@ pub fn async_interrupt_handler() {
     }
 
     // Clear all handled interrupts (write-1-to-clear)
-    crate::register::dma::DmaRegs::set_status(status.to_raw());
+    crate::internal::register::dma::DmaRegs::set_status(status.to_raw());
 }
 
 /// Returns the last interrupt status without clearing.
@@ -163,7 +163,7 @@ pub fn async_interrupt_handler() {
 /// Useful for checking error conditions in async code.
 #[inline]
 pub fn peek_interrupt_status() -> InterruptStatus {
-    InterruptStatus::from_raw(crate::register::dma::DmaRegs::status())
+    InterruptStatus::from_raw(crate::internal::register::dma::DmaRegs::status())
 }
 
 // =============================================================================

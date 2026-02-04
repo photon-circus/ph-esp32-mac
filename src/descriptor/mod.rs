@@ -82,7 +82,7 @@ pub use rx::RxDescriptor;
 pub use tx::TxDescriptor;
 
 // Re-export frame size constants from central location for backwards compatibility
-pub use crate::constants::{DEFAULT_BUFFER_SIZE, ETH_HEADER_SIZE, MAX_FRAME_SIZE, MTU};
+pub use crate::internal::constants::{DEFAULT_BUFFER_SIZE, ETH_HEADER_SIZE, MAX_FRAME_SIZE, MTU};
 
 /// Common descriptor ownership bit (bit 31 of first word)
 pub const DESC_OWN: u32 = 1 << 31;

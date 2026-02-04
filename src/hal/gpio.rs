@@ -43,28 +43,11 @@
 //! 3. Reference clock source is configured via `EmacConfig::rmii_clock`
 
 /// EMAC RMII GPIO assignments for ESP32
+///
+/// **Deprecated:** This module is re-exported for backward compatibility.
+/// The canonical location is now `crate::internal::gpio_pins::esp32`.
 #[cfg(feature = "esp32")]
+#[deprecated(since = "0.2.0", note = "moved to internal module; will be removed in 0.3.0")]
 pub mod esp32_gpio {
-    /// EMAC TXD0 - GPIO19 (fixed, internal routing)
-    pub const TXD0_GPIO: u8 = 19;
-    /// EMAC TXD1 - GPIO22 (fixed, internal routing)
-    pub const TXD1_GPIO: u8 = 22;
-    /// EMAC TX_EN - GPIO21 (fixed, internal routing)
-    pub const TX_EN_GPIO: u8 = 21;
-    /// EMAC RXD0 - GPIO25 (fixed, internal routing)
-    pub const RXD0_GPIO: u8 = 25;
-    /// EMAC RXD1 - GPIO26 (fixed, internal routing)
-    pub const RXD1_GPIO: u8 = 26;
-    /// EMAC CRS_DV - GPIO27 (fixed, internal routing)
-    pub const CRS_DV_GPIO: u8 = 27;
-    /// EMAC REF_CLK external input - GPIO0
-    pub const REF_CLK_GPIO: u8 = 0;
-    /// EMAC REF_CLK output option 1 - GPIO16
-    pub const REF_CLK_OUT_GPIO16: u8 = 16;
-    /// EMAC REF_CLK output option 2 - GPIO17
-    pub const REF_CLK_OUT_GPIO17: u8 = 17;
-    /// Default MDC GPIO (configurable via GPIO matrix)
-    pub const MDC_GPIO: u8 = 23;
-    /// Default MDIO GPIO (configurable via GPIO matrix)
-    pub const MDIO_GPIO: u8 = 18;
+    pub use crate::internal::gpio_pins::esp32::*;
 }
