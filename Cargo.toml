@@ -1,0 +1,50 @@
+[package]
+name = "ph-esp32-mac"
+description = "no_std, no_alloc Rust implementation of the ESP32 Ethernet MAC (EMAC) driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+keywords = ["esp32", "ethernet", "emac", "embedded", "no_std"]
+categories = ["embedded", "hardware-support", "no-std"]
+
+[features]
+default = ["esp32"]
+
+# Target chip selection (mutually exclusive)
+esp32 = []
+esp32p4 = []
+
+# Optional integrations
+defmt = ["dep:defmt"]
+smoltcp = ["dep:smoltcp"]
+critical-section = ["dep:critical-section"]
+esp-hal = ["dep:esp-hal", "critical-section"]  # esp-hal ergonomic integration
+async = ["critical-section"]  # Async/await support with wakers
+
+[dependencies]
+# Optional: defmt for embedded-friendly debug output
+defmt = { version = "0.3", optional = true }
+
+# Optional: smoltcp network stack integration
+# We enable proto-ipv4 and socket-tcp for basic IP/TCP support
+# Users can enable additional protocols/sockets as needed
+smoltcp = { version = "0.12", optional = true, default-features = false, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "socket-tcp",
+] }
+
+# embedded-hal traits for ecosystem compatibility
+embedded-hal = { version = "1.0" }
+
+# Optional: critical-section for interrupt-safe shared access
+# When enabled, provides SharedEmac wrapper for ISR-safe EMAC access
+# The implementation is provided by the HAL crate (e.g., esp-hal)
+critical-section = { version = "1.2", optional = true }
+
+# Optional: esp-hal for ergonomic integration with esp-rs ecosystem
+# Provides InterruptConfigurable, handler macro support, and delay types
+esp-hal = { version = "1.0", optional = true, default-features = false }
+
+[dev-dependencies]
+# For testing on host
