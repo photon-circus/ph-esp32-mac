@@ -23,6 +23,5 @@ pub mod reset;
 
 // Re-export commonly used types
 pub use clock::{ClockController, ClockState};
-pub use mdio::{MdioBus, MdioController, MdcClockDivider, PhyStatus};
+pub use mdio::{MdcClockDivider, MdioBus, MdioController, PhyStatus};
 pub use reset::{ResetController, ResetManager, ResetState};
-

@@ -7,9 +7,8 @@
 use crate::config::{PhyInterface, RmiiClockMode};
 use crate::error::{ConfigError, Result};
 use crate::register::ext::{
-    ExtRegs, EX_PHYINF_CLK_INV,
-    EX_PHYINF_RMII_CLK_SEL, EX_PHYINF_RMII_EN, EX_PHYINF_RMII_EXT_RX_CLK_EN,
-    EX_PHYINF_RMII_REF_CLK_OUT_EN,
+    EX_PHYINF_CLK_INV, EX_PHYINF_RMII_CLK_SEL, EX_PHYINF_RMII_EN, EX_PHYINF_RMII_EXT_RX_CLK_EN,
+    EX_PHYINF_RMII_REF_CLK_OUT_EN, ExtRegs,
 };
 
 /// Clock configuration state

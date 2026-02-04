@@ -189,7 +189,8 @@ impl TxDescriptor {
     pub fn setup_end_of_ring(&self, buffer: *const u8, first_desc: *const TxDescriptor) {
         self.buffer1_addr.set(buffer as u32);
         self.buffer2_next_desc.set(first_desc as u32);
-        self.tdes0.set(TDES0_SECOND_ADDR_CHAINED | TDES0_TX_END_OF_RING);
+        self.tdes0
+            .set(TDES0_SECOND_ADDR_CHAINED | TDES0_TX_END_OF_RING);
         self.tdes1.set(0);
     }
 
@@ -229,8 +230,7 @@ impl TxDescriptor {
         }
 
         // Set buffer size
-        self.tdes1
-            .set((len as u32) & TDES1_BUFFER1_SIZE_MASK);
+        self.tdes1.set((len as u32) & TDES1_BUFFER1_SIZE_MASK);
 
         // Set flags (but not OWN yet)
         self.tdes0.set(flags);
@@ -245,7 +245,8 @@ impl TxDescriptor {
     /// Set checksum insertion mode
     pub fn set_checksum_mode(&self, mode: u32) {
         self.tdes0.update(|v| {
-            (v & !TDES0_CHECKSUM_INSERT_MASK) | ((mode << TDES0_CHECKSUM_INSERT_SHIFT) & TDES0_CHECKSUM_INSERT_MASK)
+            (v & !TDES0_CHECKSUM_INSERT_MASK)
+                | ((mode << TDES0_CHECKSUM_INSERT_SHIFT) & TDES0_CHECKSUM_INSERT_MASK)
         });
     }
 
@@ -397,14 +398,20 @@ mod tests {
     #[test]
     fn tx_descriptor_new_not_owned() {
         let desc = TxDescriptor::new();
-        assert!(!desc.is_owned(), "New descriptor should not be owned by DMA");
+        assert!(
+            !desc.is_owned(),
+            "New descriptor should not be owned by DMA"
+        );
     }
 
     #[test]
     fn tx_descriptor_set_owned() {
         let desc = TxDescriptor::new();
         desc.set_owned();
-        assert!(desc.is_owned(), "Descriptor should be owned after set_owned()");
+        assert!(
+            desc.is_owned(),
+            "Descriptor should be owned after set_owned()"
+        );
     }
 
     #[test]
@@ -413,7 +420,10 @@ mod tests {
         desc.set_owned();
         assert!(desc.is_owned());
         desc.clear_owned();
-        assert!(!desc.is_owned(), "Descriptor should not be owned after clear_owned()");
+        assert!(
+            !desc.is_owned(),
+            "Descriptor should not be owned after clear_owned()"
+        );
     }
 
     #[test]
@@ -435,8 +445,14 @@ mod tests {
         desc.prepare(100, true, false);
 
         let raw = desc.raw_tdes0();
-        assert!(raw & TDES0_FIRST_SEGMENT != 0, "First segment flag should be set");
-        assert!(raw & TDES0_LAST_SEGMENT == 0, "Last segment flag should not be set");
+        assert!(
+            raw & TDES0_FIRST_SEGMENT != 0,
+            "First segment flag should be set"
+        );
+        assert!(
+            raw & TDES0_LAST_SEGMENT == 0,
+            "Last segment flag should not be set"
+        );
         assert!(raw & TDES0_OWN == 0, "OWN should not be set by prepare()");
     }
 
@@ -446,9 +462,18 @@ mod tests {
         desc.prepare(100, false, true);
 
         let raw = desc.raw_tdes0();
-        assert!(raw & TDES0_FIRST_SEGMENT == 0, "First segment flag should not be set");
-        assert!(raw & TDES0_LAST_SEGMENT != 0, "Last segment flag should be set");
-        assert!(raw & TDES0_INTERRUPT_ON_COMPLETE != 0, "IOC should be set on last segment");
+        assert!(
+            raw & TDES0_FIRST_SEGMENT == 0,
+            "First segment flag should not be set"
+        );
+        assert!(
+            raw & TDES0_LAST_SEGMENT != 0,
+            "Last segment flag should be set"
+        );
+        assert!(
+            raw & TDES0_INTERRUPT_ON_COMPLETE != 0,
+            "IOC should be set on last segment"
+        );
     }
 
     #[test]
@@ -485,8 +510,11 @@ mod tests {
         let desc = TxDescriptor::new();
         desc.prepare_and_submit(256, true, true);
 
-        assert!(desc.is_owned(), "Descriptor should be owned after prepare_and_submit()");
-        
+        assert!(
+            desc.is_owned(),
+            "Descriptor should be owned after prepare_and_submit()"
+        );
+
         // Verify length via raw_tdes1
         let len = desc.raw_tdes1() & 0x1FFF;
         assert_eq!(len, 256);
@@ -564,7 +592,8 @@ mod tests {
         assert!(errors & TDES0_UNDERFLOW_ERR != 0);
 
         // Multiple errors with summary
-        desc.tdes0.set(TDES0_ERR_SUMMARY | TDES0_LATE_COLLISION | TDES0_UNDERFLOW_ERR);
+        desc.tdes0
+            .set(TDES0_ERR_SUMMARY | TDES0_LATE_COLLISION | TDES0_UNDERFLOW_ERR);
         assert!(desc.has_error());
         let errors = desc.error_flags();
         assert!(errors & TDES0_LATE_COLLISION != 0);

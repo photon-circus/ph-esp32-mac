@@ -63,8 +63,8 @@
 pub mod generic;
 pub mod lan8720a;
 
-pub use generic::{LinkStatus, PhyDriver, PhyCapabilities};
+pub use generic::{LinkStatus, PhyCapabilities, PhyDriver};
 pub use lan8720a::{Lan8720a, Lan8720aWithReset};
 
 // Re-export IEEE 802.3 standard register definitions from mdio
-pub use crate::hal::mdio::{phy_reg, bmcr, bmsr, anar};
+pub use crate::hal::mdio::{anar, bmcr, bmsr, phy_reg};

@@ -192,7 +192,7 @@ pub trait PhyDriver {
 /// Helper functions using standard IEEE 802.3 registers
 pub mod ieee802_3 {
     use super::*;
-    use crate::hal::mdio::{phy_reg, bmcr, bmsr, anar};
+    use crate::hal::mdio::{anar, bmcr, bmsr, phy_reg};
 
     /// Read BMSR and check link status bit
     pub fn is_link_up<M: MdioBus>(mdio: &mut M, phy_addr: u8) -> Result<bool> {
@@ -235,11 +235,7 @@ pub mod ieee802_3 {
     }
 
     /// Force speed and duplex
-    pub fn force_link<M: MdioBus>(
-        mdio: &mut M,
-        phy_addr: u8,
-        status: LinkStatus,
-    ) -> Result<()> {
+    pub fn force_link<M: MdioBus>(mdio: &mut M, phy_addr: u8, status: LinkStatus) -> Result<()> {
         let mut bmcr_val = mdio.read(phy_addr, phy_reg::BMCR)?;
 
         // Disable auto-negotiation

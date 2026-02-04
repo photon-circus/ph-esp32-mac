@@ -154,9 +154,9 @@ pub mod test_utils;
 // =============================================================================
 
 pub use config::{
-    ChecksumConfig, DmaBurstLen, Duplex, EmacConfig, FlowControlConfig, MacAddressFilter,
-    MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed,
-    State, TxChecksumMode, MAC_FILTER_SLOTS,
+    ChecksumConfig, DmaBurstLen, Duplex, EmacConfig, FlowControlConfig, MAC_FILTER_SLOTS,
+    MacAddressFilter, MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State,
+    TxChecksumMode,
 };
 pub use descriptor::{RxDescriptor, TxDescriptor, VolatileCell};
 pub use dma::{DescriptorRing, DmaEngine};
@@ -183,7 +183,7 @@ pub use sync::{SharedEmac, SharedEmacDefault, SharedEmacLarge, SharedEmacSmall};
 
 // Re-export async types when async feature is enabled
 #[cfg(feature = "async")]
-pub use asynch::{AsyncEmacExt, async_interrupt_handler, RX_WAKER, TX_WAKER};
+pub use asynch::{AsyncEmacExt, RX_WAKER, TX_WAKER, async_interrupt_handler};
 
 // =============================================================================
 // Constants (re-exported from constants module)
@@ -191,17 +191,31 @@ pub use asynch::{AsyncEmacExt, async_interrupt_handler, RX_WAKER, TX_WAKER};
 
 pub use constants::{
     // Frame/buffer sizes
-    CRC_SIZE, DEFAULT_BUFFER_SIZE, ETH_HEADER_SIZE, MAX_FRAME_SIZE, MIN_FRAME_SIZE, MTU,
-    VLAN_TAG_SIZE,
-    // Buffer counts
-    DEFAULT_RX_BUFFERS, DEFAULT_TX_BUFFERS,
-    // Timing
-    FLUSH_TIMEOUT, MII_BUSY_TIMEOUT, RESET_POLL_INTERVAL_US, SOFT_RESET_TIMEOUT_MS,
-    // Clocks
-    MDC_MAX_FREQ_HZ, MII_100M_CLK_HZ, MII_10M_CLK_HZ, RMII_CLK_HZ,
+    CRC_SIZE,
+    DEFAULT_BUFFER_SIZE,
     // Flow control
-    DEFAULT_FLOW_HIGH_WATER, DEFAULT_FLOW_LOW_WATER, PAUSE_TIME_MAX,
+    DEFAULT_FLOW_HIGH_WATER,
+    DEFAULT_FLOW_LOW_WATER,
     // MAC address
-    DEFAULT_MAC_ADDR, MAC_ADDR_LEN,
+    DEFAULT_MAC_ADDR,
+    // Buffer counts
+    DEFAULT_RX_BUFFERS,
+    DEFAULT_TX_BUFFERS,
+    ETH_HEADER_SIZE,
+    // Timing
+    FLUSH_TIMEOUT,
+    MAC_ADDR_LEN,
+    MAX_FRAME_SIZE,
+    // Clocks
+    MDC_MAX_FREQ_HZ,
+    MII_10M_CLK_HZ,
+    MII_100M_CLK_HZ,
+    MII_BUSY_TIMEOUT,
+    MIN_FRAME_SIZE,
+    MTU,
+    PAUSE_TIME_MAX,
+    RESET_POLL_INTERVAL_US,
+    RMII_CLK_HZ,
+    SOFT_RESET_TIMEOUT_MS,
+    VLAN_TAG_SIZE,
 };
-

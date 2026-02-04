@@ -549,8 +549,7 @@ mod tests {
 
     #[test]
     fn config_builder_rmii_clock() {
-        let config = EmacConfig::new()
-            .with_rmii_clock(RmiiClockMode::InternalOutput { gpio: 17 });
+        let config = EmacConfig::new().with_rmii_clock(RmiiClockMode::InternalOutput { gpio: 17 });
 
         match config.rmii_clock {
             RmiiClockMode::InternalOutput { gpio } => assert_eq!(gpio, 17),

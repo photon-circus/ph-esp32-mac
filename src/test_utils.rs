@@ -5,8 +5,9 @@
 //!
 //! Only available when running `cargo test`.
 
-#![cfg(test)]
+// Note: The #[cfg(test)] attribute is applied in lib.rs where this module is declared
 #![allow(missing_docs)]
+#![allow(clippy::std_instead_of_core, clippy::std_instead_of_alloc)]
 
 extern crate std;
 
@@ -56,7 +57,9 @@ impl MockMdioBus {
 
     /// Set a register value
     pub fn set_register(&self, phy_addr: u8, reg_addr: u8, value: u16) {
-        self.registers.borrow_mut().insert((phy_addr, reg_addr), value);
+        self.registers
+            .borrow_mut()
+            .insert((phy_addr, reg_addr), value);
     }
 
     /// Get the current value of a register (for test verification)
@@ -153,10 +156,14 @@ impl MdioBus for MockMdioBus {
 
     fn write(&mut self, phy_addr: u8, reg_addr: u8, value: u16) -> Result<()> {
         // Log the write
-        self.write_log.borrow_mut().push((phy_addr, reg_addr, value));
+        self.write_log
+            .borrow_mut()
+            .push((phy_addr, reg_addr, value));
 
         // Actually update the register
-        self.registers.borrow_mut().insert((phy_addr, reg_addr), value);
+        self.registers
+            .borrow_mut()
+            .insert((phy_addr, reg_addr), value);
 
         Ok(())
     }
@@ -217,7 +224,9 @@ macro_rules! assert_reg_written {
     ($mdio:expr, $phy:expr, $reg:expr, $value:expr) => {
         let writes = $mdio.get_writes();
         assert!(
-            writes.iter().any(|w| w.0 == $phy && w.1 == $reg && w.2 == $value),
+            writes
+                .iter()
+                .any(|w| w.0 == $phy && w.1 == $reg && w.2 == $value),
             "Expected write to PHY {} reg {} with value 0x{:04X}, but got: {:?}",
             $phy,
             $reg,

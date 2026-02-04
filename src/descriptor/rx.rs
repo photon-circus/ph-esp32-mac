@@ -181,12 +181,16 @@ impl RxDescriptor {
     /// * `buffer` - Pointer to the data buffer
     /// * `buffer_size` - Size of the data buffer in bytes
     /// * `next_desc` - Pointer to the next descriptor in the chain
-    pub fn setup_chained(&self, buffer: *mut u8, buffer_size: usize, next_desc: *const RxDescriptor) {
+    pub fn setup_chained(
+        &self,
+        buffer: *mut u8,
+        buffer_size: usize,
+        next_desc: *const RxDescriptor,
+    ) {
         self.buffer1_addr.set(buffer as u32);
         self.buffer2_next_desc.set(next_desc as u32);
-        self.rdes1.set(
-            RDES1_SECOND_ADDR_CHAINED | ((buffer_size as u32) & RDES1_BUFFER1_SIZE_MASK),
-        );
+        self.rdes1
+            .set(RDES1_SECOND_ADDR_CHAINED | ((buffer_size as u32) & RDES1_BUFFER1_SIZE_MASK));
         // Give ownership to DMA
         self.rdes0.set(RDES0_OWN);
     }
@@ -465,14 +469,20 @@ mod tests {
     #[test]
     fn rx_descriptor_new_not_owned() {
         let desc = RxDescriptor::new();
-        assert!(!desc.is_owned(), "New descriptor should not be owned by DMA");
+        assert!(
+            !desc.is_owned(),
+            "New descriptor should not be owned by DMA"
+        );
     }
 
     #[test]
     fn rx_descriptor_set_owned() {
         let desc = RxDescriptor::new();
         desc.set_owned();
-        assert!(desc.is_owned(), "Descriptor should be owned after set_owned()");
+        assert!(
+            desc.is_owned(),
+            "Descriptor should be owned after set_owned()"
+        );
     }
 
     #[test]
@@ -481,7 +491,10 @@ mod tests {
         desc.set_owned();
         assert!(desc.is_owned());
         desc.clear_owned();
-        assert!(!desc.is_owned(), "Descriptor should not be owned after clear_owned()");
+        assert!(
+            !desc.is_owned(),
+            "Descriptor should not be owned after clear_owned()"
+        );
     }
 
     #[test]
@@ -547,7 +560,9 @@ mod tests {
 
         // Frame length with OWN bit and first/last flags
         let length: u32 = 256;
-        desc.rdes0.set(RDES0_OWN | RDES0_FIRST_DESC | RDES0_LAST_DESC | (length << RDES0_FRAME_LEN_SHIFT));
+        desc.rdes0.set(
+            RDES0_OWN | RDES0_FIRST_DESC | RDES0_LAST_DESC | (length << RDES0_FRAME_LEN_SHIFT),
+        );
 
         assert_eq!(desc.frame_length(), 256);
         assert!(desc.is_owned());
@@ -570,7 +585,8 @@ mod tests {
         assert!(!desc.has_error());
 
         // Multiple error bits including summary
-        desc.rdes0.set(RDES0_ERR_SUMMARY | RDES0_CRC_ERR | RDES0_OVERFLOW_ERR);
+        desc.rdes0
+            .set(RDES0_ERR_SUMMARY | RDES0_CRC_ERR | RDES0_OVERFLOW_ERR);
         assert!(desc.has_error());
 
         // Can check error flags directly
@@ -600,7 +616,8 @@ mod tests {
         let desc = RxDescriptor::new();
 
         // Set up some state
-        desc.rdes0.set(RDES0_FIRST_DESC | RDES0_LAST_DESC | (100 << RDES0_FRAME_LEN_SHIFT));
+        desc.rdes0
+            .set(RDES0_FIRST_DESC | RDES0_LAST_DESC | (100 << RDES0_FRAME_LEN_SHIFT));
         desc.rdes1.set(1600);
 
         // Recycle should reset status and give to DMA

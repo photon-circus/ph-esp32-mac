@@ -248,9 +248,7 @@ impl<'a, 'b, const RX: usize, const TX: usize, const BUF: usize> RxFuture<'a, 'b
     }
 }
 
-impl<const RX: usize, const TX: usize, const BUF: usize> Future
-    for RxFuture<'_, '_, RX, TX, BUF>
-{
+impl<const RX: usize, const TX: usize, const BUF: usize> Future for RxFuture<'_, '_, RX, TX, BUF> {
     type Output = Result<usize>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -299,9 +297,7 @@ impl<'a, 'b, const RX: usize, const TX: usize, const BUF: usize> TxFuture<'a, 'b
     }
 }
 
-impl<const RX: usize, const TX: usize, const BUF: usize> Future
-    for TxFuture<'_, '_, RX, TX, BUF>
-{
+impl<const RX: usize, const TX: usize, const BUF: usize> Future for TxFuture<'_, '_, RX, TX, BUF> {
     type Output = Result<usize>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -507,13 +503,14 @@ pub fn reset_async_state() {
 // =============================================================================
 
 #[cfg(test)]
+#[allow(clippy::std_instead_of_core, clippy::std_instead_of_alloc)]
 mod tests {
     extern crate std;
 
     use super::*;
     use core::task::{RawWaker, RawWakerVTable, Waker};
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     // =========================================================================
     // Test Waker Implementation

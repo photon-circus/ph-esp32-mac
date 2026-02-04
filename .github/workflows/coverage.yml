@@ -22,8 +22,6 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       
-      # Note: Using specific features instead of --all-features because 
-      # esp-hal features require chip selection which isn't available for host tests
       - name: Generate coverage
         run: cargo llvm-cov --features "smoltcp,async,critical-section" --workspace --lcov --output-path lcov.info
       

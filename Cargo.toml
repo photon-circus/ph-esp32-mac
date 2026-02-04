@@ -49,3 +49,118 @@ esp-hal = { version = "1.0", optional = true, default-features = false }
 [dev-dependencies]
 # For testing on host - critical-section with std implementation
 critical-section = { version = "1.2", features = ["std"] }
+
+# =============================================================================
+# Clippy Lints
+# =============================================================================
+# Lint configuration for embedded/driver development best practices
+#
+# Philosophy:
+# - Deny correctness issues (actual bugs)
+# - Warn on suspicious code (likely bugs)
+# - Warn on important style/perf issues
+# - Allow pedantic things that conflict with embedded patterns
+
+[lints.rust]
+# Enforce documentation on public items
+missing_docs = "warn"
+# Allow unsafe code (required for hardware access)
+unsafe_code = "allow"
+
+[lints.clippy]
+# =============================================================================
+# Correctness - these are actual bugs, deny them
+# =============================================================================
+correctness = { level = "deny", priority = -1 }
+
+# =============================================================================
+# Suspicious - likely bugs, warn about them
+# =============================================================================
+suspicious = { level = "warn", priority = -1 }
+
+# =============================================================================
+# Style - code quality (default warn)
+# =============================================================================
+style = { level = "warn", priority = -1 }
+
+# =============================================================================
+# Complexity - keep code simple
+# =============================================================================
+complexity = { level = "warn", priority = -1 }
+
+# =============================================================================
+# Performance - embedded systems care about this
+# =============================================================================
+perf = { level = "warn", priority = -1 }
+
+# =============================================================================
+# Pedantic - selectively enable useful ones
+# =============================================================================
+# Documentation quality (disabled for now - too many existing issues)
+# doc_markdown = "warn"
+# missing_errors_doc = "warn"
+# missing_panics_doc = "warn"
+
+# Clarity improvements
+cloned_instead_of_copied = "warn"
+explicit_iter_loop = "warn"
+implicit_clone = "warn"
+inconsistent_struct_constructor = "warn"
+manual_assert = "warn"
+manual_let_else = "warn"
+match_same_arms = "warn"
+needless_pass_by_value = "warn"
+semicolon_if_nothing_returned = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"
+
+# =============================================================================
+# Restriction - selectively enable for no_std safety
+# =============================================================================
+# Prevent accidental std usage in no_std crate
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
+# =============================================================================
+# Allowed - things we explicitly permit for embedded/driver code
+# =============================================================================
+
+# Module organization - we prefer mod.rs style
+mod_module_files = "allow"
+self_named_module_files = "allow"
+
+# Hardware register code uses many similar names
+similar_names = "allow"
+
+# Configuration structs need many fields/bools
+too_many_arguments = "allow"
+struct_excessive_bools = "allow"
+fn_params_excessive_bools = "allow"
+
+# Driver code often has complex types
+type_complexity = "allow"
+
+# Allow must_use suggestions (too noisy)
+must_use_candidate = "allow"
+
+# Constant assertions in tests are intentional (testing const values)
+assertions_on_constants = "allow"
+
+# Embedded code often uses explicit integer casts
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+cast_lossless = "allow"
+
+# Allow panics in tests and const contexts
+panic_in_result_fn = "allow"
+unwrap_used = "allow"
+expect_used = "allow"
+
+# Common patterns we use
+module_name_repetitions = "allow"
+wildcard_imports = "allow"
+items_after_statements = "allow"
+let_underscore_future = "allow"

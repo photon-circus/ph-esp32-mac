@@ -5,25 +5,26 @@
 
 use embedded_hal::delay::DelayNs;
 
-use crate::config::{Duplex, EmacConfig, FlowControlConfig, PhyInterface, RmiiClockMode, Speed, State};
+use crate::config::{
+    Duplex, EmacConfig, FlowControlConfig, PhyInterface, RmiiClockMode, Speed, State,
+};
 use crate::constants::{
-    CSR_CLOCK_DIV_42, FLUSH_TIMEOUT, MII_BUSY_TIMEOUT,
-    TX_DMA_STATE_MASK, TX_DMA_STATE_SHIFT,
+    CSR_CLOCK_DIV_42, FLUSH_TIMEOUT, MII_BUSY_TIMEOUT, TX_DMA_STATE_MASK, TX_DMA_STATE_SHIFT,
 };
 use crate::dma::DmaEngine;
 use crate::error::{ConfigError, DmaError, IoError, Result};
 use crate::hal::reset::ResetController;
 use crate::register::dma::{
-    DmaRegs, DMABUSMODE_AAL, DMABUSMODE_ATDS, DMABUSMODE_FB, DMABUSMODE_PBL_MASK,
-    DMABUSMODE_PBL_SHIFT, DMABUSMODE_USP, DMAOPERATION_RSF, DMAOPERATION_TSF, DMASTATUS_AIS,
-    DMASTATUS_FBI, DMASTATUS_NIS, DMASTATUS_OVF, DMASTATUS_RI, DMASTATUS_RPS, DMASTATUS_RU,
-    DMASTATUS_TI, DMASTATUS_TPS, DMASTATUS_TU, DMASTATUS_UNF,
+    DMABUSMODE_AAL, DMABUSMODE_ATDS, DMABUSMODE_FB, DMABUSMODE_PBL_MASK, DMABUSMODE_PBL_SHIFT,
+    DMABUSMODE_USP, DMAOPERATION_RSF, DMAOPERATION_TSF, DMASTATUS_AIS, DMASTATUS_FBI,
+    DMASTATUS_NIS, DMASTATUS_OVF, DMASTATUS_RI, DMASTATUS_RPS, DMASTATUS_RU, DMASTATUS_TI,
+    DMASTATUS_TPS, DMASTATUS_TU, DMASTATUS_UNF, DmaRegs,
 };
 use crate::register::ext::ExtRegs;
 use crate::register::mac::{
-    MacRegs, GMACCONFIG_ACS, GMACCONFIG_DM, GMACCONFIG_FES, GMACCONFIG_IPC, GMACCONFIG_JD,
-    GMACCONFIG_PS, GMACCONFIG_WD, GMACFF_PM, GMACFF_PR, GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT,
-    GMACMIIADDR_GB, GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_SHIFT,
+    GMACCONFIG_ACS, GMACCONFIG_DM, GMACCONFIG_FES, GMACCONFIG_IPC, GMACCONFIG_JD, GMACCONFIG_PS,
+    GMACCONFIG_WD, GMACFF_PM, GMACFF_PR, GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT, GMACMIIADDR_GB,
+    GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_SHIFT, MacRegs,
 };
 
 // =============================================================================
@@ -323,7 +324,9 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         let mut reset_ctrl = ResetController::new(BorrowedDelay(delay));
 
         // Perform soft reset via HAL
-        reset_ctrl.soft_reset().map_err(|_| ConfigError::ResetFailed.into())
+        reset_ctrl
+            .soft_reset()
+            .map_err(|_| ConfigError::ResetFailed.into())
     }
 
     /// Configure MAC defaults
@@ -387,7 +390,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
 
         // Configure operation mode (store and forward)
         let op_mode = DMAOPERATION_TSF  // TX store and forward
-            | DMAOPERATION_RSF;          // RX store and forward
+            | DMAOPERATION_RSF; // RX store and forward
 
         DmaRegs::set_operation_mode(op_mode);
 
@@ -637,8 +640,8 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
                 fc.pause_time,
                 fc.pause_low_threshold as u8,
                 fc.unicast_pause_detect,
-                true,  // TX flow control
-                true,  // RX flow control
+                true, // TX flow control
+                true, // RX flow control
             );
         } else {
             MacRegs::configure_flow_control(0, 0, false, false, false);
@@ -681,19 +684,14 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         let frames_remain = self.rx_frames_waiting() > 0;
 
         // Check if we need to activate flow control (send PAUSE)
-        if !self.flow_control_active
-            && free_descriptors < fc.low_water_mark
-            && frames_remain
-        {
+        if !self.flow_control_active && free_descriptors < fc.low_water_mark && frames_remain {
             MacRegs::send_pause_frame(true);
             self.flow_control_active = true;
             return true;
         }
 
         // Check if we can deactivate flow control (resume)
-        if self.flow_control_active
-            && (free_descriptors > fc.high_water_mark || !frames_remain)
-        {
+        if self.flow_control_active && (free_descriptors > fc.high_water_mark || !frames_remain) {
             MacRegs::send_pause_frame(false);
             self.flow_control_active = false;
             return true;
@@ -743,8 +741,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         }
 
         // Find a free slot
-        let slot = MacRegs::find_free_mac_filter_slot()
-            .ok_or(DmaError::NoDescriptorsAvailable)?;
+        let slot = MacRegs::find_free_mac_filter_slot().ok_or(DmaError::NoDescriptorsAvailable)?;
 
         // Add the filter (destination address, no mask)
         MacRegs::set_mac_filter(slot, addr, false, 0);
@@ -760,15 +757,17 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// # Returns
     /// * `Ok(slot)` - The filter slot (1-4) where the filter was added
     /// * `Err(NoDescriptorsAvailable)` - All 4 filter slots are in use
-    pub fn add_mac_filter_config(&mut self, filter: &crate::config::MacAddressFilter) -> Result<usize> {
+    pub fn add_mac_filter_config(
+        &mut self,
+        filter: &crate::config::MacAddressFilter,
+    ) -> Result<usize> {
         // Check if already in filter
         if MacRegs::find_mac_filter(&filter.address).is_some() {
             return Err(ConfigError::AlreadyInitialized.into());
         }
 
         // Find a free slot
-        let slot = MacRegs::find_free_mac_filter_slot()
-            .ok_or(DmaError::NoDescriptorsAvailable)?;
+        let slot = MacRegs::find_free_mac_filter_slot().ok_or(DmaError::NoDescriptorsAvailable)?;
 
         let is_source = matches!(filter.filter_type, crate::config::MacFilterType::Source);
         MacRegs::set_mac_filter(slot, &filter.address, is_source, filter.byte_mask);
@@ -785,8 +784,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// * `Ok(())` - Address was found and removed
     /// * `Err(InvalidLength)` - Address was not in the filter
     pub fn remove_mac_filter(&mut self, addr: &[u8; 6]) -> Result<()> {
-        let slot = MacRegs::find_mac_filter(addr)
-            .ok_or(DmaError::InvalidLength)?;
+        let slot = MacRegs::find_mac_filter(addr).ok_or(DmaError::InvalidLength)?;
 
         MacRegs::clear_mac_filter(slot);
         Ok(())
@@ -961,13 +959,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// * `vid_only` - If true, compare only 12-bit VID; if false, compare full tag
     /// * `inverse` - If true, pass frames that DON'T match (exclusion filter)
     /// * `svlan` - If true, match S-VLAN (0x88A8); if false, match C-VLAN (0x8100)
-    pub fn configure_vlan_filter(
-        &mut self,
-        vid: u16,
-        vid_only: bool,
-        inverse: bool,
-        svlan: bool,
-    ) {
+    pub fn configure_vlan_filter(&mut self, vid: u16, vid_only: bool, inverse: bool, svlan: bool) {
         MacRegs::configure_vlan_filter(vid, vid_only, inverse, svlan);
         MacRegs::enable_vlan_filter(true);
     }

@@ -165,7 +165,10 @@ mod tests {
     #[test]
     fn max_frame_size_includes_all_headers() {
         // MAX_FRAME_SIZE = MTU + ETH_HEADER + CRC + VLAN
-        assert_eq!(MAX_FRAME_SIZE, MTU + ETH_HEADER_SIZE + CRC_SIZE + VLAN_TAG_SIZE);
+        assert_eq!(
+            MAX_FRAME_SIZE,
+            MTU + ETH_HEADER_SIZE + CRC_SIZE + VLAN_TAG_SIZE
+        );
     }
 
     #[test]

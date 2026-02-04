@@ -236,14 +236,14 @@ mod tests {
 
         for variant in variants {
             let s = variant.as_str();
-            assert!(!s.is_empty(), "ConfigError::{:?} has empty string", variant);
+            assert!(!s.is_empty(), "ConfigError::{variant:?} has empty string");
         }
     }
 
     #[test]
     fn config_error_display() {
         let err = ConfigError::InvalidPhyAddress;
-        let display = format!("{}", err);
+        let display = format!("{err}");
         assert_eq!(display, "invalid PHY address");
     }
 
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn config_error_clone() {
         let err = ConfigError::ResetFailed;
-        let cloned = err.clone();
+        let cloned = err;
         assert_eq!(err, cloned);
     }
 
@@ -276,14 +276,14 @@ mod tests {
 
         for variant in variants {
             let s = variant.as_str();
-            assert!(!s.is_empty(), "DmaError::{:?} has empty string", variant);
+            assert!(!s.is_empty(), "DmaError::{variant:?} has empty string");
         }
     }
 
     #[test]
     fn dma_error_display() {
         let err = DmaError::NoDescriptorsAvailable;
-        let display = format!("{}", err);
+        let display = format!("{err}");
         assert_eq!(display, "no descriptors available");
     }
 
@@ -310,14 +310,14 @@ mod tests {
 
         for variant in variants {
             let s = variant.as_str();
-            assert!(!s.is_empty(), "IoError::{:?} has empty string", variant);
+            assert!(!s.is_empty(), "IoError::{variant:?} has empty string");
         }
     }
 
     #[test]
     fn io_error_display() {
         let err = IoError::Timeout;
-        let display = format!("{}", err);
+        let display = format!("{err}");
         assert_eq!(display, "operation timed out");
     }
 
@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn error_display_config() {
         let err = Error::Config(ConfigError::ClockError);
-        let display = format!("{}", err);
+        let display = format!("{err}");
         assert!(display.contains("config"));
         assert!(display.contains("clock"));
     }
@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn error_display_dma() {
         let err = Error::Dma(DmaError::FatalBusError);
-        let display = format!("{}", err);
+        let display = format!("{err}");
         assert!(display.contains("dma"));
         assert!(display.contains("bus error"));
     }
@@ -383,7 +383,7 @@ mod tests {
     #[test]
     fn error_display_io() {
         let err = Error::Io(IoError::BufferTooSmall);
-        let display = format!("{}", err);
+        let display = format!("{err}");
         assert!(display.contains("io"));
         assert!(display.contains("buffer"));
     }
@@ -401,7 +401,7 @@ mod tests {
     #[test]
     fn error_clone() {
         let err = Error::Io(IoError::FrameError);
-        let cloned = err.clone();
+        let cloned = err;
         assert_eq!(err, cloned);
     }
 

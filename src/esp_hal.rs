@@ -98,9 +98,7 @@ pub trait EmacExt {
     fn disable_emac_interrupt(&mut self);
 }
 
-impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt
-    for crate::Emac<RX, TX, BUF>
-{
+impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt for crate::Emac<RX, TX, BUF> {
     fn enable_emac_interrupt(&mut self, handler: InterruptHandler) {
         // Disable on other cores if multi-core
         #[cfg(multi_core)]
@@ -230,10 +228,7 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> EspHalEmac<'a, RX, 
     /// Initialize the EMAC with esp-hal delay.
     ///
     /// Uses `esp_hal::delay::Delay` for timing operations.
-    pub fn init_with_delay(
-        &mut self,
-        config: crate::EmacConfig,
-    ) -> crate::Result<()> {
+    pub fn init_with_delay(&mut self, config: crate::EmacConfig) -> crate::Result<()> {
         let mut delay = Delay::new();
         self.inner.init(config, &mut delay)
     }

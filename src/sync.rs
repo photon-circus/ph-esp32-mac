@@ -179,7 +179,11 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     {
         critical_section::with(|cs| {
             // try_borrow_mut returns Option<RefMut>, avoiding panic if already borrowed
-            self.inner.borrow(cs).try_borrow_mut().ok().map(|mut emac| f(&mut emac))
+            self.inner
+                .borrow(cs)
+                .try_borrow_mut()
+                .ok()
+                .map(|mut emac| f(&mut emac))
         })
     }
 }

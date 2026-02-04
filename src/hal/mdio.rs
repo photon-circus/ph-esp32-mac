@@ -8,9 +8,8 @@ use embedded_hal::delay::DelayNs;
 
 use crate::error::{ConfigError, IoError, Result};
 use crate::register::mac::{
-    MacRegs, GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT, GMACMIIADDR_GB,
-    GMACMIIADDR_GR_MASK, GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_MASK,
-    GMACMIIADDR_PA_SHIFT,
+    GMACMIIADDR_CR_MASK, GMACMIIADDR_CR_SHIFT, GMACMIIADDR_GB, GMACMIIADDR_GR_MASK,
+    GMACMIIADDR_GR_SHIFT, GMACMIIADDR_GW, GMACMIIADDR_PA_MASK, GMACMIIADDR_PA_SHIFT, MacRegs,
 };
 
 // =============================================================================
@@ -465,19 +464,34 @@ mod tests {
     #[test]
     fn clock_divider_from_sys_clock() {
         // Low frequency -> Div16
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(20_000_000), MdcClockDivider::Div16);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(20_000_000),
+            MdcClockDivider::Div16
+        );
 
         // Medium frequency -> Div26
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(40_000_000), MdcClockDivider::Div26);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(40_000_000),
+            MdcClockDivider::Div26
+        );
 
         // ESP32 default 80MHz -> Div42
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(80_000_000), MdcClockDivider::Div42);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(80_000_000),
+            MdcClockDivider::Div42
+        );
 
         // 160MHz -> Div102
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(160_000_000), MdcClockDivider::Div102);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(160_000_000),
+            MdcClockDivider::Div102
+        );
 
         // High frequency -> Div124
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(280_000_000), MdcClockDivider::Div124);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(280_000_000),
+            MdcClockDivider::Div124
+        );
     }
 
     #[test]
@@ -498,41 +512,71 @@ mod tests {
     #[test]
     fn clock_divider_boundary_35mhz() {
         // Just under 35MHz -> Div16
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(34_999_999), MdcClockDivider::Div16);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(34_999_999),
+            MdcClockDivider::Div16
+        );
         // At 35MHz -> Div26
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(35_000_000), MdcClockDivider::Div26);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(35_000_000),
+            MdcClockDivider::Div26
+        );
     }
 
     #[test]
     fn clock_divider_boundary_60mhz() {
         // Just under 60MHz -> Div26
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(59_999_999), MdcClockDivider::Div26);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(59_999_999),
+            MdcClockDivider::Div26
+        );
         // At 60MHz -> Div42
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(60_000_000), MdcClockDivider::Div42);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(60_000_000),
+            MdcClockDivider::Div42
+        );
     }
 
     #[test]
     fn clock_divider_boundary_100mhz() {
         // Just under 100MHz -> Div42
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(99_999_999), MdcClockDivider::Div42);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(99_999_999),
+            MdcClockDivider::Div42
+        );
         // At 100MHz -> Div62
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(100_000_000), MdcClockDivider::Div62);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(100_000_000),
+            MdcClockDivider::Div62
+        );
     }
 
     #[test]
     fn clock_divider_boundary_150mhz() {
         // Just under 150MHz -> Div62
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(149_999_999), MdcClockDivider::Div62);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(149_999_999),
+            MdcClockDivider::Div62
+        );
         // At 150MHz -> Div102
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(150_000_000), MdcClockDivider::Div102);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(150_000_000),
+            MdcClockDivider::Div102
+        );
     }
 
     #[test]
     fn clock_divider_boundary_250mhz() {
         // Just under 250MHz -> Div102
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(249_999_999), MdcClockDivider::Div102);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(249_999_999),
+            MdcClockDivider::Div102
+        );
         // At 250MHz -> Div124
-        assert_eq!(MdcClockDivider::from_sys_clock_hz(250_000_000), MdcClockDivider::Div124);
+        assert_eq!(
+            MdcClockDivider::from_sys_clock_hz(250_000_000),
+            MdcClockDivider::Div124
+        );
     }
 
     // =========================================================================
@@ -584,14 +628,15 @@ mod tests {
 
     #[test]
     fn phy_reg_all_valid() {
-        // All addresses should be within valid range
-        assert!(phy_reg::BMCR <= MAX_REG_ADDR);
-        assert!(phy_reg::BMSR <= MAX_REG_ADDR);
-        assert!(phy_reg::PHYIDR1 <= MAX_REG_ADDR);
-        assert!(phy_reg::PHYIDR2 <= MAX_REG_ADDR);
-        assert!(phy_reg::ANAR <= MAX_REG_ADDR);
-        assert!(phy_reg::ANLPAR <= MAX_REG_ADDR);
-        assert!(phy_reg::ESTATUS <= MAX_REG_ADDR);
+        // All addresses should be within valid range (0-31)
+        // Note: BMCR is 0 which is always <= 31, so we check < 32 instead
+        assert!(phy_reg::BMCR < 32);
+        assert!(phy_reg::BMSR < 32);
+        assert!(phy_reg::PHYIDR1 < 32);
+        assert!(phy_reg::PHYIDR2 < 32);
+        assert!(phy_reg::ANAR < 32);
+        assert!(phy_reg::ANLPAR < 32);
+        assert!(phy_reg::ESTATUS < 32);
     }
 
     // =========================================================================
@@ -734,7 +779,8 @@ mod tests {
     #[test]
     fn anar_full_advertisement() {
         // Typical full advertisement
-        let anar_val = anar::TX_FD | anar::TX_HD | anar::T10_FD | anar::T10_HD | anar::SELECTOR_IEEE802_3;
+        let anar_val =
+            anar::TX_FD | anar::TX_HD | anar::T10_FD | anar::T10_HD | anar::SELECTOR_IEEE802_3;
         assert!(anar_val & anar::TX_FD != 0);
         assert!(anar_val & anar::TX_HD != 0);
         assert!(anar_val & anar::T10_FD != 0);

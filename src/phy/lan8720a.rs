@@ -83,7 +83,7 @@ use embedded_hal::digital::OutputPin;
 use crate::error::Result;
 use crate::hal::mdio::MdioBus;
 
-use super::generic::{ieee802_3, LinkStatus, PhyCapabilities, PhyDriver};
+use super::generic::{LinkStatus, PhyCapabilities, PhyDriver, ieee802_3};
 
 // =============================================================================
 // LAN8720A Constants
@@ -503,11 +503,15 @@ impl<RST: OutputPin> Lan8720aWithReset<RST> {
     /// - Recovery time: 1ms (minimum 800µs per datasheet)
     pub fn hardware_reset<D: DelayNs>(&mut self, delay: &mut D) -> Result<()> {
         // Assert reset (low)
-        self.reset_pin.set_low().map_err(|_| crate::error::ConfigError::GpioError)?;
+        self.reset_pin
+            .set_low()
+            .map_err(|_| crate::error::ConfigError::GpioError)?;
         delay.delay_us(RESET_PULSE_US);
 
         // Deassert reset (high)
-        self.reset_pin.set_high().map_err(|_| crate::error::ConfigError::GpioError)?;
+        self.reset_pin
+            .set_high()
+            .map_err(|_| crate::error::ConfigError::GpioError)?;
         delay.delay_us(RESET_RECOVERY_US);
 
         Ok(())
@@ -517,7 +521,9 @@ impl<RST: OutputPin> Lan8720aWithReset<RST> {
     ///
     /// The PHY will remain in reset until `deassert_reset()` is called.
     pub fn assert_reset(&mut self) -> Result<()> {
-        self.reset_pin.set_low().map_err(|_| crate::error::ConfigError::GpioError)?;
+        self.reset_pin
+            .set_low()
+            .map_err(|_| crate::error::ConfigError::GpioError)?;
         Ok(())
     }
 
@@ -526,7 +532,9 @@ impl<RST: OutputPin> Lan8720aWithReset<RST> {
     /// Call this after `assert_reset()` to release the PHY.
     /// Wait at least 1ms after this before accessing the PHY via MDIO.
     pub fn deassert_reset(&mut self) -> Result<()> {
-        self.reset_pin.set_high().map_err(|_| crate::error::ConfigError::GpioError)?;
+        self.reset_pin
+            .set_high()
+            .map_err(|_| crate::error::ConfigError::GpioError)?;
         Ok(())
     }
 
@@ -541,7 +549,7 @@ impl<RST: OutputPin> Lan8720aWithReset<RST> {
     }
 
     // Forward all inner methods
-    
+
     /// Verify this is a LAN8720A by reading the PHY ID
     pub fn verify_id<M: MdioBus>(&self, mdio: &mut M) -> Result<bool> {
         self.inner.verify_id(mdio)
@@ -658,10 +666,7 @@ impl<RST: OutputPin> PhyDriver for Lan8720aWithReset<RST> {
 /// Wait for auto-negotiation to complete
 ///
 /// This is a blocking function that polls until AN completes or times out.
-pub fn wait_for_link<M: MdioBus>(
-    phy: &mut Lan8720a,
-    mdio: &mut M,
-) -> Result<Option<LinkStatus>> {
+pub fn wait_for_link<M: MdioBus>(phy: &mut Lan8720a, mdio: &mut M) -> Result<Option<LinkStatus>> {
     for _ in 0..AN_MAX_ATTEMPTS {
         if let Some(link) = phy.poll_link(mdio)? {
             return Ok(Some(link));
@@ -688,6 +693,7 @@ pub fn scan_bus<M: MdioBus>(mdio: &mut M) -> Result<[Option<u8>; 32]> {
 }
 
 #[cfg(test)]
+#[allow(clippy::std_instead_of_alloc)]
 mod tests {
     extern crate std;
 
@@ -710,7 +716,8 @@ mod tests {
 
         // Other PHYs should not match
         assert!((0x0022_1555 & LAN8720A_PHY_ID_MASK) != LAN8720A_PHY_ID); // IP101
-        assert!((0x0000_0000 & LAN8720A_PHY_ID_MASK) != LAN8720A_PHY_ID);
+        assert!(LAN8720A_PHY_ID_MASK != LAN8720A_PHY_ID); // All 1s
+        assert!((0x0001_0000 & LAN8720A_PHY_ID_MASK) != LAN8720A_PHY_ID); // Different OUI
     }
 
     #[test]
@@ -758,7 +765,11 @@ mod tests {
 
         // EDPWRDOWN should be cleared
         let mcsr_val = mdio.get_register(0, reg::MCSR).unwrap();
-        assert_eq!(mcsr_val & mcsr::EDPWRDOWN, 0, "EDPWRDOWN should be disabled");
+        assert_eq!(
+            mcsr_val & mcsr::EDPWRDOWN,
+            0,
+            "EDPWRDOWN should be disabled"
+        );
     }
 
     #[test]
@@ -1050,7 +1061,10 @@ mod tests {
 
         let bmcr_val = mdio.get_register(0, phy_reg::BMCR).unwrap();
         assert!(bmcr_val & bmcr::SPEED_100 != 0, "SPEED_100 should be set");
-        assert!(bmcr_val & bmcr::DUPLEX_FULL != 0, "DUPLEX_FULL should be set");
+        assert!(
+            bmcr_val & bmcr::DUPLEX_FULL != 0,
+            "DUPLEX_FULL should be set"
+        );
     }
 
     #[test]
@@ -1063,7 +1077,11 @@ mod tests {
 
         let bmcr_val = mdio.get_register(0, phy_reg::BMCR).unwrap();
         assert_eq!(bmcr_val & bmcr::SPEED_100, 0, "SPEED_100 should be clear");
-        assert_eq!(bmcr_val & bmcr::DUPLEX_FULL, 0, "DUPLEX_FULL should be clear");
+        assert_eq!(
+            bmcr_val & bmcr::DUPLEX_FULL,
+            0,
+            "DUPLEX_FULL should be clear"
+        );
     }
 
     #[test]
@@ -1076,7 +1094,11 @@ mod tests {
 
         let bmcr_val = mdio.get_register(0, phy_reg::BMCR).unwrap();
         assert!(bmcr_val & bmcr::SPEED_100 != 0, "SPEED_100 should be set");
-        assert_eq!(bmcr_val & bmcr::DUPLEX_FULL, 0, "DUPLEX_FULL should be clear");
+        assert_eq!(
+            bmcr_val & bmcr::DUPLEX_FULL,
+            0,
+            "DUPLEX_FULL should be clear"
+        );
     }
 
     #[test]
@@ -1089,7 +1111,10 @@ mod tests {
 
         let bmcr_val = mdio.get_register(0, phy_reg::BMCR).unwrap();
         assert_eq!(bmcr_val & bmcr::SPEED_100, 0, "SPEED_100 should be clear");
-        assert!(bmcr_val & bmcr::DUPLEX_FULL != 0, "DUPLEX_FULL should be set");
+        assert!(
+            bmcr_val & bmcr::DUPLEX_FULL != 0,
+            "DUPLEX_FULL should be set"
+        );
     }
 
     // =========================================================================
@@ -1286,7 +1311,8 @@ mod tests {
         mdio.set_register(0, reg::IMR, 0x0000);
 
         let mut phy = Lan8720a::new(0);
-        phy.set_interrupt_mask(&mut mdio, isr::LINK_DOWN | isr::AN_COMPLETE).unwrap();
+        phy.set_interrupt_mask(&mut mdio, isr::LINK_DOWN | isr::AN_COMPLETE)
+            .unwrap();
 
         let imr = mdio.get_register(0, reg::IMR).unwrap();
         assert!(imr & isr::LINK_DOWN != 0);

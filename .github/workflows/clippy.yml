@@ -1,0 +1,36 @@
+name: Clippy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Check with default features (esp32)
+      - name: Clippy (default features)
+        run: cargo clippy --lib --tests -- -D warnings
+
+      # Check with all testable features
+      - name: Clippy (all testable features)
+        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section" -- -D warnings
+
+      # Check with defmt
+      - name: Clippy (defmt)
+        run: cargo clippy --lib --features "defmt" -- -D warnings
