@@ -5,6 +5,26 @@ use super::ring::DescriptorRing;
 use crate::driver::error::{DmaError, IoError, Result};
 use crate::internal::register::dma::DmaRegs;
 
+#[cfg(feature = "log")]
+use log::warn;
+
+#[cfg(feature = "log")]
+fn log_rx_error(desc: &RxDescriptor) {
+    use crate::internal::dma::descriptor::bits::rdes0;
+
+    let raw = desc.raw_rdes0();
+    let error_flags = raw & (rdes0::ALL_ERRORS | rdes0::SA_FILTER_FAIL | rdes0::DA_FILTER_FAIL);
+    let sa_fail = (raw & rdes0::SA_FILTER_FAIL) != 0;
+    let da_fail = (raw & rdes0::DA_FILTER_FAIL) != 0;
+
+    warn!(
+        "RX frame error: rdes0=0x{:08x} flags=0x{:08x} sa_filter_fail={} da_filter_fail={}",
+        raw,
+        error_flags,
+        sa_fail,
+        da_fail
+    );
+}
 /// DMA Engine with statically allocated buffers.
 ///
 /// # Type Parameters
@@ -299,6 +319,8 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         // Single-descriptor frame (common case)
         if first_desc.is_first() && first_desc.is_last() {
             if first_desc.has_error() {
+                #[cfg(feature = "log")]
+                log_rx_error(first_desc);
                 first_desc.recycle();
                 self.rx_ring.advance();
                 DmaRegs::rx_poll_demand();
@@ -328,6 +350,8 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         }
 
         if first_desc.has_error() {
+            #[cfg(feature = "log")]
+            log_rx_error(first_desc);
             self.flush_rx_frame();
             return Err(IoError::FrameError.into());
         }

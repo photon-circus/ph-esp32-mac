@@ -34,6 +34,7 @@
 //! - `critical-section`: Enable ISR-safe `SharedEmac` wrapper
 //! - `async`: Enable async/await support with wakers
 //! - `esp-hal`: Enable esp-hal ergonomic integration
+//! - `embassy-net`: Enable embassy-net-driver integration
 //!
 //! # Example
 //!
@@ -176,7 +177,7 @@ pub mod phy;
 // Internal implementation details (pub(crate) only)
 mod internal;
 
-#[cfg(any(feature = "smoltcp", feature = "esp-hal"))]
+#[cfg(any(feature = "smoltcp", feature = "esp-hal", feature = "embassy-net"))]
 pub mod integration;
 
 #[cfg(feature = "critical-section")]
@@ -222,6 +223,10 @@ pub use sync::{SharedEmac, SharedEmacDefault, SharedEmacLarge, SharedEmacSmall};
 // Re-export async types when async feature is enabled
 #[cfg(feature = "async")]
 pub use sync::asynch::{AsyncEmacExt, RX_WAKER, TX_WAKER, async_interrupt_handler};
+
+// Re-export embassy-net types when embassy-net feature is enabled
+#[cfg(feature = "embassy-net")]
+pub use integration::embassy_net::{EmbassyEmac, EmbassyEmacState, EmbassyRxToken, EmbassyTxToken};
 
 // =============================================================================
 // Constants (re-exported from internal constants module)

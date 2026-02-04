@@ -16,7 +16,6 @@ This is a `no_std`, `no_alloc` Rust driver for the ESP32 Ethernet MAC (EMAC) con
 ```bash
 # Format all code
 cargo fmt
-./scripts/dev.sh fmt            # Also formats integration_tests
 
 # Run all host unit tests (299 tests)
 cargo test --lib
@@ -28,7 +27,6 @@ cargo test --lib descriptor
 
 # Run clippy
 cargo clippy -- -D warnings
-./scripts/dev.sh clippy         # Also checks integration_tests
 
 # Build documentation
 cargo doc --no-deps
@@ -36,8 +34,11 @@ cargo doc --no-deps
 # Run code coverage (requires cargo-llvm-cov)
 cargo llvm-cov --lib
 
-# Run all checks (fmt, clippy, test)
-./scripts/dev.sh all
+# Integration tests (build only)
+cargo int-build
+
+# Integration tests (flash + run; requires hardware)
+cargo int
 ```
 
 ### Building for ESP32 Hardware

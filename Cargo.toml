@@ -18,14 +18,17 @@ esp32p4 = []
 
 # Optional integrations
 defmt = ["dep:defmt"]
+log = ["dep:log"]
 smoltcp = ["dep:smoltcp"]
 critical-section = ["dep:critical-section"]
 esp-hal = ["dep:esp-hal", "critical-section"]  # esp-hal ergonomic integration
 async = ["critical-section"]  # Async/await support with wakers
+embassy-net = ["dep:embassy-net-driver", "critical-section"]
 
 [dependencies]
 # Optional: defmt for embedded-friendly debug output
 defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
 
 # Optional: smoltcp network stack integration
 # We enable proto-ipv4 and socket-tcp for basic IP/TCP support
@@ -47,6 +50,9 @@ critical-section = { version = "1.2", optional = true }
 # Optional: esp-hal for ergonomic integration with esp-rs ecosystem
 # Provides InterruptConfigurable, handler macro support, and delay types
 esp-hal = { version = "1.0", optional = true, default-features = false }
+
+# Optional: Embassy network driver traits (driver-only, per embassy guidance)
+embassy-net-driver = { version = "0.2", optional = true }
 
 [dev-dependencies]
 # For testing on host - critical-section with std implementation

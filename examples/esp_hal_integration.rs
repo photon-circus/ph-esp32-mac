@@ -14,7 +14,8 @@
 //! # Building
 //!
 //! ```bash
-//! cargo build --example esp_hal_example --target xtensa-esp32-none-elf --release
+//! cargo build --bin esp_hal_integration --target xtensa-esp32-none-elf --release \
+//!     --features esp-hal-example
 //! ```
 //!
 //! # Features Required
@@ -31,6 +32,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex;
 use esp_backtrace as _;
+use esp_bootloader_esp_idf::esp_app_desc;
 use esp_hal::{
     delay::Delay,
     gpio::{Level, Output, OutputConfig},
@@ -39,8 +41,8 @@ use esp_hal::{
 use log::{error, info, warn};
 
 use ph_esp32_mac::{
-    Duplex, Emac, EmacConfig, InterruptStatus, Lan8720a, MdioController, PhyDriver, PhyInterface,
-    RmiiClockMode, Speed,
+    Duplex, Emac, EmacConfig, Lan8720a, MdioController, PhyDriver, PhyInterface, RmiiClockMode,
+    Speed,
 };
 
 // =============================================================================
@@ -64,6 +66,8 @@ static EMAC: Mutex<RefCell<Option<Emac<10, 10, 1600>>>> = Mutex::new(RefCell::ne
 // Main Entry Point
 // =============================================================================
 
+esp_app_desc!();
+
 #[main]
 fn main() -> ! {
     // Initialize esp-hal
@@ -80,22 +84,26 @@ fn main() -> ! {
     // GPIO16 controls the oscillator enable on this board
     let mut clk_en = Output::new(peripherals.GPIO16, Level::Low, OutputConfig::default());
     clk_en.set_high();
-    info!("External oscillator enabled (GPIO16 = HIGH)");
+    info!("External oscillator enabled (GPIO{} = HIGH)", CLK_EN_GPIO);
 
     // Small delay for oscillator startup
     delay.delay_millis(10);
 
-    // Initialize EMAC
+    // Place EMAC in static storage before init (required for DMA descriptors).
     critical_section::with(|cs| {
-        let mut emac = Emac::new();
+        EMAC.borrow_ref_mut(cs).replace(Emac::new());
+    });
 
-        // Configure for WT32-ETH01 board
-        let config = EmacConfig::new()
-            .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
-            .with_phy_interface(PhyInterface::Rmii)
-            .with_rmii_clock(RmiiClockMode::ExternalGpio0);
+    // Configure for WT32-ETH01 board
+    let config = EmacConfig::new()
+        .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+        .with_phy_interface(PhyInterface::Rmii)
+        .with_rmii_clock(RmiiClockMode::ExternalInput { gpio: 0 });
 
-        info!("Initializing EMAC...");
+    info!("Initializing EMAC...");
+    critical_section::with(|cs| {
+        let mut emac_ref = EMAC.borrow_ref_mut(cs);
+        let emac = emac_ref.as_mut().expect("EMAC static unavailable");
         match emac.init(config, &mut delay) {
             Ok(()) => info!("EMAC initialized successfully"),
             Err(e) => {
@@ -103,8 +111,6 @@ fn main() -> ! {
                 panic!("Cannot continue without EMAC");
             }
         }
-
-        EMAC.borrow_ref_mut(cs).replace(emac);
     });
 
     // Initialize PHY
@@ -112,27 +118,21 @@ fn main() -> ! {
 
     // Create MDIO controller with esp-hal delay
     let mut phy = Lan8720a::new(PHY_ADDR);
+    let mut mdio = MdioController::new(Delay::new());
 
-    critical_section::with(|cs| {
-        if let Some(emac) = EMAC.borrow_ref_mut(cs).as_mut() {
-            // Use MdioController for PHY communication
-            let mut mdio = MdioController::new(&mut delay);
-
-            match phy.init(&mut mdio) {
-                Ok(()) => info!("PHY initialized successfully"),
-                Err(e) => {
-                    error!("PHY initialization failed: {:?}", e);
-                    panic!("Cannot continue without PHY");
-                }
-            }
-
-            // Check PHY ID
-            match phy.read_id(&mut mdio) {
-                Ok(id) => info!("PHY ID: 0x{:08X}", id),
-                Err(e) => warn!("Could not read PHY ID: {:?}", e),
-            }
+    match phy.init(&mut mdio) {
+        Ok(()) => info!("PHY initialized successfully"),
+        Err(e) => {
+            error!("PHY initialization failed: {:?}", e);
+            panic!("Cannot continue without PHY");
         }
-    });
+    }
+
+    // Check PHY ID
+    match phy.phy_id(&mut mdio) {
+        Ok(id) => info!("PHY ID: 0x{:08X}", id),
+        Err(e) => warn!("Could not read PHY ID: {:?}", e),
+    }
 
     // Wait for link to come up
     info!("Waiting for Ethernet link...");
@@ -141,40 +141,38 @@ fn main() -> ! {
     for attempt in 0..50 {
         delay.delay_millis(200);
 
-        critical_section::with(|cs| {
-            if let Some(emac) = EMAC.borrow_ref_mut(cs).as_mut() {
-                let mut mdio = MdioController::new(&mut delay);
+        match phy.poll_link(&mut mdio) {
+            Ok(Some(status)) => {
+                info!(
+                    "Link UP: {} {}",
+                    match status.speed {
+                        Speed::Mbps10 => "10 Mbps",
+                        Speed::Mbps100 => "100 Mbps",
+                    },
+                    match status.duplex {
+                        Duplex::Half => "Half Duplex",
+                        Duplex::Full => "Full Duplex",
+                    }
+                );
 
-                match phy.poll_link(&mut mdio) {
-                    Ok(Some(status)) => {
-                        info!(
-                            "Link UP: {} {}",
-                            match status.speed {
-                                Speed::Mbps10 => "10 Mbps",
-                                Speed::Mbps100 => "100 Mbps",
-                            },
-                            match status.duplex {
-                                Duplex::Half => "Half Duplex",
-                                Duplex::Full => "Full Duplex",
-                            }
-                        );
-
-                        // Configure MAC to match PHY link parameters
-                        emac.set_speed(status.speed);
-                        emac.set_duplex(status.duplex);
-                        link_up = true;
-                    }
-                    Ok(None) => {
-                        if attempt % 10 == 0 {
-                            info!("Link down, waiting... (attempt {})", attempt);
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Error polling link: {:?}", e);
-                    }
+                // Configure MAC to match PHY link parameters
+                critical_section::with(|cs| {
+                    let mut emac_ref = EMAC.borrow_ref_mut(cs);
+                    let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+                    emac.set_speed(status.speed);
+                    emac.set_duplex(status.duplex);
+                });
+                link_up = true;
+            }
+            Ok(None) => {
+                if attempt % 10 == 0 {
+                    info!("Link down, waiting... (attempt {})", attempt);
                 }
             }
-        });
+            Err(e) => {
+                warn!("Error polling link: {:?}", e);
+            }
+        }
 
         if link_up {
             break;
@@ -200,7 +198,7 @@ fn main() -> ! {
         }
     });
 
-    info!("Ethernet is ready! Running echo server...");
+    info!("Ethernet is ready! Running packet sniffer...");
     info!(
         "Memory usage: {} bytes",
         Emac::<10, 10, 1600>::memory_usage()
@@ -209,79 +207,61 @@ fn main() -> ! {
     // Main loop: simple frame echo with statistics
     let mut rx_buffer = [0u8; 1600];
     let mut frames_rx = 0u32;
-    let mut frames_tx = 0u32;
     let mut errors = 0u32;
     let mut last_stats_time = time::Instant::now();
 
     loop {
         critical_section::with(|cs| {
             if let Some(emac) = EMAC.borrow_ref_mut(cs).as_mut() {
-                // Try to receive a frame
-                match emac.receive(&mut rx_buffer) {
-                    Ok(len) if len > 0 => {
-                        frames_rx += 1;
+                if emac.rx_available() {
+                    // Try to receive a frame
+                    match emac.receive(&mut rx_buffer) {
+                        Ok(len) if len > 0 => {
+                            frames_rx += 1;
 
-                        // Log frame info (first frame only to avoid spam)
-                        if frames_rx == 1 {
-                            info!("First frame received: {} bytes", len);
-                            info!(
-                                "  Dst: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                                rx_buffer[0],
-                                rx_buffer[1],
-                                rx_buffer[2],
-                                rx_buffer[3],
-                                rx_buffer[4],
-                                rx_buffer[5]
-                            );
-                            info!(
-                                "  Src: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                                rx_buffer[6],
-                                rx_buffer[7],
-                                rx_buffer[8],
-                                rx_buffer[9],
-                                rx_buffer[10],
-                                rx_buffer[11]
-                            );
+                            if len < 14 {
+                                info!("RX runt frame: {} bytes", len);
+                            } else {
+                                let ethertype = u16::from_be_bytes([rx_buffer[12], rx_buffer[13]]);
+                                info!(
+                                    "RX {} bytes dst={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} src={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} type=0x{:04X}",
+                                    len,
+                                    rx_buffer[0],
+                                    rx_buffer[1],
+                                    rx_buffer[2],
+                                    rx_buffer[3],
+                                    rx_buffer[4],
+                                    rx_buffer[5],
+                                    rx_buffer[6],
+                                    rx_buffer[7],
+                                    rx_buffer[8],
+                                    rx_buffer[9],
+                                    rx_buffer[10],
+                                    rx_buffer[11],
+                                    ethertype
+                                );
+                            }
                         }
-
-                        // Echo: swap MAC addresses and send back
-                        let frame = &mut rx_buffer[..len];
-                        for i in 0..6 {
-                            frame.swap(i, i + 6);
-                        }
-
-                        match emac.transmit(&frame[..len]) {
-                            Ok(_) => frames_tx += 1,
-                            Err(_) => errors += 1,
-                        }
+                        Err(ph_esp32_mac::Error::Io(ph_esp32_mac::IoError::IncompleteFrame)) => {}
+                        Err(_) => errors += 1,
+                        _ => {}
                     }
-                    Err(_) => errors += 1,
-                    _ => {}
                 }
             }
         });
 
         // Print statistics every 10 seconds
         let now = time::Instant::now();
-        if now.duration_since(last_stats_time).as_secs() >= 10 {
-            info!(
-                "Stats: RX={}, TX={}, Errors={}",
-                frames_rx, frames_tx, errors
-            );
+        if (now - last_stats_time).as_secs() >= 10 {
+            info!("Stats: RX={}, Errors={}", frames_rx, errors);
             last_stats_time = now;
 
             // Also check link status periodically
-            critical_section::with(|cs| {
-                if EMAC.borrow_ref(cs).is_some() {
-                    let mut mdio = MdioController::new(&mut delay);
-
-                    if let Ok(up) = phy.is_link_up(&mut mdio) {
-                        if !up {
-                            warn!("Link is DOWN");
-                        }
-                    }
+            if let Ok(up) = phy.is_link_up(&mut mdio) {
+                if !up {
+                    warn!("Link is DOWN");
                 }
-            });
+            }
         }
 
         // Small delay to prevent tight polling

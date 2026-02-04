@@ -6,9 +6,9 @@ This directory contains example applications demonstrating different ways to use
 
 | Example | Description | Features Required |
 |---------|-------------|-------------------|
-| [bare_metal.rs](bare_metal.rs) | Lowest-level usage without any HAL | `esp32` |
 | [esp_hal_integration.rs](esp_hal_integration.rs) | Integration with esp-hal ecosystem | `esp32`, `esp-hal`, `critical-section` |
 | [smoltcp_echo.rs](smoltcp_echo.rs) | TCP/IP networking with smoltcp | `esp32`, `smoltcp`, `critical-section` |
+| [embassy_net.rs](embassy_net.rs) | Async TCP/IP networking with embassy-net | `esp32`, `embassy-net`, `esp-hal`, `critical-section` |
 
 ## Building Examples
 
@@ -29,42 +29,67 @@ They require the xtensa toolchain.
    cargo install espflash
    ```
 
-### Building
+### Cargo Aliases (Recommended)
 
-Examples should be built as standalone binaries. Due to target architecture requirements,
-it's recommended to copy the example into a standalone project:
+The `examples/` directory includes Cargo aliases for the common example commands.
+Run these from the `examples/` folder:
 
 ```bash
-# Create a new ESP32 project
-cargo generate esp-rs/esp-template
+cd examples
 
-# Copy the example code and adapt the Cargo.toml
+# Build (release)
+cargo ex-build-esp
+cargo ex-build-smoltcp
+cargo ex-build-embassy
+
+# Flash + monitor (uses espflash runner)
+cargo ex-run-esp
+cargo ex-run-smoltcp
+cargo ex-run-embassy
 ```
 
-Or use the `integration_tests/` directory as a template.
+You can set `ESPFLASH_PORT` and `ESPFLASH_BAUD` as environment variables
+if you prefer not to pass them on the command line.
+
+### Manual Cargo Commands
+
+```bash
+# Build
+cargo build --manifest-path examples/Cargo.toml --bin esp_hal_integration \
+    --features esp-hal-example --release
+
+# Flash + monitor (runner is set in examples/.cargo/config.toml)
+cargo run --manifest-path examples/Cargo.toml --bin smoltcp_echo --features smoltcp-example --release
+
+# Embassy example
+cargo run --manifest-path examples/Cargo.toml --bin embassy_net \
+    --features embassy-net-example --release
+```
+
+**Important**: Examples must be built with the `esp` toolchain (installed via `espup`).
+If you run cargo from the repo root, use one of these patterns:
+
+```bash
+# Use the esp toolchain explicitly
+cargo +esp run --manifest-path examples/Cargo.toml --bin smoltcp_echo \
+    --features smoltcp-example --release
+
+# Or run from the examples directory (uses examples/rust-toolchain.toml)
+cd examples
+cargo run --bin smoltcp_echo --features smoltcp-example --release
+```
+
+### Example Feature Mapping
+
+| Example | examples crate feature |
+|---------|-------------------------|
+| `esp_hal_integration` | `esp-hal-example` |
+| `smoltcp_echo` | `smoltcp-example` |
+| `embassy_net` | `embassy-net-example` |
 
 ## Example Details
 
-### 1. Bare Metal (`bare_metal.rs`)
-
-**Purpose**: Shows the lowest-level usage pattern without any HAL dependencies.
-
-**Use Case**: 
-- Custom `no_std` environments
-- When you need maximum control
-- Porting to non-standard ESP32 setups
-
-**Key Points**:
-- Provides a custom `DelayNs` implementation using busy-wait
-- Direct GPIO register access for clock enable
-- No dependencies on esp-hal or esp-rs ecosystem
-
-**Features**:
-```toml
-ph-esp32-mac = { version = "0.1", features = ["esp32"] }
-```
-
-### 2. esp-hal Integration (`esp_hal_integration.rs`)
+### 1. esp-hal Integration (`esp_hal_integration.rs`)
 
 **Purpose**: Demonstrates the recommended way to use the driver with esp-hal.
 
@@ -85,7 +110,7 @@ ph-esp32-mac = { version = "0.1", features = ["esp32", "critical-section"] }
 esp-hal = { version = "1.0", features = ["esp32"] }
 ```
 
-### 3. smoltcp TCP Echo (`smoltcp_echo.rs`)
+### 2. smoltcp TCP Echo (`smoltcp_echo.rs`)
 
 **Purpose**: Full TCP/IP networking with the smoltcp stack.
 
@@ -130,6 +155,52 @@ For other boards, modify the constants at the top of each example:
 - `PHY_ADDR` - MDIO address of your PHY
 - `CLK_EN_GPIO` - GPIO that enables the clock (if applicable)
 - `RmiiClockMode` - Use `ExternalGpio0` or `InternalGpio0` depending on your hardware
+
+### 3. embassy-net Async Example (`embassy_net.rs`)
+
+**Purpose**: Demonstrates async networking with embassy-net and the EMAC driver.
+
+**Use Case**:
+- Embassy-based async applications
+- Non-blocking network stacks
+- Integration with esp-hal 1.0.0 + esp-rtos
+
+**Key Points**:
+- Uses `embassy-net-driver` integration via `EmbassyEmac`
+- Starts the Embassy time driver with `esp-rtos`
+- Spawns an async network runner task
+- Polls PHY link state periodically and updates the stack
+
+**Features**:
+```toml
+ph-esp32-mac = { version = "0.1", features = ["esp32", "embassy-net", "esp-hal", "critical-section"] }
+```
+
+**Additional Dependencies** (example project):
+```toml
+embassy-net = { version = "0.7.0", default-features = false, features = ["medium-ethernet", "proto-ipv4", "dhcpv4"] }
+embassy-net-driver = "0.2"
+embassy-executor = "0.7"
+embassy-time = "0.4"
+esp-hal = { version = "1.0.0", features = ["esp32"] }
+esp-rtos = { version = "0.2.0", features = ["embassy", "esp32"] }
+static-cell = "2"
+```
+
+**Interrupt Wiring**:
+```rust
+use ph_esp32_mac::esp_hal::{emac_isr, Priority};
+
+emac_isr!(EMAC_IRQ, Priority::Priority1, {
+    EMAC_STATE.handle_interrupt();
+});
+```
+
+**Embassy Time Driver**:
+```rust
+let timg0 = TimerGroup::new(peripherals.TIMG0);
+esp_rtos::start(timg0.timer0);
+```
 
 ## Memory Usage
 

@@ -6,7 +6,7 @@
 //! # Features
 //!
 //! - Full TCP/IP networking via smoltcp
-//! - DHCP or static IP configuration
+//! - DHCP IPv4 configuration
 //! - TCP echo server on port 7
 //! - ARP, ICMP (ping) support
 //!
@@ -24,29 +24,33 @@
 //! # Testing
 //!
 //! 1. Connect the board to your network
-//! 2. Find its IP address (192.168.1.100 if static, or check DHCP logs)
-//! 3. Test with: `nc 192.168.1.100 7` or `telnet 192.168.1.100 7`
+//! 2. Find its IP address from the DHCP log output
+//! 3. Test with: `nc <assigned-ip> 7` or `telnet <assigned-ip> 7`
 //! 4. Type text and see it echoed back
 
 #![no_std]
 #![no_main]
 
 use core::cell::RefCell;
-
 use critical_section::Mutex;
+
 use esp_backtrace as _;
+use esp_bootloader_esp_idf::esp_app_desc;
 use esp_hal::{
     delay::Delay,
     gpio::{Level, Output, OutputConfig},
-    main, time,
+    main,
+    rng::Rng,
+    time::Instant,
 };
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 
 use smoltcp::{
     iface::{Config, Interface, SocketSet},
+    socket::dhcpv4,
     socket::tcp::{Socket as TcpSocket, SocketBuffer as TcpSocketBuffer},
     time::Instant as SmolInstant,
-    wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address},
+    wire::{EthernetAddress, IpCidr, Ipv4Cidr},
 };
 
 use ph_esp32_mac::{
@@ -57,12 +61,6 @@ use ph_esp32_mac::{
 // =============================================================================
 // Network Configuration
 // =============================================================================
-
-/// Static IP configuration (set to None for DHCP if supported)
-const STATIC_IP: Option<IpCidr> = Some(IpCidr::new(IpAddress::v4(192, 168, 1, 100), 24));
-
-/// Default gateway
-const GATEWAY: Option<Ipv4Address> = Some(Ipv4Address::new(192, 168, 1, 1));
 
 /// TCP echo server port
 const ECHO_PORT: u16 = 7;
@@ -75,6 +73,7 @@ const MAC_ADDR: [u8; 6] = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
 // =============================================================================
 
 const PHY_ADDR: u8 = 1;
+#[allow(dead_code)]
 const CLK_EN_GPIO: u8 = 16;
 
 // =============================================================================
@@ -82,11 +81,13 @@ const CLK_EN_GPIO: u8 = 16;
 // =============================================================================
 
 /// Static EMAC instance
-static mut EMAC: Emac<10, 10, 1600> = Emac::new();
+static EMAC: Mutex<RefCell<Option<Emac<10, 10, 1600>>>> = Mutex::new(RefCell::new(None));
 
 // =============================================================================
 // Main Entry Point
 // =============================================================================
+
+esp_app_desc!();
 
 #[main]
 fn main() -> ! {
@@ -98,28 +99,34 @@ fn main() -> ! {
     info!("smoltcp TCP Echo Server starting...");
 
     let mut delay = Delay::new();
+    let mut mdio = MdioController::new(Delay::new());
 
     // Enable external oscillator
     let mut clk_en = Output::new(peripherals.GPIO16, Level::Low, OutputConfig::default());
     clk_en.set_high();
     delay.delay_millis(10);
 
-    // Get EMAC reference
-    let emac = unsafe { &mut EMAC };
+    // Place EMAC in static storage before init (required for DMA descriptors).
+    critical_section::with(|cs| {
+        EMAC.borrow_ref_mut(cs).replace(Emac::new());
+    });
 
     // Configure EMAC
     let config = EmacConfig::new()
         .with_mac_address(MAC_ADDR)
         .with_phy_interface(PhyInterface::Rmii)
-        .with_rmii_clock(RmiiClockMode::ExternalGpio0);
+        .with_rmii_clock(RmiiClockMode::ExternalInput { gpio: 0 });
 
     info!("Initializing EMAC...");
-    emac.init(config, &mut delay).expect("EMAC init failed");
+    critical_section::with(|cs| {
+        let mut emac_ref = EMAC.borrow_ref_mut(cs);
+        let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+        emac.init(config, &mut delay).expect("EMAC init failed");
+    });
 
     // Initialize PHY
     info!("Initializing PHY...");
     let mut phy = Lan8720a::new(PHY_ADDR);
-    let mut mdio = MdioController::new(&mut delay);
     phy.init(&mut mdio).expect("PHY init failed");
 
     // Wait for link
@@ -140,14 +147,22 @@ fn main() -> ! {
                     "HD"
                 }
             );
-            emac.set_speed(status.speed);
-            emac.set_duplex(status.duplex);
+            critical_section::with(|cs| {
+                let mut emac_ref = EMAC.borrow_ref_mut(cs);
+                let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+                emac.set_speed(status.speed);
+                emac.set_duplex(status.duplex);
+            });
             break;
         }
     }
 
     // Start EMAC
-    emac.start().expect("EMAC start failed");
+    critical_section::with(|cs| {
+        let mut emac_ref = EMAC.borrow_ref_mut(cs);
+        let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+        emac.start().expect("EMAC start failed");
+    });
     info!("EMAC started");
 
     // ==========================================================================
@@ -156,31 +171,25 @@ fn main() -> ! {
 
     // Create smoltcp configuration
     let hw_addr = EthernetAddress(MAC_ADDR);
-    let smol_config = Config::new(hw_addr.into());
+    let mut smol_config = Config::new(hw_addr.into());
+    let rng = Rng::new();
+    smol_config.random_seed =
+        ((rng.random() as u64) << 32) | (rng.random() as u64);
 
     // Create the network interface
-    let mut iface = Interface::new(smol_config, emac, SmolInstant::from_millis(0));
-
-    // Configure IP address
-    if let Some(ip) = STATIC_IP {
-        iface.update_ip_addrs(|addrs| {
-            addrs.push(ip).unwrap();
-        });
-        info!("Static IP: {}", ip);
-    }
-
-    // Configure default gateway
-    if let Some(gw) = GATEWAY {
-        iface.routes_mut().add_default_ipv4_route(gw).unwrap();
-        info!("Gateway: {}", gw);
-    }
+    let mut iface = critical_section::with(|cs| {
+        let mut emac_ref = EMAC.borrow_ref_mut(cs);
+        let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+        Interface::new(smol_config, emac, SmolInstant::from_millis(0))
+    });
+    iface.set_any_ip(true);
 
     // ==========================================================================
     // Socket Setup
     // ==========================================================================
 
     // Create socket storage
-    let mut socket_storage = [smoltcp::iface::SocketStorage::EMPTY; 4];
+    let mut socket_storage = [smoltcp::iface::SocketStorage::EMPTY; 5];
     let mut sockets = SocketSet::new(&mut socket_storage[..]);
 
     // Create TCP socket buffers
@@ -191,6 +200,9 @@ fn main() -> ! {
         TcpSocketBuffer::new(&mut tcp_tx_buffer[..]),
     );
     let tcp_handle = sockets.add(tcp_socket);
+
+    // Create DHCP socket
+    let dhcp_handle = sockets.add(dhcpv4::Socket::new());
 
     // Start listening on echo port
     {
@@ -203,20 +215,71 @@ fn main() -> ! {
     // Main Network Loop
     // ==========================================================================
 
-    let mut last_status_time = time::Instant::now();
+    let mut last_status_time = Instant::now();
     let mut connections = 0u32;
     let mut bytes_echoed = 0u64;
+    let mut echo_buf = [0u8; 1024];
+    let mut dhcp_configured = false;
+    let mut dhcp_last_address: Option<Ipv4Cidr> = None;
 
     info!("Entering main loop...");
-    info!("Test with: nc {} {}", "192.168.1.100", ECHO_PORT);
+    info!("Waiting for DHCP...");
 
     loop {
         // Get current timestamp for smoltcp
-        let now = time::Instant::now();
-        let smol_now = SmolInstant::from_millis(now.as_millis() as i64);
+        let now = Instant::now();
+        let smol_now =
+            SmolInstant::from_millis(now.duration_since_epoch().as_millis() as i64);
 
         // Poll the interface (handles ARP, ICMP, etc.)
-        let _activity = iface.poll(smol_now, emac, &mut sockets);
+        critical_section::with(|cs| {
+            let mut emac_ref = EMAC.borrow_ref_mut(cs);
+            let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+            let _activity = iface.poll(smol_now, emac, &mut sockets);
+        });
+
+        // Handle DHCP events
+        if let Some(event) = sockets.get_mut::<dhcpv4::Socket>(dhcp_handle).poll() {
+            match event {
+                dhcpv4::Event::Configured(config) => {
+                    iface.update_ip_addrs(|addrs| {
+                        addrs.clear();
+                        addrs.push(IpCidr::Ipv4(config.address)).unwrap();
+                    });
+                    iface.set_any_ip(false);
+
+                    if let Some(router) = config.router {
+                        iface.routes_mut().add_default_ipv4_route(router).ok();
+                    } else {
+                        iface.routes_mut().remove_default_ipv4_route();
+                    }
+
+                    let address_changed = dhcp_last_address.map_or(true, |addr| addr != config.address);
+                    if address_changed {
+                        info!("DHCP address: {}", config.address);
+                        if let Some(router) = config.router {
+                            info!("DHCP gateway: {}", router);
+                        }
+                        info!("Test with: nc {} {}", config.address.address(), ECHO_PORT);
+                    } else {
+                        info!("DHCP renewed: {}", config.address);
+                    }
+
+                    dhcp_last_address = Some(config.address);
+                    dhcp_configured = true;
+                }
+                dhcpv4::Event::Deconfigured => {
+                    iface.update_ip_addrs(|addrs| addrs.clear());
+                    iface.routes_mut().remove_default_ipv4_route();
+                    iface.set_any_ip(true);
+                    dhcp_last_address = None;
+                    if dhcp_configured {
+                        warn!("DHCP deconfigured");
+                    }
+                    dhcp_configured = false;
+                }
+            }
+        }
 
         // Handle TCP socket
         {
@@ -226,17 +289,11 @@ fn main() -> ! {
             if socket.is_active() && socket.may_recv() {
                 // Echo received data back
                 if socket.can_recv() {
-                    match socket.recv(|data| {
-                        let len = data.len();
-                        if len > 0 {
+                    match socket.recv_slice(&mut echo_buf) {
+                        Ok(len) if len > 0 => {
                             debug!("Received {} bytes", len);
-                        }
-                        (len, data.to_vec()) // Return data to echo
-                    }) {
-                        Ok(data) if !data.is_empty() => {
-                            // Send data back
                             if socket.can_send() {
-                                match socket.send_slice(&data) {
+                                match socket.send_slice(&echo_buf[..len]) {
                                     Ok(sent) => {
                                         bytes_echoed += sent as u64;
                                         debug!("Echoed {} bytes", sent);
@@ -265,14 +322,13 @@ fn main() -> ! {
         }
 
         // Periodic status update
-        if now.duration_since(last_status_time).as_secs() >= 30 {
+        if (now - last_status_time).as_secs() >= 30 {
             info!(
                 "Status: {} connections, {} bytes echoed",
                 connections, bytes_echoed
             );
 
             // Check link status
-            let mut mdio = MdioController::new(&mut delay);
             if let Ok(up) = phy.is_link_up(&mut mdio) {
                 if !up {
                     warn!("Link is DOWN!");

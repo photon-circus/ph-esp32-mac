@@ -1,7 +1,7 @@
 # Cargo configuration for ph-esp32-mac
 #
 # Provides convenient aliases for common development tasks.
-# For multi-crate operations, use the scripts in scripts/ directory.
+# Example-specific aliases live in examples/.cargo/config.toml.
 
 [alias]
 # =============================================================================

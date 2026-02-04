@@ -29,7 +29,7 @@ jobs:
 
       # Check with all testable features
       - name: Clippy (all testable features)
-        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section" -- -D warnings
+        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section,embassy-net" -- -D warnings
 
       # Check with defmt
       - name: Clippy (defmt)
