@@ -18,37 +18,42 @@ This document outlines the testing strategy for the ESP32 EMAC driver, covering 
 | `dma.rs` | 47 | ✅ Implemented | 2026-02-04 |
 | `test_utils.rs` | 5 | ✅ Implemented | 2026-02-03 |
 | `constants.rs` | 29 | ✅ Implemented | 2026-02-03 |
-| `asynch.rs` | 12 | ✅ Implemented | 2026-02-03 |
+| `asynch.rs` | 4 | ✅ Implemented | 2026-02-04 |
 | `smoltcp.rs` | 9 | ✅ Implemented | 2026-02-03 |
-| `sync.rs` | 11 | ✅ Implemented | 2026-02-03 |
+| `sync.rs` | 21 | ✅ Implemented | 2026-02-04 |
+| `sync_primitives.rs` | 14 | ✅ Implemented | 2026-02-04 |
 | `descriptor/mod.rs` | 1 | ✅ Implemented | 2026-02-03 |
-| **Total** | **260** | ✅ All Passing | 2026-02-04 |
+| **Total** | **299** | ✅ All Passing | 2026-02-04 |
 
 ### Code Coverage (llvm-cov)
 
 | File | Regions | Region Cover | Functions | Func Cover | Lines | Line Cover |
 |------|---------|--------------|-----------|------------|-------|------------|
+| `asynch.rs` | 252 | 54.76% | 24 | 54.17% | 168 | 47.62% |
 | `config.rs` | 280 | **93.93%** | 40 | 90.00% | 255 | 93.33% |
 | `constants.rs` | 129 | **100.00%** | 29 | 100.00% | 105 | 100.00% |
 | `descriptor/mod.rs` | 25 | 84.00% | 5 | 80.00% | 20 | 85.00% |
 | `descriptor/rx.rs` | 336 | 72.02% | 46 | 58.70% | 226 | 65.93% |
 | `descriptor/tx.rs` | 379 | **85.49%** | 45 | 75.56% | 248 | 84.68% |
-| `dma.rs` | 1232 | 68.51% | 98 | **86.73%** | 773 | 68.82% |
+| `dma.rs` | 1194 | 69.26% | 88 | **87.50%** | 734 | 69.21% |
 | `error.rs` | 267 | **98.88%** | 36 | 100.00% | 195 | 98.46% |
 | `hal/mdio.rs` | 578 | 74.39% | 55 | 74.55% | 448 | 74.11% |
 | `phy/generic.rs` | 142 | 80.28% | 15 | 93.33% | 104 | 89.42% |
 | `phy/lan8720a.rs` | 1294 | **84.47%** | 101 | 69.31% | 693 | 81.10% |
-| `test_utils.rs` | 250 | **88.00%** | 23 | 78.26% | 142 | 86.62% |
-| **TOTAL** | **6517** | **65.57%** | **699** | **60.94%** | **4552** | **61.29%** |
+| `sync.rs` | 276 | **81.16%** | 47 | 82.98% | 183 | 80.33% |
+| `sync_primitives.rs` | 303 | **96.04%** | 38 | 97.37% | 190 | 96.32% |
+| `test_utils.rs` | 304 | **84.87%** | 36 | 77.78% | 196 | 82.14% |
+| **TOTAL** | **7364** | **67.41%** | **811** | **64.24%** | **5108** | **63.33%** |
 
 #### Coverage Summary
 
 | Tier | Files | Notes |
 |------|-------|-------|
 | ✅ **100%** | `constants.rs` | Fully tested |
-| ✅ **>90%** | `config.rs`, `error.rs` | Excellent coverage |
-| ✅ **>80%** | `descriptor/tx.rs`, `phy/lan8720a.rs`, `phy/generic.rs`, `test_utils.rs` | Good coverage |
+| ✅ **>90%** | `config.rs`, `error.rs`, `sync_primitives.rs` | Excellent coverage |
+| ✅ **>80%** | `descriptor/tx.rs`, `phy/lan8720a.rs`, `phy/generic.rs`, `test_utils.rs`, `sync.rs` | Good coverage |
 | ⚠️ **>60%** | `dma.rs`, `hal/mdio.rs`, `descriptor/rx.rs` | Adequate coverage |
+| ⚠️ **>40%** | `asynch.rs`, `mac.rs` | Needs improvement (futures, hardware-dependent) |
 | ❌ **0%** | `register/*.rs`, `hal/clock.rs`, `hal/reset.rs` | Hardware-only (requires ESP32) |
 
 ---
@@ -83,7 +88,7 @@ This document outlines the testing strategy for the ESP32 EMAC driver, covering 
                  │   Integration Tests   │  ← ESP32 + PHY + loopback
                  │      (Hardware)       │
               ┌──┴───────────────────────┴──┐
-              │        Unit Tests           │  ← Host-based, fast (260 tests)
+              │        Unit Tests           │  ← Host-based, fast (299 tests)
               │          (Host)             │
               └─────────────────────────────┘
 ```
@@ -261,14 +266,15 @@ assert_eq!(ring.current().frame_length(), 1500);
 
 ### 10. Async Tests (`asynch.rs`)
 
-**Status:** ✅ **IMPLEMENTED** (12 tests)
+**Status:** ✅ **IMPLEMENTED** (4 tests)
 
 | Test Category | Tests | Status |
 |---------------|-------|--------|
-| **AtomicWaker** | `new()`, `register()`, `wake()`, `take()` | ✅ |
-| **Waker Behavior** | Overwrite on re-register, wake clears, double wake | ✅ |
 | **Static Wakers** | `TX_WAKER`, `RX_WAKER`, `ERR_WAKER` independence | ✅ |
 | **Async State** | `reset_async_state()` wakes all pending | ✅ |
+| **ErrorFuture** | `new()`, `default()` | ✅ |
+
+> **Note:** `AtomicWaker` tests moved to `sync_primitives.rs` after refactoring.
 
 ---
 
@@ -288,15 +294,35 @@ assert_eq!(ring.current().frame_length(), 1500);
 
 ### 12. Sync Wrapper Tests (`sync.rs`)
 
-**Status:** ✅ **IMPLEMENTED** (11 tests)
+**Status:** ✅ **IMPLEMENTED** (21 tests)
 
 | Test Category | Tests | Status |
 |---------------|-------|--------|
-| **Construction** | `new()`, `Default` trait | ✅ |
-| **Access Patterns** | `with()`, `try_with()`, nested calls | ✅ |
-| **Return Values** | Closure return value propagation | ✅ |
-| **Type Aliases** | `SharedEmacSmall`, `SharedEmacLarge` | ✅ |
-| **Static Allocation** | Static cell pattern with `RefCell` | ✅ |
+| **SharedEmac Construction** | `new()`, `Default` trait | ✅ |
+| **SharedEmac Access** | `with()`, `try_with()`, multiple calls, interleaved | ✅ |
+| **SharedEmac Return Values** | Closure return value propagation | ✅ |
+| **SharedEmac Type Aliases** | `SharedEmacSmall`, `SharedEmacLarge` | ✅ |
+| **SharedEmac Static** | Static allocation pattern | ✅ |
+| **AsyncSharedEmac Construction** | `new()`, `Default` trait | ✅ |
+| **AsyncSharedEmac Type Aliases** | `AsyncSharedEmacSmall`, `AsyncSharedEmacLarge` | ✅ |
+| **AsyncSharedEmac Access** | `with()`, `try_with()`, state access | ✅ |
+| **AsyncSharedEmac Status** | `rx_available()`, `tx_ready()` | ✅ |
+| **AsyncSharedEmac Static** | Static allocation pattern | ✅ |
+
+---
+
+### 13. Synchronization Primitives Tests (`sync_primitives.rs`)
+
+**Status:** ✅ **IMPLEMENTED** (14 tests)
+
+| Test Category | Tests | Status |
+|---------------|-------|--------|
+| **CriticalSectionCell** | `new()`, `with()`, `try_with()`, `with_ref()` | ✅ |
+| **CriticalSectionCell Behavior** | Mutation, return values, static usage | ✅ |
+| **AtomicWaker** | `new()`, `default()`, `is_registered()` | ✅ |
+| **AtomicWaker Register** | Stores waker, overwrites previous | ✅ |
+| **AtomicWaker Wake** | Calls waker, clears after wake, double wake | ✅ |
+| **AtomicWaker Edge Cases** | Wake without registered is no-op | ✅ |
 
 ---
 

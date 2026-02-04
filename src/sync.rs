@@ -4,12 +4,21 @@
 //! the `critical-section` crate. These wrappers allow safe access to the
 //! EMAC from both normal code and interrupt handlers.
 //!
+//! # Types
+//!
+//! - [`SharedEmac`] - Synchronous ISR-safe EMAC wrapper
+//! - [`AsyncSharedEmac`] - Async-capable ISR-safe EMAC wrapper (requires `async` feature)
+//!
 //! # When to Use
 //!
 //! Use `SharedEmac` when you need to:
 //! - Access the EMAC from interrupt handlers
 //! - Share the EMAC between multiple contexts safely
 //! - Avoid `unsafe` in your application code
+//!
+//! Use `AsyncSharedEmac` when you need both:
+//! - ISR-safe access patterns (like `SharedEmac`)
+//! - Async/await support for non-blocking I/O
 //!
 //! For single-context use (no interrupts accessing EMAC), the regular
 //! `static mut EMAC` pattern is simpler and has no overhead.
@@ -69,10 +78,8 @@
 //! For ESP32, this typically disables interrupts on the current core.
 //! On dual-core configurations, it also acquires a hardware spinlock.
 
-use core::cell::RefCell;
-use critical_section::Mutex;
-
 use crate::mac::Emac;
+use crate::sync_primitives::CriticalSectionCell;
 
 // =============================================================================
 // SharedEmac
@@ -101,7 +108,7 @@ use crate::mac::Emac;
 /// });
 /// ```
 pub struct SharedEmac<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> {
-    inner: Mutex<RefCell<Emac<RX_BUFS, TX_BUFS, BUF_SIZE>>>,
+    inner: CriticalSectionCell<Emac<RX_BUFS, TX_BUFS, BUF_SIZE>>,
 }
 
 impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
@@ -118,7 +125,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// ```
     pub const fn new() -> Self {
         Self {
-            inner: Mutex::new(RefCell::new(Emac::new())),
+            inner: CriticalSectionCell::new(Emac::new()),
         }
     }
 
@@ -152,10 +159,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     where
         F: FnOnce(&mut Emac<RX_BUFS, TX_BUFS, BUF_SIZE>) -> R,
     {
-        critical_section::with(|cs| {
-            let mut emac = self.inner.borrow_ref_mut(cs);
-            f(&mut emac)
-        })
+        self.inner.with(f)
     }
 
     /// Try to execute a closure, returning `None` if the EMAC is already borrowed
@@ -177,14 +181,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     where
         F: FnOnce(&mut Emac<RX_BUFS, TX_BUFS, BUF_SIZE>) -> R,
     {
-        critical_section::with(|cs| {
-            // try_borrow_mut returns Option<RefMut>, avoiding panic if already borrowed
-            self.inner
-                .borrow(cs)
-                .try_borrow_mut()
-                .ok()
-                .map(|mut emac| f(&mut emac))
-        })
+        self.inner.try_with(f)
     }
 }
 
@@ -196,11 +193,227 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Default
     }
 }
 
-// Safety: SharedEmac uses critical sections to protect all access,
-// making it safe to share across threads/interrupt contexts.
-unsafe impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Sync
-    for SharedEmac<RX_BUFS, TX_BUFS, BUF_SIZE>
+// =============================================================================
+// AsyncSharedEmac
+// =============================================================================
+
+/// ISR-safe async-capable EMAC wrapper
+///
+/// This wrapper combines the ISR-safety of [`SharedEmac`] with async/await
+/// capabilities. It provides both synchronous access via `with()` and
+/// async methods that yield when waiting for I/O.
+///
+/// # When to Use
+///
+/// Use `AsyncSharedEmac` when you need:
+/// - Safe access from both main code and interrupt handlers
+/// - Async/await support for non-blocking I/O
+/// - Integration with async executors (embassy, etc.)
+///
+/// # Example
+///
+/// ```ignore
+/// use ph_esp32_mac::sync::AsyncSharedEmac;
+/// use ph_esp32_mac::EmacConfig;
+///
+/// static EMAC: AsyncSharedEmac<10, 10, 1600> = AsyncSharedEmac::new();
+///
+/// async fn ethernet_task() {
+///     let mut buf = [0u8; 1600];
+///     
+///     loop {
+///         // Async receive - yields until frame available
+///         let len = EMAC.receive_async(&mut buf).await.unwrap();
+///         
+///         // Process and respond
+///         let response = process(&buf[..len]);
+///         EMAC.transmit_async(&response).await.unwrap();
+///     }
+/// }
+///
+/// #[interrupt]
+/// fn ETH_MAC() {
+///     // Wake async tasks when hardware events occur
+///     ph_esp32_mac::asynch::async_interrupt_handler();
+/// }
+/// ```
+pub struct AsyncSharedEmac<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> {
+    inner: CriticalSectionCell<Emac<RX_BUFS, TX_BUFS, BUF_SIZE>>,
+}
+
+impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
+    AsyncSharedEmac<RX_BUFS, TX_BUFS, BUF_SIZE>
 {
+    /// Create a new async shared EMAC instance
+    ///
+    /// This is a const function suitable for static initialization.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// static EMAC: AsyncSharedEmac<10, 10, 1600> = AsyncSharedEmac::new();
+    /// ```
+    pub const fn new() -> Self {
+        Self {
+            inner: CriticalSectionCell::new(Emac::new()),
+        }
+    }
+
+    /// Execute a closure with exclusive access to the EMAC (synchronous)
+    ///
+    /// This is identical to [`SharedEmac::with()`] - it acquires a critical
+    /// section and executes the closure with a mutable reference to the EMAC.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure that receives `&mut Emac` and returns a value
+    ///
+    /// # Returns
+    ///
+    /// The return value of the closure
+    #[inline]
+    pub fn with<R, F>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut Emac<RX_BUFS, TX_BUFS, BUF_SIZE>) -> R,
+    {
+        self.inner.with(f)
+    }
+
+    /// Try to execute a closure, returning `None` if already borrowed
+    #[inline]
+    pub fn try_with<R, F>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Emac<RX_BUFS, TX_BUFS, BUF_SIZE>) -> R,
+    {
+        self.inner.try_with(f)
+    }
+
+    /// Receive a frame asynchronously
+    ///
+    /// This method yields until a frame is available, using the global
+    /// `RX_WAKER` to be notified by the interrupt handler.
+    ///
+    /// # Arguments
+    ///
+    /// * `buffer` - Buffer to receive the frame into
+    ///
+    /// # Returns
+    ///
+    /// Returns the frame length on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Frame had CRC/length errors
+    /// - Buffer too small for frame
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut buf = [0u8; 1600];
+    /// let len = EMAC.receive_async(&mut buf).await?;
+    /// process(&buf[..len]);
+    /// ```
+    pub async fn receive_async(&self, buffer: &mut [u8]) -> crate::Result<usize> {
+        use crate::asynch::RX_WAKER;
+        use core::future::poll_fn;
+        use core::task::Poll;
+
+        poll_fn(|cx| {
+            // Check if a frame is available
+            let result = self.inner.with(|emac| {
+                if emac.rx_available() {
+                    Some(emac.receive(buffer))
+                } else {
+                    None
+                }
+            });
+
+            match result {
+                Some(Ok(len)) => Poll::Ready(Ok(len)),
+                Some(Err(e)) => Poll::Ready(Err(e)),
+                None => {
+                    // No frame available, register waker
+                    RX_WAKER.register(cx.waker());
+                    Poll::Pending
+                }
+            }
+        })
+        .await
+    }
+
+    /// Transmit a frame asynchronously
+    ///
+    /// This method yields until a TX buffer is available and the frame has
+    /// been queued for transmission.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The frame data to transmit (must include Ethernet header)
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of bytes submitted on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if frame is too large for TX buffer.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let packet = build_packet();
+    /// let len = EMAC.transmit_async(&packet).await?;
+    /// ```
+    pub async fn transmit_async(&self, data: &[u8]) -> crate::Result<usize> {
+        use crate::asynch::TX_WAKER;
+        use core::future::poll_fn;
+        use core::task::Poll;
+
+        poll_fn(|cx| {
+            // Check if TX is ready
+            let result = self.inner.with(|emac| {
+                if emac.tx_ready() {
+                    Some(emac.transmit(data))
+                } else {
+                    None
+                }
+            });
+
+            match result {
+                Some(Ok(len)) => Poll::Ready(Ok(len)),
+                Some(Err(e)) => Poll::Ready(Err(e)),
+                None => {
+                    // No TX slot available, register waker
+                    TX_WAKER.register(cx.waker());
+                    Poll::Pending
+                }
+            }
+        })
+        .await
+    }
+
+    /// Check if the EMAC has received frames waiting
+    ///
+    /// This is a synchronous check that does not yield.
+    pub fn rx_available(&self) -> bool {
+        self.inner.with(|emac| emac.rx_available())
+    }
+
+    /// Check if the EMAC can accept a frame for transmission
+    ///
+    /// This is a synchronous check that does not yield.
+    pub fn tx_ready(&self) -> bool {
+        self.inner.with(|emac| emac.tx_ready())
+    }
+}
+
+impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Default
+    for AsyncSharedEmac<RX_BUFS, TX_BUFS, BUF_SIZE>
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // =============================================================================
@@ -215,6 +428,15 @@ pub type SharedEmacSmall = SharedEmac<4, 4, 1600>;
 
 /// Large shared EMAC configuration for high-throughput applications
 pub type SharedEmacLarge = SharedEmac<16, 16, 1600>;
+
+/// Default async shared EMAC configuration
+pub type AsyncSharedEmacDefault = AsyncSharedEmac<10, 10, 1600>;
+
+/// Small async shared EMAC configuration
+pub type AsyncSharedEmacSmall = AsyncSharedEmac<4, 4, 1600>;
+
+/// Large async shared EMAC configuration
+pub type AsyncSharedEmacLarge = AsyncSharedEmac<16, 16, 1600>;
 
 // =============================================================================
 // Tests
@@ -333,6 +555,78 @@ mod tests {
     #[test]
     fn test_static_shared_emac() {
         static SHARED: SharedEmac<10, 10, 1600> = SharedEmac::new();
+
+        let state = SHARED.with(|emac| emac.state());
+        assert_eq!(state, State::Uninitialized);
+    }
+
+    // =========================================================================
+    // AsyncSharedEmac Construction Tests
+    // =========================================================================
+
+    #[test]
+    fn test_async_shared_emac_new() {
+        static _EMAC: AsyncSharedEmac<10, 10, 1600> = AsyncSharedEmac::new();
+    }
+
+    #[test]
+    fn test_async_shared_emac_default() {
+        let _emac: AsyncSharedEmacDefault = AsyncSharedEmac::default();
+    }
+
+    #[test]
+    fn test_async_shared_emac_type_aliases() {
+        let _small: AsyncSharedEmacSmall = AsyncSharedEmac::new();
+        let _large: AsyncSharedEmacLarge = AsyncSharedEmac::new();
+    }
+
+    // =========================================================================
+    // AsyncSharedEmac Sync Access Tests
+    // =========================================================================
+
+    #[test]
+    fn test_async_shared_emac_with_returns_value() {
+        let shared: AsyncSharedEmacDefault = AsyncSharedEmac::new();
+        let result = shared.with(|_emac| 42);
+        assert_eq!(result, 42);
+    }
+
+    #[test]
+    fn test_async_shared_emac_with_can_read_state() {
+        let shared: AsyncSharedEmacDefault = AsyncSharedEmac::new();
+        let state = shared.with(|emac| emac.state());
+        assert_eq!(state, State::Uninitialized);
+    }
+
+    #[test]
+    fn test_async_shared_emac_try_with_returns_some() {
+        let shared: AsyncSharedEmacDefault = AsyncSharedEmac::new();
+        let result = shared.try_with(|_emac| 123);
+        assert_eq!(result, Some(123));
+    }
+
+    // =========================================================================
+    // AsyncSharedEmac Status Checks
+    // =========================================================================
+
+    #[test]
+    fn test_async_shared_emac_rx_available_uninitialized() {
+        let shared: AsyncSharedEmacDefault = AsyncSharedEmac::new();
+        // Uninitialized EMAC returns false for rx_available
+        assert!(!shared.rx_available());
+    }
+
+    #[test]
+    fn test_async_shared_emac_tx_ready_uninitialized() {
+        let shared: AsyncSharedEmacDefault = AsyncSharedEmac::new();
+        // Uninitialized EMAC with fresh descriptors - they are not owned by DMA,
+        // so tx_ready returns true (descriptors are available)
+        assert!(shared.tx_ready());
+    }
+
+    #[test]
+    fn test_static_async_shared_emac() {
+        static SHARED: AsyncSharedEmac<10, 10, 1600> = AsyncSharedEmac::new();
 
         let state = SHARED.with(|emac| emac.state());
         assert_eq!(state, State::Uninitialized);

@@ -137,6 +137,9 @@ pub mod register;
 pub mod smoltcp;
 
 #[cfg(feature = "critical-section")]
+pub mod sync_primitives;
+
+#[cfg(feature = "critical-section")]
 pub mod sync;
 
 #[cfg(feature = "esp-hal")]

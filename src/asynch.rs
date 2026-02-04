@@ -84,74 +84,13 @@
 use core::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
 
 use crate::{Emac, Error, InterruptStatus, IoError, Result};
 
-// =============================================================================
-// AtomicWaker Implementation
-// =============================================================================
-
-/// A thread-safe, interrupt-safe waker storage.
-///
-/// This is similar to `embassy_sync::waitqueue::AtomicWaker` but works without
-/// external dependencies. Uses critical-section for safe access.
-pub struct AtomicWaker {
-    waker: critical_section::Mutex<core::cell::RefCell<Option<Waker>>>,
-}
-
-impl AtomicWaker {
-    /// Create a new empty AtomicWaker.
-    pub const fn new() -> Self {
-        Self {
-            waker: critical_section::Mutex::new(core::cell::RefCell::new(None)),
-        }
-    }
-
-    /// Register a waker to be woken later.
-    ///
-    /// Overwrites any previously registered waker.
-    pub fn register(&self, waker: &Waker) {
-        critical_section::with(|cs| {
-            let mut slot = self.waker.borrow_ref_mut(cs);
-            match &*slot {
-                Some(existing) if existing.will_wake(waker) => {
-                    // Same waker, no action needed
-                }
-                _ => {
-                    *slot = Some(waker.clone());
-                }
-            }
-        });
-    }
-
-    /// Wake the registered waker, if any.
-    ///
-    /// This clears the stored waker after waking.
-    #[inline]
-    pub fn wake(&self) {
-        let waker = critical_section::with(|cs| self.waker.borrow_ref_mut(cs).take());
-        if let Some(w) = waker {
-            w.wake();
-        }
-    }
-
-    /// Check if a waker is registered.
-    pub fn is_registered(&self) -> bool {
-        critical_section::with(|cs| self.waker.borrow_ref(cs).is_some())
-    }
-}
-
-impl Default for AtomicWaker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// SAFETY: AtomicWaker uses critical_section for synchronization
-unsafe impl Send for AtomicWaker {}
-unsafe impl Sync for AtomicWaker {}
+// Re-export AtomicWaker from sync_primitives for backwards compatibility
+pub use crate::sync_primitives::AtomicWaker;
 
 // =============================================================================
 // Static Wakers
@@ -565,96 +504,6 @@ mod tests {
 
         let raw = RawWaker::new(Arc::into_raw(counter) as *const (), &VTABLE);
         unsafe { Waker::from_raw(raw) }
-    }
-
-    // =========================================================================
-    // AtomicWaker Tests
-    // =========================================================================
-
-    #[test]
-    fn atomic_waker_new_is_empty() {
-        let waker = AtomicWaker::new();
-        assert!(!waker.is_registered());
-    }
-
-    #[test]
-    fn atomic_waker_default_is_empty() {
-        let waker = AtomicWaker::default();
-        assert!(!waker.is_registered());
-    }
-
-    #[test]
-    fn atomic_waker_register_stores_waker() {
-        let atomic_waker = AtomicWaker::new();
-        let counter = WakeCounter::new();
-        let waker = test_waker(counter.clone());
-
-        atomic_waker.register(&waker);
-        assert!(atomic_waker.is_registered());
-    }
-
-    #[test]
-    fn atomic_waker_wake_calls_waker() {
-        let atomic_waker = AtomicWaker::new();
-        let counter = WakeCounter::new();
-        let waker = test_waker(counter.clone());
-
-        atomic_waker.register(&waker);
-        assert_eq!(counter.count(), 0);
-
-        atomic_waker.wake();
-        assert_eq!(counter.count(), 1);
-    }
-
-    #[test]
-    fn atomic_waker_wake_clears_waker() {
-        let atomic_waker = AtomicWaker::new();
-        let counter = WakeCounter::new();
-        let waker = test_waker(counter.clone());
-
-        atomic_waker.register(&waker);
-        assert!(atomic_waker.is_registered());
-
-        atomic_waker.wake();
-        assert!(!atomic_waker.is_registered());
-    }
-
-    #[test]
-    fn atomic_waker_wake_without_registered_is_noop() {
-        let atomic_waker = AtomicWaker::new();
-        // Should not panic
-        atomic_waker.wake();
-        assert!(!atomic_waker.is_registered());
-    }
-
-    #[test]
-    fn atomic_waker_register_overwrites_previous() {
-        let atomic_waker = AtomicWaker::new();
-        let counter1 = WakeCounter::new();
-        let counter2 = WakeCounter::new();
-        let waker1 = test_waker(counter1.clone());
-        let waker2 = test_waker(counter2.clone());
-
-        atomic_waker.register(&waker1);
-        atomic_waker.register(&waker2);
-        atomic_waker.wake();
-
-        // Only the second waker should be called
-        assert_eq!(counter1.count(), 0);
-        assert_eq!(counter2.count(), 1);
-    }
-
-    #[test]
-    fn atomic_waker_double_wake_only_wakes_once() {
-        let atomic_waker = AtomicWaker::new();
-        let counter = WakeCounter::new();
-        let waker = test_waker(counter.clone());
-
-        atomic_waker.register(&waker);
-        atomic_waker.wake();
-        atomic_waker.wake(); // Second wake should be no-op
-
-        assert_eq!(counter.count(), 1);
     }
 
     // =========================================================================
