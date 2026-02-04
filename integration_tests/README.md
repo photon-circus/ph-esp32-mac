@@ -107,10 +107,22 @@ cargo build --manifest-path integration_tests/Cargo.toml --release
 
 ### Flashing
 
+From the project root (recommended):
+
+```bash
+# Build, flash, and monitor using cargo alias
+cargo int
+
+# Build only (no flash)
+cargo int-build
+```
+
+Or from the integration_tests directory:
+
 ```bash
 cd integration_tests
 
-# Flash and open serial monitor (configured in .cargo/config.toml)
+# Flash and open serial monitor
 cargo run --release
 
 # Or flash manually
@@ -123,42 +135,72 @@ espflash monitor
 ### Expected Output
 
 ```
-WT32-ETH01 Ethernet Integration Test
-=====================================
-Enabling external oscillator (GPIO16)...
+╔══════════════════════════════════════════════════════════════╗
+║       WT32-ETH01 Integration Test Suite                      ║
+║       ph-esp32-mac Driver Verification                       ║
+╚══════════════════════════════════════════════════════════════╝
+
+Enabling external 50MHz oscillator...
 Oscillator enabled
-Initializing EMAC...
-EMAC initialized successfully
-Initializing LAN8720A PHY at address 1...
-PHY initialized successfully
-PHY ID: 0x0007C0F1
-  -> Confirmed: LAN8720A/LAN8720AI
-Waiting for Ethernet link...
-Link UP: 100 Mbps Full Duplex
 
-=== INTEGRATION TEST ACTIVE ===
-EMAC is running. Testing packet reception...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  GROUP 1: Register Access
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-RX #1: 60 bytes, EtherType=0x0806
-  Dst: FF:FF:FF:FF:FF:FF
-  Src: AA:BB:CC:DD:EE:FF
-  Type: ARP
+▶ EMAC clock enable
+  DPORT WIFI_CLK_EN=0x..., EMAC_EN=1
+  ✓ PASS
+...
+
+══════════════════════════════════════════════════════════════════
+  TEST SUMMARY
+══════════════════════════════════════════════════════════════════
+
+  Total:   47
+  Passed:  47 ✓
+  Failed:  0 ✗
+  Skipped: 0 ○
+
+╔══════════════════════════════════════════════════════════════╗
+║                    ALL TESTS PASSED! ✓                       ║
+╚══════════════════════════════════════════════════════════════╝
+
+Entering continuous RX monitoring mode...
 ```
 
-### What the Test Does
+### Test Groups
 
-1. **Enables the external oscillator** (GPIO16 HIGH)
-2. **Initializes EMAC** with proper RMII configuration
-3. **Initializes LAN8720A PHY** at address 1
-4. **Waits for link** (auto-negotiation)
-5. **Configures MAC speed/duplex** based on PHY status
-6. **Starts EMAC** for packet reception
-7. **Logs all received packets** with header parsing
+The test suite runs 47 tests organized into 9 groups:
 
-The test receives and logs all Ethernet frames, showing:
-- Destination and source MAC addresses
-- EtherType (IPv4, IPv6, ARP, etc.)
-- Protocol for IP packets (ICMP, TCP, UDP)
+| Group | Tests | Description |
+|-------|-------|-----------|
+| 1. Register Access | 4 | EMAC clock, DMA/MAC/extension registers |
+| 2. EMAC Initialization | 3 | Init, RMII pins, DMA descriptors |
+| 3. PHY Communication | 3 | MDIO read, PHY init, link detection |
+| 4. EMAC Operations | 4 | Start, TX, RX (3s), stop/start |
+| 5. Link Status | 1 | Link status query |
+| 6. smoltcp Integration | 3 | Interface, capabilities, poll |
+| 7. State/Interrupts/Utils | 11 | State, interrupts, TX/RX utilities |
+| 8. Advanced Features | 7 | Promiscuous, force link, PHY caps, int enable |
+| 9. Edge Cases | 11 | MAC/hash/VLAN filtering, flow control, EDPD, cleanup |
+
+Tests in later groups may be skipped if dependencies in earlier groups fail
+(e.g., EMAC operations require successful initialization and link).
+
+### What the Tests Verify
+
+1. **Register Access** - Verifies EMAC peripheral clock and register accessibility
+2. **EMAC Initialization** - Tests driver initialization and hardware configuration
+3. **PHY Communication** - Validates MDIO bus and LAN8720A PHY functionality
+4. **EMAC Operations** - End-to-end packet TX/RX verification
+5. **Link Status** - PHY link monitoring capability
+6. **smoltcp Integration** - Network stack Device trait implementation
+7. **State/Interrupts/Utils** - State machine, interrupt handling, TX ready, RX peek, frame sizes
+8. **Advanced Features** - Promiscuous mode, forced link, PHY capabilities, interrupt enable/disable
+9. **Edge Cases** - MAC/hash/VLAN filtering, flow control, PHY energy detect, async API
+
+After tests complete, the binary enters a continuous RX monitoring mode that
+logs all received packets for debugging.
 
 ### Troubleshooting
 

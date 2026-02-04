@@ -105,21 +105,27 @@ pub const DEFAULT_FLOW_HIGH_WATER: usize = 6;
 
 /// CSR clock divider for 60-100 MHz APB clock (div 42 = ~1.9 MHz MDC)
 /// This is the register value for GMACMIIADDR_CR field
+#[allow(dead_code)]
 pub const CSR_CLOCK_DIV_42: u32 = 0;
 
 /// CSR clock divider for 100-150 MHz APB clock (div 62)
+#[allow(dead_code)]
 pub const CSR_CLOCK_DIV_62: u32 = 1;
 
 /// CSR clock divider for 20-35 MHz APB clock (div 16)
+#[allow(dead_code)]
 pub const CSR_CLOCK_DIV_16: u32 = 2;
 
 /// CSR clock divider for 35-60 MHz APB clock (div 26)
+#[allow(dead_code)]
 pub const CSR_CLOCK_DIV_26: u32 = 3;
 
 /// CSR clock divider for 150-250 MHz APB clock (div 102)
+#[allow(dead_code)]
 pub const CSR_CLOCK_DIV_102: u32 = 4;
 
 /// CSR clock divider for 250-300 MHz APB clock (div 124)
+#[allow(dead_code)]
 pub const CSR_CLOCK_DIV_124: u32 = 5;
 
 // =============================================================================
@@ -145,9 +151,11 @@ pub const TX_DMA_STATE_SHIFT: u32 = 20;
 pub const TX_DMA_STATE_MASK: u32 = 0x7;
 
 /// RX DMA state shift in status register
+#[allow(dead_code)]
 pub const RX_DMA_STATE_SHIFT: u32 = 17;
 
 /// RX DMA state mask (3 bits)
+#[allow(dead_code)]
 pub const RX_DMA_STATE_MASK: u32 = 0x7;
 
 // =============================================================================

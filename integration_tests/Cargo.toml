@@ -37,15 +37,16 @@ log = "0.4"
 # Interrupt-safe access
 critical-section = "1.2"
 
-# =============================================================================
-# Build Configuration for ESP32
-# =============================================================================
+[profile.dev]
+# Rust debug is too slow.
+# For debug builds always builds with some optimization
+opt-level = "s"
 
 [profile.release]
-opt-level = "s"      # Optimize for size
-lto = "thin"         # Link-time optimization
-debug = true         # Keep debug info for panic messages
-
-[profile.dev]
-opt-level = 1        # Some optimization even in debug
-debug = true
+codegen-units    = 1     # LLVM can perform better optimizations using a single thread
+debug            = 2
+debug-assertions = false
+incremental      = false
+lto              = 'fat'
+opt-level        = 's'
+overflow-checks  = false

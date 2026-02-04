@@ -3,6 +3,8 @@
 //! This module provides type-safe access to the EMAC peripheral registers.
 //! All register access is volatile to ensure proper hardware interaction.
 
+#![allow(dead_code)]
+
 pub mod dma;
 pub mod ext;
 pub mod gpio;

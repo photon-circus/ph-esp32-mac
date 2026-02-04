@@ -116,7 +116,53 @@
 
 #![no_std]
 #![deny(missing_docs)]
+#![allow(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
+// Clippy lint levels live here; thresholds and config are in clippy.toml.
+#![deny(clippy::correctness)]
+#![warn(
+    clippy::suspicious,
+    clippy::style,
+    clippy::complexity,
+    clippy::perf,
+    clippy::cloned_instead_of_copied,
+    clippy::explicit_iter_loop,
+    clippy::implicit_clone,
+    clippy::inconsistent_struct_constructor,
+    clippy::manual_assert,
+    clippy::manual_let_else,
+    clippy::match_same_arms,
+    clippy::needless_pass_by_value,
+    clippy::semicolon_if_nothing_returned,
+    clippy::uninlined_format_args,
+    clippy::unnested_or_patterns,
+    clippy::std_instead_of_core,
+    clippy::std_instead_of_alloc,
+    clippy::alloc_instead_of_core,
+)]
+#![allow(
+    clippy::mod_module_files,
+    clippy::self_named_module_files,
+    clippy::similar_names,
+    clippy::too_many_arguments,
+    clippy::struct_excessive_bools,
+    clippy::fn_params_excessive_bools,
+    clippy::type_complexity,
+    clippy::must_use_candidate,
+    clippy::assertions_on_constants,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    clippy::cast_lossless,
+    clippy::panic_in_result_fn,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::module_name_repetitions,
+    clippy::wildcard_imports,
+    clippy::items_after_statements,
+    clippy::let_underscore_future,
+)]
 // #![allow(dead_code)] // Temporarily disabled to identify unused code
 
 // =============================================================================
