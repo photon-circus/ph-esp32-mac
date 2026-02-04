@@ -5,7 +5,10 @@
 //!
 //! - [`config`] - Configuration types and builder patterns
 //! - [`error`] - Error types and result aliases
-//! - [`mac`] - The main EMAC controller implementation
+//! - [`emac`] - The main EMAC controller implementation
+//! - [`interrupt`] - Interrupt status handling
+//! - [`filtering`] - MAC address, hash, and VLAN filtering
+//! - [`flow`] - IEEE 802.3 flow control
 //!
 //! # Example
 //!
@@ -18,8 +21,11 @@
 
 // Submodules
 pub mod config;
+pub mod emac;
 pub mod error;
-pub mod mac;
+pub mod filtering;
+pub mod flow;
+pub mod interrupt;
 
 // Re-exports for convenience
 pub use config::{
@@ -27,5 +33,6 @@ pub use config::{
     MacFilterType, PauseLowThreshold, PhyInterface, RmiiClockMode, Speed, State, TxChecksumMode,
     MAC_FILTER_SLOTS,
 };
+pub use emac::{Emac, EmacDefault, EmacLarge, EmacSmall};
 pub use error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};
-pub use mac::{Emac, EmacDefault, EmacLarge, EmacSmall, InterruptStatus};
+pub use interrupt::InterruptStatus;

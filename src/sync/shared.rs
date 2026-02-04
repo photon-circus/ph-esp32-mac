@@ -4,7 +4,7 @@
 //! [`AsyncSharedEmac`] for async-capable ISR-safe access.
 
 use super::primitives::CriticalSectionCell;
-use crate::driver::mac::Emac;
+use crate::driver::emac::Emac;
 
 /// ISR-safe EMAC wrapper using critical sections.
 ///

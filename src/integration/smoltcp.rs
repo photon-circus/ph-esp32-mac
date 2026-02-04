@@ -52,7 +52,7 @@
 
 use crate::driver::config::State;
 use crate::internal::constants::{MAX_FRAME_SIZE, MTU};
-use crate::driver::mac::Emac;
+use crate::driver::emac::Emac;
 
 use smoltcp::phy::{Checksum, ChecksumCapabilities, Device, DeviceCapabilities, Medium};
 use smoltcp::time::Instant;

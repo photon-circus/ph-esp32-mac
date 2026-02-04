@@ -172,7 +172,8 @@ pub use driver::config::{
 };
 pub use dma::{DescriptorRing, DmaEngine};
 pub use driver::error::{ConfigError, ConfigResult, DmaError, DmaResult, Error, IoError, IoResult, Result};
-pub use driver::mac::{Emac, EmacDefault, EmacLarge, EmacSmall, InterruptStatus};
+pub use driver::emac::{Emac, EmacDefault, EmacLarge, EmacSmall};
+pub use driver::interrupt::InterruptStatus;
 
 // Re-export register access types
 pub use internal::register::dma::DmaRegs;
