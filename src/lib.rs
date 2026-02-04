@@ -153,20 +153,11 @@ pub mod register {
     pub use crate::internal::register::*;
 }
 
-#[cfg(feature = "smoltcp")]
-pub mod smoltcp;
-
-#[cfg(feature = "critical-section")]
-pub mod sync_primitives;
+#[cfg(any(feature = "smoltcp", feature = "esp-hal"))]
+pub mod integration;
 
 #[cfg(feature = "critical-section")]
 pub mod sync;
-
-#[cfg(feature = "esp-hal")]
-pub mod esp_hal;
-
-#[cfg(feature = "async")]
-pub mod asynch;
 
 // Test utilities (only available during testing)
 #[cfg(test)]
@@ -205,7 +196,7 @@ pub use sync::{SharedEmac, SharedEmacDefault, SharedEmacLarge, SharedEmacSmall};
 
 // Re-export async types when async feature is enabled
 #[cfg(feature = "async")]
-pub use asynch::{AsyncEmacExt, RX_WAKER, TX_WAKER, async_interrupt_handler};
+pub use sync::asynch::{AsyncEmacExt, RX_WAKER, TX_WAKER, async_interrupt_handler};
 
 // =============================================================================
 // Constants (re-exported from internal constants module)
