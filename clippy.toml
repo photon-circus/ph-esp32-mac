@@ -3,7 +3,7 @@
 # Lint levels are defined in src/lib.rs; this file only stores configuration values.
 
 # MSRV for this project (Rust 2024 edition)
-msrv = "1.85.0"
+msrv = "1.92.0"
 
 # Allow slightly longer functions for driver code
 too-many-lines-threshold = 150

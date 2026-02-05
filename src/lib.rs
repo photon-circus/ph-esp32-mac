@@ -120,12 +120,6 @@
 #![deny(missing_docs)]
 #![allow(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
-
-#[cfg(all(feature = "esp32", feature = "esp32p4"))]
-compile_error!("Features 'esp32' and 'esp32p4' are mutually exclusive.");
-
-#[cfg(not(any(feature = "esp32", feature = "esp32p4")))]
-compile_error!("Either feature 'esp32' or 'esp32p4' must be enabled. The default is 'esp32'.");
 // Clippy lint levels live here; thresholds and config are in clippy.toml.
 #![deny(clippy::correctness)]
 #![warn(
@@ -171,6 +165,11 @@ compile_error!("Either feature 'esp32' or 'esp32p4' must be enabled. The default
     clippy::items_after_statements,
     clippy::let_underscore_future,
 )]
+#[cfg(all(feature = "esp32", feature = "esp32p4"))]
+compile_error!("Features 'esp32' and 'esp32p4' are mutually exclusive.");
+
+#[cfg(not(any(feature = "esp32", feature = "esp32p4")))]
+compile_error!("Either feature 'esp32' or 'esp32p4' must be enabled. The default is 'esp32'.");
 // #![allow(dead_code)] // Temporarily disabled to identify unused code
 
 // =============================================================================
