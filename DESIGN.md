@@ -696,14 +696,14 @@ fn main() {
     
     EMAC.with(|emac| {
         emac.init(config, &mut delay).unwrap();
-        emac.enable_emac_interrupt(emac_handler);  // ← esp-hal integration
+        emac.bind_interrupt(emac_handler);  // ← esp-hal integration
         emac.start().unwrap();
     });
 }
 ```
 
 The `esp-hal` feature provides:
-- `EmacExt` trait: `enable_emac_interrupt()`, `disable_emac_interrupt()`
+- `EmacExt` trait: `bind_interrupt()`, `disable_interrupt()`
 - `emac_isr!` macro: Convenience macro for defining ISR handlers
 - `EspHalEmac`: Wrapper for future peripheral ownership integration
 - Re-exports: `Delay`, `Priority`, `InterruptHandler`, `Interrupt`
@@ -760,7 +760,7 @@ emac_isr!(ASYNC_HANDLER, Priority::Priority1, {
 });
 
 // In main:
-emac.enable_emac_interrupt(ASYNC_HANDLER);
+emac.bind_interrupt(ASYNC_HANDLER);
 ```
 
 ### critical-section Feature

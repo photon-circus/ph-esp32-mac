@@ -18,8 +18,7 @@
 //! // Define interrupt handler using esp-hal-style macro
 //! emac_isr!(EMAC_IRQ, Priority::Priority1, {
 //!     EMAC.with(|emac| {
-//!         let status = emac.read_interrupt_status();
-//!         emac.clear_interrupts(status);
+//!         let status = emac.handle_interrupt();
 //!         
 //!         if status.rx_complete() {
 //!             // Signal RX task...
@@ -37,7 +36,7 @@
 //!         .unwrap();
 //!     
 //!     // Enable interrupt with esp-hal
-//!     emac.enable_emac_interrupt(EMAC_IRQ);
+//!     emac.bind_interrupt(EMAC_IRQ);
 //!     
 //!     emac.start().unwrap();
 //! }
@@ -205,23 +204,22 @@ pub trait EmacExt {
     /// #[esp_hal::handler(priority = Priority::Priority1)]
     /// fn emac_handler() {
     ///     EMAC.with(|emac| {
-    ///         let status = emac.read_interrupt_status();
-    ///         emac.clear_interrupts(status);
+    ///         let _status = emac.handle_interrupt();
     ///     });
     /// }
     ///
-    /// emac.enable_emac_interrupt(emac_handler);
+    /// emac.bind_interrupt(emac_handler);
     /// ```
-    fn enable_emac_interrupt(&mut self, handler: InterruptHandler);
+    fn bind_interrupt(&mut self, handler: InterruptHandler);
 
     /// Disable the EMAC interrupt.
     ///
     /// Call this before reconfiguring the EMAC or when shutting down.
-    fn disable_emac_interrupt(&mut self);
+    fn disable_interrupt(&mut self);
 }
 
 impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt for crate::Emac<RX, TX, BUF> {
-    fn enable_emac_interrupt(&mut self, handler: InterruptHandler) {
+    fn bind_interrupt(&mut self, handler: InterruptHandler) {
         // Disable on other cores if multi-core
         #[cfg(multi_core)]
         for core in esp_hal::system::Cpu::other() {
@@ -237,7 +235,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt for crate::Emac
             .expect("Failed to enable EMAC interrupt");
     }
 
-    fn disable_emac_interrupt(&mut self) {
+    fn disable_interrupt(&mut self) {
         esp_hal::interrupt::disable(esp_hal::system::Cpu::current(), EMAC_INTERRUPT);
     }
 }
@@ -264,15 +262,14 @@ impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt for crate::Emac
 /// // Simple handler
 /// emac_isr!(EMAC_HANDLER, Priority::Priority1, {
 ///     EMAC.with(|emac| {
-///         let status = emac.read_interrupt_status();
-///         emac.clear_interrupts(status);
+///         let _status = emac.handle_interrupt();
 ///     });
 /// });
 ///
 /// // In main, enable the interrupt
 /// fn main() {
 ///     // ... init emac ...
-///     unsafe { &mut *EMAC.get() }.enable_emac_interrupt(EMAC_HANDLER);
+///     unsafe { &mut *EMAC.get() }.bind_interrupt(EMAC_HANDLER);
 /// }
 /// ```
 ///
@@ -378,12 +375,12 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> core::ops::DerefMut
 impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmacExt
     for EspHalEmac<'a, RX, TX, BUF>
 {
-    fn enable_emac_interrupt(&mut self, handler: InterruptHandler) {
-        self.inner.enable_emac_interrupt(handler);
+    fn bind_interrupt(&mut self, handler: InterruptHandler) {
+        self.inner.bind_interrupt(handler);
     }
 
-    fn disable_emac_interrupt(&mut self) {
-        self.inner.disable_emac_interrupt();
+    fn disable_interrupt(&mut self) {
+        self.inner.disable_interrupt();
     }
 }
 

@@ -490,7 +490,7 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     emac.start().unwrap();
-    emac.enable_emac_interrupt(EMAC_IRQ);
+    emac.bind_interrupt(EMAC_IRQ);
     info!("EMAC started");
 
     // Create embassy-net stack.

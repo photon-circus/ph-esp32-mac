@@ -80,8 +80,8 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 **Proposed API Checklist (esp-hal-first facade)**
 - [x] `EmacBuilder::new(&mut Emac)` with esp-hal defaults
 - [x] `EmacConfig::rmii_esp32_default()` (or `EmacConfig::esp_hal_default()`)
-- [ ] `EmacExt::bind_interrupt(handler)` (or `Emac::bind_interrupt(handler)`)
-- [ ] `Emac::handle_interrupt()` (clears status + wakes async state if present)
+- [x] `EmacExt::bind_interrupt(handler)` (or `Emac::bind_interrupt(handler)`)
+- [x] `Emac::handle_interrupt()` (clears status + wakes async state if present)
 - [ ] `EmacPhyBundle::new(emac, phy, mdio, delay)` (optional convenience)
 - [ ] `EmacPhyBundle::wait_link_up(timeout)` helper
 - [ ] `doc(cfg(feature = "esp-hal"))` and “happy path” snippet
@@ -121,7 +121,7 @@ let mut mdio = MdioController::new(delay);
 let mut phy = Lan8720a::new(0);
 phy.init(&mut mdio)?;
 
-emac.enable_emac_interrupt(handler);
+emac.bind_interrupt(handler);
 ```
 
 _After (esp-hal facade, minimal boilerplate)_
@@ -165,6 +165,7 @@ emac.bind_interrupt(EMAC_ISR);
 - **Exit criteria:** Host `cargo check --features esp-hal` requires the esp toolchain (esp-rom-sys target features); examples compile on target toolchain.
 
 **Sprint 2 — Interrupt Wiring (1 week)**
+- **Status:** ✅ Completed
 - **Goals:** Reduce ISR wiring boilerplate for esp-hal users.
 - **Work items:**
   - Add `Emac::handle_interrupt()` and `EmacExt::bind_interrupt(handler)` (or equivalent).

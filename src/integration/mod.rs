@@ -28,7 +28,7 @@
 //! ```ignore
 //! // With esp-hal
 //! use ph_esp32_mac::integration::esp_hal::{EmacExt, Priority};
-//! emac.enable_emac_interrupt(handler);
+//! emac.bind_interrupt(handler);
 //!
 //! // With smoltcp
 //! use smoltcp::phy::Device;
