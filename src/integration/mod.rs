@@ -50,7 +50,7 @@ pub mod embassy_net;
 
 // Re-export key types for convenience when both features are enabled
 #[cfg(feature = "esp-hal")]
-pub use esp_hal::{EMAC_INTERRUPT, EmacBuilder, EmacExt, EspHalEmac};
+pub use esp_hal::{EMAC_INTERRUPT, EmacBuilder, EmacExt, EmacPhyBundle, EspHalEmac};
 
 #[cfg(feature = "smoltcp")]
 pub use smoltcp::{EmacRxToken, EmacTxToken, ethernet_address};

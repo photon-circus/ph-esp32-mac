@@ -7,6 +7,7 @@
 //! - [`emac_isr!`]: Macro for defining EMAC interrupt handlers with esp-hal semantics
 //! - [`emac_async_isr!`]: Macro for defining EMAC async ISR handlers
 //! - [`EmacBuilder`]: Builder for minimal-boilerplate esp-hal bring-up
+//! - [`EmacPhyBundle`]: Convenience wrapper for PHY + MDIO bring-up
 //! - Type aliases and re-exports for common esp-hal types
 //!
 //! # Usage
@@ -43,6 +44,20 @@
 //! }
 //! ```
 //!
+//! # PHY Bring-up Helper
+//!
+//! ```ignore
+//! use ph_esp32_mac::esp_hal::EmacPhyBundle;
+//!
+//! let mut emac_phy = EmacPhyBundle::new(
+//!     emac,
+//!     Lan8720a::new(PHY_ADDR),
+//!     MdioController::new(Delay::new()),
+//! );
+//! emac_phy.init_phy().unwrap();
+//! let _status = emac_phy.wait_link_up(&mut delay, 10_000, 200).unwrap();
+//! ```
+//!
 //! # Async Usage (per-instance wakers)
 //!
 //! ```ignore
@@ -73,6 +88,12 @@
 pub use esp_hal::delay::Delay;
 pub use esp_hal::interrupt::{self, InterruptHandler, Priority};
 pub use esp_hal::peripherals::Interrupt;
+
+use embedded_hal::delay::DelayNs;
+
+use crate::driver::error::{ConfigError, IoError};
+use crate::hal::mdio::MdioBus;
+use crate::phy::{LinkStatus, PhyDriver};
 
 /// Builder for esp-hal-friendly EMAC initialization.
 ///
@@ -189,6 +210,143 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmacBuilder<'a, RX,
         self.emac.init(self.config, delay)?;
         self.emac.start()?;
         Ok(self.emac)
+    }
+}
+
+/// Convenience wrapper for EMAC + PHY + MDIO bring-up with esp-hal.
+///
+/// This helper reduces boilerplate by bundling PHY initialization and
+/// link-up polling while keeping EMAC ownership explicit.
+pub struct EmacPhyBundle<'a, const RX: usize, const TX: usize, const BUF: usize, P, M> {
+    emac: &'a mut crate::Emac<RX, TX, BUF>,
+    phy: P,
+    mdio: M,
+}
+
+impl<'a, const RX: usize, const TX: usize, const BUF: usize, P, M>
+    EmacPhyBundle<'a, RX, TX, BUF, P, M>
+where
+    P: PhyDriver,
+    M: MdioBus,
+{
+    /// Create a new EMAC/PHY bundle.
+    ///
+    /// # Arguments
+    ///
+    /// * `emac` - Initialized EMAC instance in its final memory location
+    /// * `phy` - PHY driver instance
+    /// * `mdio` - MDIO bus implementation
+    pub fn new(emac: &'a mut crate::Emac<RX, TX, BUF>, phy: P, mdio: M) -> Self {
+        Self { emac, phy, mdio }
+    }
+
+    /// Borrow the EMAC instance.
+    pub fn emac_mut(&mut self) -> &mut crate::Emac<RX, TX, BUF> {
+        self.emac
+    }
+
+    /// Borrow the PHY instance.
+    pub fn phy_mut(&mut self) -> &mut P {
+        &mut self.phy
+    }
+
+    /// Borrow the MDIO bus.
+    pub fn mdio_mut(&mut self) -> &mut M {
+        &mut self.mdio
+    }
+
+    /// Initialize the PHY.
+    ///
+    /// # Errors
+    ///
+    /// Propagates PHY/MDIO errors from the underlying driver.
+    pub fn init_phy(&mut self) -> crate::Result<()> {
+        self.phy.init(&mut self.mdio)
+    }
+
+    /// Read the current link status and apply speed/duplex to the EMAC.
+    ///
+    /// # Returns
+    ///
+    /// `Some(LinkStatus)` when link is up, `None` when link is down.
+    ///
+    /// # Errors
+    ///
+    /// Propagates PHY/MDIO errors from the underlying driver.
+    pub fn link_status(&mut self) -> crate::Result<Option<LinkStatus>> {
+        let status = self.phy.link_status(&mut self.mdio)?;
+        self.apply_link(status);
+        Ok(status)
+    }
+
+    /// Poll for link changes and apply speed/duplex to the EMAC.
+    ///
+    /// # Returns
+    ///
+    /// `Some(LinkStatus)` when a new link is established, `None` otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Propagates PHY/MDIO errors from the underlying driver.
+    pub fn poll_link(&mut self) -> crate::Result<Option<LinkStatus>> {
+        let status = self.phy.poll_link(&mut self.mdio)?;
+        self.apply_link(status);
+        Ok(status)
+    }
+
+    /// Wait for link-up with a timeout.
+    ///
+    /// # Arguments
+    ///
+    /// * `delay` - Delay provider
+    /// * `timeout_ms` - Total timeout in milliseconds
+    /// * `poll_interval_ms` - Poll interval in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Link status once a link is established.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IoError::Timeout`] if the timeout expires.
+    /// Propagates PHY/MDIO errors from the underlying driver.
+    pub fn wait_link_up<D: DelayNs>(
+        &mut self,
+        delay: &mut D,
+        timeout_ms: u32,
+        poll_interval_ms: u32,
+    ) -> crate::Result<LinkStatus> {
+        if poll_interval_ms == 0 {
+            return Err(ConfigError::InvalidConfig.into());
+        }
+
+        if let Some(status) = self.link_status()? {
+            return Ok(status);
+        }
+
+        let mut elapsed_ms = 0u32;
+        while elapsed_ms < timeout_ms {
+            delay.delay_ms(poll_interval_ms);
+            elapsed_ms = elapsed_ms.saturating_add(poll_interval_ms);
+
+            if let Some(status) = self.link_status()? {
+                return Ok(status);
+            }
+        }
+
+        Err(IoError::Timeout.into())
+    }
+
+    /// Consume the bundle and return the parts.
+    pub fn into_parts(self) -> (&'a mut crate::Emac<RX, TX, BUF>, P, M) {
+        (self.emac, self.phy, self.mdio)
+    }
+
+    fn apply_link(&mut self, status: Option<LinkStatus>) {
+        if let Some(status) = status {
+            self.emac.set_speed(status.speed);
+            self.emac.set_duplex(status.duplex);
+        }
     }
 }
 

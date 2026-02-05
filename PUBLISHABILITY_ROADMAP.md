@@ -82,8 +82,8 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 - [x] `EmacConfig::rmii_esp32_default()` (or `EmacConfig::esp_hal_default()`)
 - [x] `EmacExt::bind_interrupt(handler)` (or `Emac::bind_interrupt(handler)`)
 - [x] `Emac::handle_interrupt()` (clears status + wakes async state if present)
-- [ ] `EmacPhyBundle::new(emac, phy, mdio, delay)` (optional convenience)
-- [ ] `EmacPhyBundle::wait_link_up(timeout)` helper
+- [x] `EmacPhyBundle::new(emac, phy, mdio, delay)` (optional convenience)
+- [x] `EmacPhyBundle::wait_link_up(timeout)` helper
 - [ ] `doc(cfg(feature = "esp-hal"))` and “happy path” snippet
 
 **Interrupt Wiring & Ergonomics**
@@ -185,6 +185,7 @@ emac.bind_interrupt(EMAC_ISR);
 - **Exit criteria:** esp-hal + async example builds; async ISR wiring is one-line.
 
 **Sprint 4 — PHY/Link Convenience & Polishing (1 week)**
+- **Status:** ✅ Completed
 - **Goals:** Minimize bring-up steps and consolidate PHY handling.
 - **Work items:**
   - Add `EmacPhyBundle` (or `EmacWithPhy`) convenience wrapper.

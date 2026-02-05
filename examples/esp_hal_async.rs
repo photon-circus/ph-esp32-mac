@@ -32,10 +32,10 @@ use esp_hal::{
 use log::{info, warn};
 use static_cell::StaticCell;
 
-use ph_esp32_mac::esp_hal::{EmacBuilder, EmacExt, emac_async_isr};
+use ph_esp32_mac::esp_hal::{EmacBuilder, EmacExt, EmacPhyBundle, emac_async_isr};
 use ph_esp32_mac::{
-    AsyncEmacExt, AsyncEmacState, Emac, EmacConfig, Lan8720a, MdioController, PhyDriver,
-    PhyInterface, RmiiClockMode,
+    AsyncEmacExt, AsyncEmacState, Emac, EmacConfig, Lan8720a, MdioController, PhyInterface,
+    RmiiClockMode,
 };
 
 // =============================================================================
@@ -121,21 +121,23 @@ async fn main(spawner: Spawner) -> ! {
         .init(&mut delay)
         .unwrap();
 
-    // Initialize PHY and set initial MAC speed/duplex.
-    let mut phy = Lan8720a::new(PHY_ADDR);
-    let mut mdio = MdioController::new(Delay::new());
-    phy.init(&mut mdio).unwrap();
+    // Initialize PHY and wait for link.
+    {
+        let mut emac_phy = EmacPhyBundle::new(
+            emac,
+            Lan8720a::new(PHY_ADDR),
+            MdioController::new(Delay::new()),
+        );
+        emac_phy.init_phy().unwrap();
 
-    if let Some(status) = phy.link_status(&mut mdio).unwrap() {
-        emac.set_speed(status.speed);
-        emac.set_duplex(status.duplex);
-        info!("Link up: {:?}", status);
-    } else {
-        warn!("Link down");
+        match emac_phy.wait_link_up(&mut delay, 10_000, 200) {
+            Ok(status) => info!("Link up: {:?}", status),
+            Err(err) => warn!("Link wait failed: {:?}", err),
+        }
+
+        emac_phy.emac_mut().start().unwrap();
+        emac_phy.emac_mut().bind_interrupt(EMAC_IRQ);
     }
-
-    emac.start().unwrap();
-    emac.bind_interrupt(EMAC_IRQ);
     info!("EMAC started; awaiting frames...");
 
     spawner.spawn(rx_task(emac_ptr)).unwrap();

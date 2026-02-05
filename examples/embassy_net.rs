@@ -37,7 +37,7 @@ use esp_hal::{
 use log::{info, warn};
 use static_cell::StaticCell;
 
-use ph_esp32_mac::integration::esp_hal::EmacExt;
+use ph_esp32_mac::integration::esp_hal::{EmacExt, EmacPhyBundle};
 use ph_esp32_mac::{
     Emac, EmacConfig, EmbassyEmac, EmbassyEmacState, Lan8720a, MdioController, PhyDriver,
     PhyInterface, RmiiClockMode,
@@ -477,16 +477,24 @@ async fn main(spawner: Spawner) -> ! {
     emac.init(config, &mut delay).unwrap();
 
     // Initialize PHY and set initial MAC speed/duplex.
-    let mut phy = Lan8720a::new(PHY_ADDR);
-    let mut mdio = MdioController::new(Delay::new());
-    phy.init(&mut mdio).unwrap();
+    {
+        let mut emac_phy = EmacPhyBundle::new(
+            emac,
+            Lan8720a::new(PHY_ADDR),
+            MdioController::new(Delay::new()),
+        );
+        emac_phy.init_phy().unwrap();
 
-    if let Some(status) = phy.link_status(&mut mdio).unwrap() {
-        emac.set_speed(status.speed);
-        emac.set_duplex(status.duplex);
-        EMAC_STATE.set_link_state(LinkState::Up);
-    } else {
-        EMAC_STATE.set_link_state(LinkState::Down);
+        match emac_phy.link_status().unwrap() {
+            Some(status) => {
+                info!("Link up: {:?}", status);
+                EMAC_STATE.set_link_state(LinkState::Up);
+            }
+            None => {
+                warn!("Link down");
+                EMAC_STATE.set_link_state(LinkState::Down);
+            }
+        }
     }
 
     emac.start().unwrap();
