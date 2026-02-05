@@ -19,10 +19,7 @@ fn log_rx_error(desc: &RxDescriptor) {
 
     warn!(
         "RX frame error: rdes0=0x{:08x} flags=0x{:08x} sa_filter_fail={} da_filter_fail={}",
-        raw,
-        error_flags,
-        sa_fail,
-        da_fail
+        raw, error_flags, sa_fail, da_fail
     );
 }
 /// DMA Engine with statically allocated buffers.

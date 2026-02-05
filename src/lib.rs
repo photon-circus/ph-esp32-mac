@@ -140,7 +140,7 @@
     clippy::unnested_or_patterns,
     clippy::std_instead_of_core,
     clippy::std_instead_of_alloc,
-    clippy::alloc_instead_of_core,
+    clippy::alloc_instead_of_core
 )]
 #![allow(
     clippy::mod_module_files,
@@ -163,7 +163,7 @@
     clippy::module_name_repetitions,
     clippy::wildcard_imports,
     clippy::items_after_statements,
-    clippy::let_underscore_future,
+    clippy::let_underscore_future
 )]
 #[cfg(all(feature = "esp32", feature = "esp32p4"))]
 compile_error!("Features 'esp32' and 'esp32p4' are mutually exclusive.");

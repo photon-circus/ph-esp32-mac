@@ -22,7 +22,7 @@
 #![no_main]
 
 use embassy_executor::Spawner;
-use embassy_net::{udp::UdpSocket, Config, ConfigV4, DhcpConfig, StackResources};
+use embassy_net::{Config, ConfigV4, DhcpConfig, StackResources, udp::UdpSocket};
 use embassy_net_driver::{Capabilities, Driver, HardwareAddress, LinkState, RxToken, TxToken};
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -37,11 +37,11 @@ use esp_hal::{
 use log::{info, warn};
 use static_cell::StaticCell;
 
+use ph_esp32_mac::integration::esp_hal::EmacExt;
 use ph_esp32_mac::{
-    EmbassyEmac, EmbassyEmacState, Emac, EmacConfig, Lan8720a, MdioController, PhyDriver,
+    Emac, EmacConfig, EmbassyEmac, EmbassyEmacState, Lan8720a, MdioController, PhyDriver,
     PhyInterface, RmiiClockMode,
 };
-use ph_esp32_mac::integration::esp_hal::EmacExt;
 
 // =============================================================================
 // Board Configuration
@@ -102,23 +102,28 @@ struct LoggingTxToken<T> {
 }
 
 impl<D: Driver> Driver for LoggingDriver<D> {
-    type RxToken<'a> = LoggingRxToken<D::RxToken<'a>> where Self: 'a;
-    type TxToken<'a> = LoggingTxToken<D::TxToken<'a>> where Self: 'a;
+    type RxToken<'a>
+        = LoggingRxToken<D::RxToken<'a>>
+    where
+        Self: 'a;
+    type TxToken<'a>
+        = LoggingTxToken<D::TxToken<'a>>
+    where
+        Self: 'a;
 
     fn receive(
         &mut self,
         cx: &mut core::task::Context<'_>,
     ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-        self.inner.receive(cx).map(|(rx, tx)| {
-            (
-                LoggingRxToken { inner: rx },
-                LoggingTxToken { inner: tx },
-            )
-        })
+        self.inner
+            .receive(cx)
+            .map(|(rx, tx)| (LoggingRxToken { inner: rx }, LoggingTxToken { inner: tx }))
     }
 
     fn transmit(&mut self, cx: &mut core::task::Context<'_>) -> Option<Self::TxToken<'_>> {
-        self.inner.transmit(cx).map(|tx| LoggingTxToken { inner: tx })
+        self.inner
+            .transmit(cx)
+            .map(|tx| LoggingTxToken { inner: tx })
     }
 
     fn link_state(&mut self, cx: &mut core::task::Context<'_>) -> LinkState {
@@ -271,7 +276,11 @@ fn log_dhcp(direction: &str, info: &DhcpInfo) {
         "{} DHCP {}->{} {}.{}.{}.{}:{} -> {}.{}.{}.{}:{} len={}",
         direction,
         msg_type_name(info.msg_type),
-        if info.src_port == 68 { "client" } else { "server" },
+        if info.src_port == 68 {
+            "client"
+        } else {
+            "server"
+        },
         info.src_ip[0],
         info.src_ip[1],
         info.src_ip[2],
@@ -391,10 +400,7 @@ async fn udp_echo_task(stack: embassy_net::Stack<'static>) -> ! {
 }
 
 #[embassy_executor::task]
-async fn link_task(
-    state: &'static EmbassyEmacState,
-    emac: *mut Emac<10, 10, 1600>,
-) -> ! {
+async fn link_task(state: &'static EmbassyEmacState, emac: *mut Emac<10, 10, 1600>) -> ! {
     let mut mdio = MdioController::new(Delay::new());
     let mut phy = Lan8720a::new(PHY_ADDR);
     let mut last_state = state.link_state();

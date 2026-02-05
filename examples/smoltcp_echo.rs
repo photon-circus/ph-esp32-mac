@@ -173,8 +173,7 @@ fn main() -> ! {
     let hw_addr = EthernetAddress(MAC_ADDR);
     let mut smol_config = Config::new(hw_addr.into());
     let rng = Rng::new();
-    smol_config.random_seed =
-        ((rng.random() as u64) << 32) | (rng.random() as u64);
+    smol_config.random_seed = ((rng.random() as u64) << 32) | (rng.random() as u64);
 
     // Create the network interface
     let mut iface = critical_section::with(|cs| {
@@ -228,8 +227,7 @@ fn main() -> ! {
     loop {
         // Get current timestamp for smoltcp
         let now = Instant::now();
-        let smol_now =
-            SmolInstant::from_millis(now.duration_since_epoch().as_millis() as i64);
+        let smol_now = SmolInstant::from_millis(now.duration_since_epoch().as_millis() as i64);
 
         // Poll the interface (handles ARP, ICMP, etc.)
         critical_section::with(|cs| {
@@ -254,7 +252,8 @@ fn main() -> ! {
                         iface.routes_mut().remove_default_ipv4_route();
                     }
 
-                    let address_changed = dhcp_last_address.map_or(true, |addr| addr != config.address);
+                    let address_changed =
+                        dhcp_last_address.map_or(true, |addr| addr != config.address);
                     if address_changed {
                         info!("DHCP address: {}", config.address);
                         if let Some(router) = config.router {

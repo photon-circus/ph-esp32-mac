@@ -260,16 +260,17 @@ impl<const RX: usize, const TX: usize, const BUF: usize> TxToken
 // Driver Implementation
 // =============================================================================
 
-impl<const RX: usize, const TX: usize, const BUF: usize> Driver
-    for EmbassyEmac<'_, RX, TX, BUF>
-{
-    type RxToken<'a> = EmbassyRxToken<'a, RX, TX, BUF> where Self: 'a;
-    type TxToken<'a> = EmbassyTxToken<'a, RX, TX, BUF> where Self: 'a;
+impl<const RX: usize, const TX: usize, const BUF: usize> Driver for EmbassyEmac<'_, RX, TX, BUF> {
+    type RxToken<'a>
+        = EmbassyRxToken<'a, RX, TX, BUF>
+    where
+        Self: 'a;
+    type TxToken<'a>
+        = EmbassyTxToken<'a, RX, TX, BUF>
+    where
+        Self: 'a;
 
-    fn receive(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
+    fn receive(&mut self, cx: &mut Context<'_>) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
         // SAFETY: The raw pointer is valid for the lifetime of the driver.
         let emac = unsafe { &mut *self.emac };
 
