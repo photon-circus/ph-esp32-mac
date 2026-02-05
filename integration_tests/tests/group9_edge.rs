@@ -332,10 +332,9 @@ pub fn test_rx_interrupt_fires(duration_ms: u32) -> TestResult {
 /// IT-9-010: Test async waker registration (basic functionality)
 /// Note: Full async testing requires embassy runtime which isn't setup here
 pub fn test_async_wakers() -> TestResult {
-    // The wakers exist in the library and can be called, 
-    // but full async testing would require an async runtime
-    info!("  Async waker API exists (TX_WAKER, RX_WAKER)");
-    info!("  Full async test requires embassy runtime - skipping");
+    // Async support is feature-gated and requires an async runtime.
+    info!("  Async per-instance waker state available (AsyncEmacState)");
+    info!("  Full async test requires async feature + runtime - skipping");
     
     // We could test that async_interrupt_handler exists by checking
     // if interrupt handling works, which we test in other tests

@@ -228,7 +228,7 @@ pub use sync::{SharedEmac, SharedEmacDefault, SharedEmacLarge, SharedEmacSmall};
 
 // Re-export async types when async feature is enabled
 #[cfg(feature = "async")]
-pub use sync::asynch::{AsyncEmacExt, RX_WAKER, TX_WAKER, async_interrupt_handler};
+pub use sync::asynch::{AsyncEmacExt, AsyncEmacState, async_interrupt_handler};
 
 // Re-export embassy-net types when embassy-net feature is enabled
 #[cfg(feature = "embassy-net")]

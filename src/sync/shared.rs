@@ -3,6 +3,8 @@
 //! Provides [`SharedEmac`] for synchronous ISR-safe access and
 //! [`AsyncSharedEmac`] for async-capable ISR-safe access.
 
+#[cfg(feature = "async")]
+use super::asynch::AsyncEmacState;
 use super::primitives::CriticalSectionCell;
 use crate::driver::emac::Emac;
 
@@ -66,11 +68,17 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Default
 /// ISR-safe async-capable EMAC wrapper.
 ///
 /// Combines ISR-safety of [`SharedEmac`] with async/await capabilities.
+/// Call [`AsyncSharedEmac::handle_interrupt`] from the EMAC ISR to wake tasks.
 ///
 /// # Example
 ///
 /// ```ignore
 /// static EMAC: AsyncSharedEmac<10, 10, 1600> = AsyncSharedEmac::new();
+///
+/// #[interrupt]
+/// fn EMAC_IRQ() {
+///     EMAC.handle_interrupt();
+/// }
 ///
 /// async fn task() {
 ///     let mut buf = [0u8; 1600];
@@ -79,6 +87,8 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Default
 /// ```
 pub struct AsyncSharedEmac<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> {
     inner: CriticalSectionCell<Emac<RX_BUFS, TX_BUFS, BUF_SIZE>>,
+    #[cfg(feature = "async")]
+    async_state: AsyncEmacState,
 }
 
 impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
@@ -88,6 +98,8 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     pub const fn new() -> Self {
         Self {
             inner: CriticalSectionCell::new(Emac::new()),
+            #[cfg(feature = "async")]
+            async_state: AsyncEmacState::new(),
         }
     }
 
@@ -109,12 +121,23 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.inner.try_with(f)
     }
 
+    /// Get the async state used by this wrapper.
+    #[cfg(feature = "async")]
+    pub fn async_state(&self) -> &AsyncEmacState {
+        &self.async_state
+    }
+
+    /// Handle the EMAC interrupt and wake async tasks.
+    #[cfg(feature = "async")]
+    pub fn handle_interrupt(&self) {
+        self.async_state.handle_interrupt();
+    }
+
     /// Receive a frame asynchronously.
     ///
     /// Yields until a frame is available.
     #[cfg(feature = "async")]
     pub async fn receive_async(&self, buffer: &mut [u8]) -> crate::Result<usize> {
-        use super::asynch::RX_WAKER;
         use core::future::poll_fn;
         use core::task::Poll;
 
@@ -131,8 +154,20 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
                 Some(Ok(len)) => Poll::Ready(Ok(len)),
                 Some(Err(e)) => Poll::Ready(Err(e)),
                 None => {
-                    RX_WAKER.register(cx.waker());
-                    Poll::Pending
+                    self.async_state.register_rx(cx.waker());
+                    let retry = self.inner.with(|emac| {
+                        if emac.rx_available() {
+                            Some(emac.receive(buffer))
+                        } else {
+                            None
+                        }
+                    });
+
+                    match retry {
+                        Some(Ok(len)) => Poll::Ready(Ok(len)),
+                        Some(Err(e)) => Poll::Ready(Err(e)),
+                        None => Poll::Pending,
+                    }
                 }
             }
         })
@@ -144,7 +179,6 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// Yields until a TX buffer is available.
     #[cfg(feature = "async")]
     pub async fn transmit_async(&self, data: &[u8]) -> crate::Result<usize> {
-        use super::asynch::TX_WAKER;
         use core::future::poll_fn;
         use core::task::Poll;
 
@@ -161,8 +195,20 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
                 Some(Ok(len)) => Poll::Ready(Ok(len)),
                 Some(Err(e)) => Poll::Ready(Err(e)),
                 None => {
-                    TX_WAKER.register(cx.waker());
-                    Poll::Pending
+                    self.async_state.register_tx(cx.waker());
+                    let retry = self.inner.with(|emac| {
+                        if emac.tx_ready() {
+                            Some(emac.transmit(data))
+                        } else {
+                            None
+                        }
+                    });
+
+                    match retry {
+                        Some(Ok(len)) => Poll::Ready(Ok(len)),
+                        Some(Err(e)) => Poll::Ready(Err(e)),
+                        None => Poll::Pending,
+                    }
                 }
             }
         })

@@ -12,9 +12,10 @@
 //!   - [`AsyncSharedEmac`] - Async-capable ISR-safe EMAC wrapper
 //!
 //! - **Async Support** (`asynch`): Async/await support for EMAC operations
+//!   - [`AsyncEmacState`] - Per-instance waker state for RX/TX/error events
 //!   - [`AsyncEmacExt`] - Extension trait adding async methods to EMAC
 //!   - [`RxFuture`], [`TxFuture`] - Futures for async I/O
-//!   - Static wakers and interrupt handler
+//!   - Interrupt handler helpers for waking tasks
 //!
 //! # Feature Flags
 //!
@@ -65,6 +66,6 @@ pub mod asynch;
 
 #[cfg(feature = "async")]
 pub use asynch::{
-    AsyncEmacExt, ERR_WAKER, ErrorFuture, RX_WAKER, RxFuture, TX_WAKER, TxFuture,
-    async_interrupt_handler, peek_interrupt_status, reset_async_state,
+    AsyncEmacExt, AsyncEmacState, ErrorFuture, RxFuture, TxFuture, async_interrupt_handler,
+    peek_interrupt_status, reset_async_state,
 };

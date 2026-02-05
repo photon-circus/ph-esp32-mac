@@ -345,8 +345,8 @@ Several tests produce "soft pass" results when no traffic is present:
 
 IT-9-010 only verifies the async API exists:
 ```rust
-info!("  Async waker API exists (TX_WAKER, RX_WAKER)");
-info!("  Full async test requires embassy runtime - skipping");
+info!("  Async per-instance waker state available (AsyncEmacState)");
+info!("  Full async test requires async feature + runtime - skipping");
 ```
 
 **What's needed for full async tests:**

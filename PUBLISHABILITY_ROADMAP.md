@@ -65,11 +65,95 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 
 ### 3.2 esp-hal API Surface (target: `esp-hal` **1.0.0**)
 
-- Provide a first-class esp-hal constructor or builder that accepts:
-  - `esp_hal::delay::Delay` (or `DelayNs`) for timing.
-  - A consistent way to enable EMAC interrupts via `EmacExt` and helpers.
-- Consolidate pin/clock configuration docs in a single, esp-hal-oriented section.
-- Ensure the existing `EmacExt` API matches esp-hal 1.0.0 interrupt expectations and update examples accordingly.
+- **Goal:** Make `esp-hal` the primary, first-class facade so users can bring up EMAC with minimal boilerplate while preserving the driver’s stronger internal implementation.
+- **Breaking changes are acceptable** if they reduce setup friction for esp-hal consumers.
+
+**Facade & Constructor Strategy**
+- Provide a top-level esp-hal constructor (or builder) that hides raw register setup and reduces the “steps list” to a single call:
+  - `Emac::new_esp_hal(peripherals, config, clocks, dma, ...)` or `EmacBuilder::new(peripherals).with_clocks(...).with_phy(...).build()`.
+  - Accept `esp_hal::delay::Delay` (or `DelayNs`) directly.
+  - Accept `esp_hal` peripheral ownership patterns rather than raw `*mut` or statics wherever possible.
+- Add a minimal “happy path” facade that defaults the common RMII settings:
+  - `EmacConfig::esp_hal_default()` or `EmacConfig::rmii_esp32_default()`.
+  - Default RMII clock mode and GPIO routing for ESP32 (documented pins only).
+
+**Proposed API Checklist (esp-hal-first facade)**
+- [ ] `EmacBuilder::new(peripherals)` or `Emac::new_esp_hal(peripherals, config, clocks, ...)`
+- [ ] `EmacConfig::rmii_esp32_default()` (or `EmacConfig::esp_hal_default()`)
+- [ ] `EmacExt::bind_interrupt(handler)` (or `Emac::bind_interrupt(handler)`)
+- [ ] `Emac::handle_interrupt()` (clears status + wakes async state if present)
+- [ ] `EmacPhyBundle::new(emac, phy, mdio, delay)` (optional convenience)
+- [ ] `EmacPhyBundle::wait_link_up(timeout)` helper
+- [ ] `doc(cfg(feature = "esp-hal"))` and “happy path” snippet
+
+**Interrupt Wiring & Ergonomics**
+- Provide a single helper to bind interrupts and wire async wakeups:
+  - Example: `emac.enable_interrupts(handler)` or `EmacExt::bind_interrupt(handler)`; align with esp-hal 1.0.0 expectations.
+  - Expose a `handle_interrupt()` method on the esp-hal facade to avoid manual status read/clear boilerplate.
+- Provide an opt-in `esp_hal`-specific “interrupt glue” module that:
+  - Exposes `emac_isr!` helpers or a ready-to-use handler stub.
+  - Bridges to `AsyncEmacState` so async users don’t manually stitch ISR logic.
+
+**PHY + Link Management Simplification**
+- Offer a thin esp-hal wrapper that bundles PHY + MDIO setup:
+  - `EmacWithPhy::new(emac, phy, mdio, delay)` or `EmacPhyBundle`.
+  - Provide a convenience `wait_link_up()` helper that hides repeated polling loops.
+- Document the recommended PHY reset path for esp-hal (optional pin), with a single helper call.
+
+**Boilerplate Reduction Targets**
+- Reduce bring-up to ~10 lines in esp-hal examples:
+  - One call for clocks/pins, one for EMAC init/start, one for PHY init/link, one for interrupt binding.
+- Provide one minimal esp-hal example with just link-up + DHCP/stack (no extra logging).
+- Provide one advanced esp-hal example showing async integration with `AsyncEmacState` + ISR binding.
+
+**Before / After (Goal)**
+
+_Before (current, verbose)_
+
+```rust
+// Pseudocode: multiple steps + manual wiring
+let mut delay = Delay::new();
+let mut emac = unsafe { &mut EMAC };
+emac.init(config, &mut delay)?;
+emac.start()?;
+
+let mut mdio = MdioController::new(delay);
+let mut phy = Lan8720a::new(0);
+phy.init(&mut mdio)?;
+
+emac.enable_emac_interrupt(handler);
+```
+
+_After (esp-hal facade, minimal boilerplate)_
+
+```rust
+let mut delay = Delay::new();
+let (emac, mut phy) = EmacBuilder::new(peripherals)
+    .with_config(EmacConfig::rmii_esp32_default())
+    .with_delay(&mut delay)
+    .build()?;
+
+emac.bind_interrupt(handler);
+emac.start()?;
+phy.wait_link_up(&mut emac, &mut delay)?;
+```
+
+_Async + ISR wiring (esp-hal facade)_
+
+```rust
+static ASYNC_STATE: AsyncEmacState = AsyncEmacState::new();
+
+emac_isr!(EMAC_ISR, Priority::Priority1, {
+    ph_esp32_mac::async_interrupt_handler(&ASYNC_STATE);
+});
+
+emac.bind_interrupt(EMAC_ISR);
+```
+
+**API Alignment + Docs**
+- Consolidate esp-hal specific docs into one section with a single “happy path” snippet.
+- Ensure `EmacExt` matches esp-hal 1.0.0 API names, interrupt model, and ownership patterns.
+- Add `doc(cfg(feature = "esp-hal"))` for esp-hal-specific APIs and examples.
 
 ### 3.3 Embassy Driver Integration (target: `embassy-net` **0.7.0**)
 
@@ -86,18 +170,17 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 
 ### 3.4 Async/Waker Architecture
 
-- **Current state:** `sync::asynch` uses global RX/TX/ERR wakers and a global interrupt handler, while the Embassy driver already uses per-instance wakers in `EmbassyEmacState`. This split risks cross-instance interference and duplicates logic.
-- **Target architecture:**
-  - Introduce a per-instance async state (e.g., `AsyncEmacState`) with RX/TX/ERR (and optional link) wakers plus any cached interrupt/link flags, stored in static memory with `CriticalSectionCell` and `const fn new`.
-  - Bind async operations to a specific state (`AsyncEmac<'a, ...>` wrapper or `Emac::with_async_state(&'a AsyncEmacState)`), and have futures register wakers on that state instead of global statics.
-  - Provide `async_interrupt_handler(state: &AsyncEmacState)` and `reset_async_state(state)` helpers; share common interrupt handling logic with `EmbassyEmacState::handle_interrupt` to avoid divergence.
-  - Preserve the “register → recheck → Pending” pattern to avoid missed wakeups.
-- **Compatibility:** Break the API if needed; remove the global-waker path entirely in favor of per-instance state.
-- **Constraints:** Keep async paths `no_std`/`no_alloc` and rely on static buffers and existing DMA rings.
+- **Status:** ✅ Implemented (breaking change accepted).
+- **Implemented architecture:**
+  - `AsyncEmacState` provides per-instance RX/TX/ERR wakers with `const fn new()`.
+  - `AsyncEmacExt::{receive_async, transmit_async, wait_for_error}` now require `&AsyncEmacState`.
+  - `async_interrupt_handler(state)` and `reset_async_state(state)` are per-instance helpers.
+  - `AsyncSharedEmac` owns an async state and exposes `handle_interrupt()` for ISR wiring.
+  - Async futures use the “register → recheck → Pending” pattern to avoid missed wakeups.
+- **Constraints preserved:** `no_std`/`no_alloc`, static buffers, existing DMA rings.
 - **Validation:**
-  - Unit tests prove wakers are isolated across multiple async states.
-  - Re-initialization clears stale wakers (`reset_async_state`).
-  - Docs include the ISR call pattern and esp-hal interrupt binding example.
+  - Unit tests cover per-instance isolation and reset behavior.
+  - Docs updated with the new ISR call pattern and esp-hal binding example.
 
 ### 3.5 Embassy Examples and Runner Model
 

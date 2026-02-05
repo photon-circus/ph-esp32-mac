@@ -713,15 +713,15 @@ The `esp-hal` feature provides:
 Enables async/await support using interrupt-driven wakers:
 
 ```rust
-use ph_esp32_mac::{Emac, EmacConfig, AsyncEmacExt};
-use ph_esp32_mac::asynch::async_interrupt_handler;
+use ph_esp32_mac::{AsyncEmacExt, AsyncEmacState, Emac, EmacConfig, async_interrupt_handler};
 
 static mut EMAC: Emac<10, 10, 1600> = Emac::new();
+static ASYNC_STATE: AsyncEmacState = AsyncEmacState::new();
 
 // Interrupt handler must call async_interrupt_handler()
 #[interrupt]
 fn ETH_MAC() {
-    async_interrupt_handler();
+    async_interrupt_handler(&ASYNC_STATE);
 }
 
 async fn ethernet_task() {
@@ -730,30 +730,33 @@ async fn ethernet_task() {
     
     loop {
         // Async receive - yields to executor when no frames available
-        let len = emac.receive_async(&mut rx_buf).await.unwrap();
+        let len = emac.receive_async(&ASYNC_STATE, &mut rx_buf).await.unwrap();
         
         // Process the frame...
         let response = process(&rx_buf[..len]);
         
         // Async transmit - yields if TX buffers are full
-        let _ = emac.transmit_async(&response).await.unwrap();
+        let _ = emac.transmit_async(&ASYNC_STATE, &response).await.unwrap();
     }
 }
 ```
 
 The `async` feature provides:
+- `AsyncEmacState`: Per-instance RX/TX/error waker state
 - `AsyncEmacExt` trait: `receive_async()`, `transmit_async()`, `wait_for_error()`
-- `async_interrupt_handler()`: ISR handler that wakes async tasks
-- `RX_WAKER`, `TX_WAKER`, `ERR_WAKER`: Static wakers for each event type
+- `async_interrupt_handler(state)`: ISR handler that wakes async tasks
 - `RxFuture`, `TxFuture`, `ErrorFuture`: Future types for manual use
 
 When combined with `esp-hal`:
 
 ```rust
-use ph_esp32_mac::esp_hal::{emac_isr, Priority, EmacExt};
+use ph_esp32_mac::AsyncEmacState;
+use ph_esp32_mac::esp_hal::{emac_isr, EmacExt, Priority};
+
+static ASYNC_STATE: AsyncEmacState = AsyncEmacState::new();
 
 emac_isr!(ASYNC_HANDLER, Priority::Priority1, {
-    ph_esp32_mac::asynch::async_interrupt_handler();
+    ph_esp32_mac::async_interrupt_handler(&ASYNC_STATE);
 });
 
 // In main:
