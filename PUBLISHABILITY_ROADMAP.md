@@ -175,12 +175,13 @@ emac.bind_interrupt(EMAC_ISR);
 - **Exit criteria:** esp-hal example builds with no manual status read/clear.
 
 **Sprint 3 — Async Integration (1 week)**
+- **Status:** ✅ Completed
 - **Goals:** Integrate per-instance async state into esp-hal flows.
 - **Work items:**
   - Ensure async path uses `AsyncEmacState` in esp-hal example(s).
   - Wire async ISR glue to call `async_interrupt_handler(&AsyncEmacState)`.
   - Add async-specific docs section with the exact ISR + task pattern.
-- **Deliverables:** Async example updated; ISR glue references `AsyncEmacState`.
+- **Deliverables:** Async example added; async ISR macro references `AsyncEmacState`.
 - **Exit criteria:** esp-hal + async example builds; async ISR wiring is one-line.
 
 **Sprint 4 — PHY/Link Convenience & Polishing (1 week)**

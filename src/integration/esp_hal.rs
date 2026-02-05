@@ -5,6 +5,7 @@
 //!
 //! - [`EmacExt`]: Extension trait for interrupt handler registration
 //! - [`emac_isr!`]: Macro for defining EMAC interrupt handlers with esp-hal semantics
+//! - [`emac_async_isr!`]: Macro for defining EMAC async ISR handlers
 //! - [`EmacBuilder`]: Builder for minimal-boilerplate esp-hal bring-up
 //! - Type aliases and re-exports for common esp-hal types
 //!
@@ -40,6 +41,23 @@
 //!     
 //!     emac.start().unwrap();
 //! }
+//! ```
+//!
+//! # Async Usage (per-instance wakers)
+//!
+//! ```ignore
+//! use ph_esp32_mac::{AsyncEmacExt, AsyncEmacState};
+//! use ph_esp32_mac::esp_hal::{emac_async_isr, EmacExt, Priority};
+//!
+//! static ASYNC_STATE: AsyncEmacState = AsyncEmacState::new();
+//!
+//! emac_async_isr!(EMAC_IRQ, Priority::Priority1, &ASYNC_STATE);
+//!
+//! // In main:
+//! emac.bind_interrupt(EMAC_IRQ);
+//!
+//! // In an async task:
+//! let len = emac.receive_async(&ASYNC_STATE, &mut buffer).await?;
 //! ```
 //!
 //! # Feature Detection
@@ -294,6 +312,44 @@ macro_rules! emac_isr {
                 $body
             }
             __emac_isr_internal
+        };
+    };
+}
+
+/// Macro for defining an EMAC async interrupt handler.
+///
+/// This macro wires the ISR to [`async_interrupt_handler`] using a static
+/// [`AsyncEmacState`], minimizing boilerplate for async usage.
+///
+/// # Parameters
+///
+/// - `$name`: The name for the handler constant (e.g., `EMAC_ASYNC_IRQ`)
+/// - `$priority`: The interrupt priority (e.g., `Priority::Priority1`)
+/// - `$state`: Reference to a static [`AsyncEmacState`]
+///
+/// # Example
+///
+/// ```ignore
+/// use ph_esp32_mac::{AsyncEmacState, AsyncEmacExt};
+/// use ph_esp32_mac::esp_hal::{emac_async_isr, EmacExt, Priority};
+///
+/// static ASYNC_STATE: AsyncEmacState = AsyncEmacState::new();
+///
+/// emac_async_isr!(EMAC_IRQ, Priority::Priority1, &ASYNC_STATE);
+///
+/// // In main:
+/// emac.bind_interrupt(EMAC_IRQ);
+/// ```
+#[macro_export]
+macro_rules! emac_async_isr {
+    ($name:ident, $priority:expr, $state:expr) => {
+        #[allow(non_upper_case_globals)]
+        const $name: $crate::esp_hal::InterruptHandler = {
+            #[esp_hal::handler(priority = $priority)]
+            fn __emac_async_isr_internal() {
+                $crate::async_interrupt_handler($state);
+            }
+            __emac_async_isr_internal
         };
     };
 }

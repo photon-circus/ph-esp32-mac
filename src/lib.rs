@@ -234,6 +234,7 @@ pub mod esp_hal {
     //! This module re-exports esp-hal integration helpers for ergonomic access.
 
     pub use crate::integration::esp_hal::*;
+    pub use crate::{emac_async_isr, emac_isr};
 }
 
 // Re-export async types when async feature is enabled

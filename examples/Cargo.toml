@@ -13,6 +13,11 @@ path = "esp_hal_integration.rs"
 required-features = ["esp-hal-example"]
 
 [[bin]]
+name = "esp_hal_async"
+path = "esp_hal_async.rs"
+required-features = ["esp-hal-async-example"]
+
+[[bin]]
 name = "smoltcp_echo"
 path = "smoltcp_echo.rs"
 required-features = ["smoltcp-example"]
@@ -31,6 +36,20 @@ esp-hal-example = [
   "dep:esp-hal",
   "dep:esp-println",
   "dep:log",
+  "ph-esp32-mac/critical-section",
+  "ph-esp32-mac/esp-hal",
+]
+esp-hal-async-example = [
+  "dep:critical-section",
+  "dep:embassy-executor",
+  "dep:esp-backtrace",
+  "dep:esp-bootloader-esp-idf",
+  "dep:esp-hal",
+  "dep:esp-println",
+  "dep:esp-rtos",
+  "dep:log",
+  "dep:static_cell",
+  "ph-esp32-mac/async",
   "ph-esp32-mac/critical-section",
   "ph-esp32-mac/esp-hal",
 ]

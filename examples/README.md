@@ -7,6 +7,7 @@ This directory contains example applications demonstrating different ways to use
 | Example | Description | Features Required |
 |---------|-------------|-------------------|
 | [esp_hal_integration.rs](esp_hal_integration.rs) | Integration with esp-hal ecosystem | `esp32`, `esp-hal`, `critical-section` |
+| [esp_hal_async.rs](esp_hal_async.rs) | Async RX with per-instance wakers | `esp32`, `esp-hal`, `async`, `critical-section` |
 | [smoltcp_echo.rs](smoltcp_echo.rs) | TCP/IP networking with smoltcp | `esp32`, `smoltcp`, `critical-section` |
 | [embassy_net.rs](embassy_net.rs) | Async TCP/IP networking with embassy-net | `esp32`, `embassy-net`, `esp-hal`, `critical-section` |
 
@@ -39,11 +40,13 @@ cd examples
 
 # Build (release)
 cargo ex-build-esp
+cargo ex-build-esp-async
 cargo ex-build-smoltcp
 cargo ex-build-embassy
 
 # Flash + monitor (uses espflash runner)
 cargo ex-run-esp
+cargo ex-run-esp-async
 cargo ex-run-smoltcp
 cargo ex-run-embassy
 ```
@@ -57,6 +60,10 @@ if you prefer not to pass them on the command line.
 # Build
 cargo build --manifest-path examples/Cargo.toml --bin esp_hal_integration \
     --features esp-hal-example --release
+
+# Build async esp-hal example
+cargo build --manifest-path examples/Cargo.toml --bin esp_hal_async \
+    --features esp-hal-async-example --release
 
 # Flash + monitor (runner is set in examples/.cargo/config.toml)
 cargo run --manifest-path examples/Cargo.toml --bin smoltcp_echo --features smoltcp-example --release
@@ -84,6 +91,7 @@ cargo run --bin smoltcp_echo --features smoltcp-example --release
 | Example | examples crate feature |
 |---------|-------------------------|
 | `esp_hal_integration` | `esp-hal-example` |
+| `esp_hal_async` | `esp-hal-async-example` |
 | `smoltcp_echo` | `smoltcp-example` |
 | `embassy_net` | `embassy-net-example` |
 
@@ -110,7 +118,26 @@ ph-esp32-mac = { version = "0.1", features = ["esp32", "critical-section"] }
 esp-hal = { version = "1.0", features = ["esp32"] }
 ```
 
-### 2. smoltcp TCP Echo (`smoltcp_echo.rs`)
+### 2. esp-hal Async RX (`esp_hal_async.rs`)
+
+**Purpose**: Async receive example using per-instance wakers (`AsyncEmacState`) with esp-hal.
+
+**Use Case**:
+- Async tasks without embassy-net
+- Low-boilerplate async receive
+- Interrupt-driven RX wakeups
+
+**Key Points**:
+- Uses `AsyncEmacState` and `AsyncEmacExt`
+- ISR wiring is one-line with `emac_async_isr!`
+- Runs on the esp-rtos embassy executor
+
+**Features**:
+```toml
+ph-esp32-mac = { version = "0.1", features = ["esp32", "async", "critical-section", "esp-hal"] }
+```
+
+### 3. smoltcp TCP Echo (`smoltcp_echo.rs`)
 
 **Purpose**: Full TCP/IP networking with the smoltcp stack.
 
@@ -156,7 +183,7 @@ For other boards, modify the constants at the top of each example:
 - `CLK_EN_GPIO` - GPIO that enables the clock (if applicable)
 - `RmiiClockMode` - Use `ExternalGpio0` or `InternalGpio0` depending on your hardware
 
-### 3. embassy-net Async Example (`embassy_net.rs`)
+### 4. embassy-net Async Example (`embassy_net.rs`)
 
 **Purpose**: Demonstrates async networking with embassy-net and the EMAC driver.
 
