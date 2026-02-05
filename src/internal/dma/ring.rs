@@ -247,6 +247,7 @@ mod tests {
         let ptr = ring.base_addr();
         assert!(!ptr.is_null());
         // Pointer should point to first element
+        // SAFETY: `base_addr` points to a valid element in the ring.
         unsafe {
             assert_eq!(*ptr, 10);
         }

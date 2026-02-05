@@ -1,4 +1,5 @@
 //! Embassy network driver integration.
+#![cfg_attr(docsrs, doc(cfg(feature = "embassy-net")))]
 //!
 //! This module provides an `embassy-net-driver` implementation for the EMAC.
 //! It follows Embassy guidance by depending only on `embassy-net-driver` and
@@ -34,6 +35,19 @@
 //!
 //! // In your EMAC interrupt handler:
 //! // EMAC_STATE.handle_interrupt();
+//! ```
+//!
+//! # Macro Helpers
+//!
+//! When using `embassy-net` with esp-hal, you can reduce boilerplate:
+//!
+//! ```ignore
+//! ph_esp32_mac::embassy_net_statics!(EMAC, EMAC_STATE, RESOURCES, 10, 10, 1600, 4);
+//!
+//! // After EMAC init:
+//! let driver = ph_esp32_mac::embassy_net_driver!(emac_ptr, &EMAC_STATE);
+//! let (stack, runner) =
+//!     ph_esp32_mac::embassy_net_stack!(driver, RESOURCES, Config::default(), seed);
 //! ```
 //!
 //! # Interrupt Handling
@@ -207,6 +221,9 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmbassyEmac<'a, RX,
 // =============================================================================
 
 /// Embassy RX token for EMAC.
+///
+/// This is an implementation detail of the embassy-net driver. Most users
+/// should not need to reference it directly.
 pub struct EmbassyRxToken<'a, const RX: usize, const TX: usize, const BUF: usize> {
     emac: *mut Emac<RX, TX, BUF>,
     _marker: PhantomData<&'a mut Emac<RX, TX, BUF>>,
@@ -221,8 +238,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> RxToken
     {
         let mut buffer = [0u8; MAX_FRAME_SIZE];
 
-        // SAFETY: The raw pointer is valid for the lifetime of the driver,
-        // and tokens are consumed immediately by the stack.
+        // SAFETY: The raw pointer is valid for the driver lifetime and tokens are consumed immediately by the stack.
         let emac = unsafe { &mut *self.emac };
 
         let len = emac.receive(&mut buffer).unwrap_or(0);
@@ -231,6 +247,9 @@ impl<const RX: usize, const TX: usize, const BUF: usize> RxToken
 }
 
 /// Embassy TX token for EMAC.
+///
+/// This is an implementation detail of the embassy-net driver. Most users
+/// should not need to reference it directly.
 pub struct EmbassyTxToken<'a, const RX: usize, const TX: usize, const BUF: usize> {
     emac: *mut Emac<RX, TX, BUF>,
     _marker: PhantomData<&'a mut Emac<RX, TX, BUF>>,
@@ -247,8 +266,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> TxToken
         let mut buffer = [0u8; MAX_FRAME_SIZE];
         let result = f(&mut buffer[..len]);
 
-        // SAFETY: The raw pointer is valid for the lifetime of the driver,
-        // and tokens are consumed immediately by the stack.
+        // SAFETY: The raw pointer is valid for the driver lifetime and tokens are consumed immediately by the stack.
         let emac = unsafe { &mut *self.emac };
 
         let _ = emac.transmit(&buffer[..len]);
@@ -271,7 +289,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Driver for EmbassyEmac<
         Self: 'a;
 
     fn receive(&mut self, cx: &mut Context<'_>) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-        // SAFETY: The raw pointer is valid for the lifetime of the driver.
+        // SAFETY: The raw pointer is valid for the driver lifetime.
         let emac = unsafe { &mut *self.emac };
 
         if !emac.rx_available() {
@@ -294,7 +312,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Driver for EmbassyEmac<
     }
 
     fn transmit(&mut self, cx: &mut Context<'_>) -> Option<Self::TxToken<'_>> {
-        // SAFETY: The raw pointer is valid for the lifetime of the driver.
+        // SAFETY: The raw pointer is valid for the driver lifetime.
         let emac = unsafe { &mut *self.emac };
 
         if !emac.tx_ready() {
@@ -324,7 +342,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Driver for EmbassyEmac<
     }
 
     fn hardware_address(&self) -> HardwareAddress {
-        // SAFETY: The raw pointer is valid for the lifetime of the driver.
+        // SAFETY: The raw pointer is valid for the driver lifetime.
         let emac = unsafe { &*self.emac };
         HardwareAddress::Ethernet(*emac.mac_address())
     }

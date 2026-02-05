@@ -366,24 +366,28 @@ impl DmaRegs {
     /// Issue TX poll demand (wake up TX DMA)
     #[inline(always)]
     pub fn tx_poll_demand() {
+        // SAFETY: DMA register address is valid for this SoC.
         unsafe { write_reg(DMA_BASE + DMATXPOLLDEMAND_OFFSET, 0) }
     }
 
     /// Issue RX poll demand (wake up RX DMA)
     #[inline(always)]
     pub fn rx_poll_demand() {
+        // SAFETY: DMA register address is valid for this SoC.
         unsafe { write_reg(DMA_BASE + DMARXPOLLDEMAND_OFFSET, 0) }
     }
 
     /// Set RX descriptor list base address
     #[inline(always)]
     pub fn set_rx_desc_list_addr(addr: u32) {
+        // SAFETY: DMA register address is valid for this SoC.
         unsafe { write_reg(DMA_BASE + DMARXBASEADDR_OFFSET, addr) }
     }
 
     /// Set TX descriptor list base address
     #[inline(always)]
     pub fn set_tx_desc_list_addr(addr: u32) {
+        // SAFETY: DMA register address is valid for this SoC.
         unsafe { write_reg(DMA_BASE + DMATXBASEADDR_OFFSET, addr) }
     }
 
@@ -396,6 +400,7 @@ impl DmaRegs {
     /// Flush TX FIFO
     #[inline(always)]
     pub fn flush_tx_fifo() {
+        // SAFETY: DMA register addresses are valid for this SoC.
         unsafe {
             let mode = read_reg(DMA_BASE + DMAOPERATION_OFFSET);
             write_reg(DMA_BASE + DMAOPERATION_OFFSET, mode | DMAOPERATION_FTF);
@@ -417,6 +422,7 @@ impl DmaRegs {
     /// Set RX interrupt watchdog timer
     #[inline(always)]
     pub fn set_rx_watchdog(value: u8) {
+        // SAFETY: DMA register address is valid for this SoC.
         unsafe { write_reg(DMA_BASE + DMARXWATCHDOG_OFFSET, value as u32) }
     }
 

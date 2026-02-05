@@ -1,4 +1,5 @@
 //! Async/await support for EMAC operations.
+#![cfg_attr(docsrs, doc(cfg(feature = "async")))]
 //!
 //! Provides futures, per-instance wakers, and an interrupt handler for async I/O.
 
@@ -176,6 +177,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Future for RxFuture<'_,
     type Output = Result<usize>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // SAFETY: We never move `self` after pinning; only mutable access is needed.
         let this = unsafe { self.get_unchecked_mut() };
 
         let status = peek_interrupt_status();
@@ -222,6 +224,7 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Future for TxFuture<'_,
     type Output = Result<usize>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // SAFETY: We never move `self` after pinning; only mutable access is needed.
         let this = unsafe { self.get_unchecked_mut() };
 
         let status = peek_interrupt_status();
@@ -383,6 +386,7 @@ mod tests {
 
     fn test_waker(counter: Arc<WakeCounter>) -> Waker {
         fn clone_fn(ptr: *const ()) -> RawWaker {
+            // SAFETY: `ptr` originates from `Arc::into_raw` in this test helper.
             let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
             let cloned = arc.clone();
             core::mem::forget(arc);
@@ -390,17 +394,20 @@ mod tests {
         }
 
         fn wake_fn(ptr: *const ()) {
+            // SAFETY: `ptr` originates from `Arc::into_raw` in this test helper.
             let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
             arc.count.fetch_add(1, Ordering::SeqCst);
         }
 
         fn wake_by_ref_fn(ptr: *const ()) {
+            // SAFETY: `ptr` originates from `Arc::into_raw` in this test helper.
             let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
             arc.count.fetch_add(1, Ordering::SeqCst);
             core::mem::forget(arc);
         }
 
         fn drop_fn(ptr: *const ()) {
+            // SAFETY: `ptr` originates from `Arc::into_raw` in this test helper.
             unsafe {
                 Arc::from_raw(ptr as *const WakeCounter);
             }
@@ -410,6 +417,7 @@ mod tests {
             RawWakerVTable::new(clone_fn, wake_fn, wake_by_ref_fn, drop_fn);
 
         let raw = RawWaker::new(Arc::into_raw(counter) as *const (), &VTABLE);
+        // SAFETY: `raw` is built from a valid `RawWakerVTable` and pointer.
         unsafe { Waker::from_raw(raw) }
     }
 

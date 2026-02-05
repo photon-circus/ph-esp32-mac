@@ -22,18 +22,17 @@ Last updated: 2026-02-05
 - Integration tests run as expected (per latest local runs).
 - Async/waker architecture is per-instance and no-alloc, using `AsyncEmacState` and explicit ISR helpers.
 - esp-hal (1.0.0) and embassy-net (0.7.0) integrations are present and exercised via examples.
-- CI workflows are in place for format/clippy/tests/docs (target checks are still being tuned for xtensa availability).
-- Documentation was recently consolidated, but packaging metadata and publish artifacts remain incomplete.
+- Packaging baseline is in place: root `README.md`, `CHANGELOG.md`, `RELEASE.md`, docs.rs metadata, and publish metadata are set.
+- Examples follow Rust conventions but are excluded from the crates.io package due to cross-compile complexity; README links to the repo examples.
+- `cargo publish --dry-run` succeeds locally (one Windows incremental cache warning observed).
 
 ---
 
 ## Current Gaps
 
-- **Packaging metadata**: No root `README.md`, no `CHANGELOG.md`, and `Cargo.toml` is missing `repository`, `documentation`, `homepage`, and docs.rs metadata.
-- **Public API audit**: No explicit inventory of public surface area; some APIs still feel “internal-first” rather than idiomatic embedded-Rust facades.
-- **Feature docs**: Feature gating for `esp32p4` is enforced but still needs “experimental/hidden from docs” treatment and clearer doc(cfg) coverage.
-- **Safety and documentation polish**: Need a structured unsafe-audit pass to guarantee `# Safety` sections and `SAFETY:` comments everywhere required.
-- **Release mechanics**: No release checklist or dry-run publish validation tracked in the roadmap.
+- **Examples packaging decision**: Current choice is to exclude examples from the published crate; consider a separate `ph-esp32-mac-examples` crate or keep repo-only.
+- **CI discipline**: Confirm fmt/doc/clippy are aligned with the packaging choice (examples excluded from publish, still built in repo as needed).
+ - **Tooling note**: On Windows, clippy/doc runs may emit an incremental cache access warning (does not affect output).
 
 ---
 
@@ -41,7 +40,7 @@ Last updated: 2026-02-05
 
 - **Publish target**: crates.io
 - **Supported hardware for next release**: ESP32 only
-- **Experimental / hidden**: ESP32-P4 (not implemented yet; hide from docs)
+- **Experimental / hidden**: ESP32-P4 (feature hidden from docs; not supported in 0.1)
 - **Primary consumer**: `esp-hal` 1.0.0
 - **Secondary integration**: `embassy-net` 0.7.0
 - **MSRV**: Rust 1.92.0 (locked)
@@ -54,15 +53,14 @@ Last updated: 2026-02-05
 
 **Goal**: Make the crate publishable from a packaging perspective.
 
+**Status**: ✅ Completed
+
 **Work items**
 - Add root `README.md` (aligned with `DOCUMENTATION_STANDARDS.md`) and set `readme = "README.md"`.
 - Add `repository`, `documentation`, `homepage`, and `package.metadata.docs.rs`.
 - Add `CHANGELOG.md` and `RELEASE.md` with a publish checklist.
-- Add `exclude` list to `Cargo.toml` for non-package artifacts (`target/`, `.idea/`, `DESIGN_old.md`, `REORGANIZATION.md`, etc.).
-- note the repo url is https://github.com/photon-circus/ph-esp32-mac
-- license is apache 2.0
-- note issues with ci fmt failing on examples
-- note issues with ci doc failing because of documentation quality issues
+- Add `exclude` list to `Cargo.toml` for non-package artifacts.
+- Disable auto-discovered examples (`autoexamples = false`) and link to repo examples instead.
 
 **Exit criteria**
 - `cargo package --list` is clean and includes only intended artifacts.
@@ -74,23 +72,38 @@ Last updated: 2026-02-05
 
 **Goal**: Ensure the public surface is idiomatic, minimal, and stable for embedded users (esp-hal first).
 
+**Status**: ✅ Completed
+
 **Work items**
 - Inventory all public items across `driver`, `integration`, and `sync` modules; categorize as stable vs internal.
 - Tighten re-exports to reduce surface bloat; expose a clean top-level facade.
+- Define opinionated facades for esp-hal/embassy-net/smoltcp to reduce boilerplate and guesswork.
 - Verify API names and patterns align with embedded-Rust norms:
   - Builder patterns, explicit `Result` types, `no_std` conventions.
   - Minimize unsafe exposure and raw pointers in public APIs.
 - Review feature gating and doc(cfg) coverage:
   - `esp-hal`, `embassy-net`, `smoltcp`, `async`, `critical-section`.
-  - Ensure `esp32p4` is documented as experimental and hidden from docs.
 - Run an unsafe-audit pass:
   - All `unsafe` blocks have `SAFETY:` comments.
   - All unsafe public APIs have a `# Safety` section.
 
 **Exit criteria**
-- A short “Public API report” section added to this roadmap (or a new `API.md`).
+- A “Public API report” is captured in `API.md` (or embedded here).
 - All public APIs follow documented style and safety requirements.
 - No clippy warnings for `missing_docs` or unsafe documentation in public items.
+
+**Progress**
+- Demoted low-level register re-exports into `unsafe_registers::{DmaRegs, ExtRegs, MacRegs}`.
+- Created initial `API.md` inventory.
+- Removed top-level HAL re-exports and moved constants under `ph_esp32_mac::constants`.
+- Added `doc(cfg)` coverage for feature-gated modules and re-exports.
+- Simplified esp-hal facade: removed `EspHalEmac` placeholder and made explicit esp-hal re-exports.
+- Marked ESP32-P4 as experimental and hidden from docs (feature is present but not documented).
+- Added WT32-ETH01 board helper and esp-hal convenience constructors for the canonical bring-up.
+- Completed API inventory and stability classification in `API.md`.
+- Removed `hal::gpio::esp32_gpio` (breaking removal allowed for first release).
+- Documented advanced/testing gaps for filtering and flow control.
+- Documented token types as implementation details for smoltcp/embassy-net.
 
 ---
 
@@ -99,17 +112,22 @@ Last updated: 2026-02-05
 **Goal**: Present a clear, minimal integration story with current examples and docs.
 
 **Work items**
-- Update root docs and examples README with “happy path” snippets:
-  - esp-hal bring-up
-  - embassy-net bring-up
-  - smoltcp usage
-- Verify all docs show correct crate name and API (no legacy references).
-- Ensure examples README and integration tests README match current CLI aliases and example layout.
-- Add a concise memory/footprint section (DMA buffer sizes, defaults).
+- **Root documentation pass**
+  - Add “happy path” snippets for esp-hal (WT32-ETH01), embassy-net, and smoltcp.
+  - Add a concise **feature-flag matrix** (what each flag unlocks).
+  - Add a **memory/footprint** section (DMA descriptor counts, buffer sizes, defaults).
+  - Ensure all docs use the correct crate name and current API (no legacy references).
+- **Examples + integration tests docs**
+  - Update `examples/README.md` to match current `cargo` aliases and example layout.
+  - Update `integration_tests/README.md` with the latest board wiring + run steps.
+  - Add a small troubleshooting note for DHCP bring-up timing and link readiness.
+- **Packaging narrative**
+  - Document the decision to keep examples repo-only (or spin out a separate examples crate).
+  - If repo-only, add a short “why” and link from the root README.
 
 **Exit criteria**
 - Docs build cleanly with `cargo doc --no-deps`.
-- Example READMEs are accurate, minimal, and up-to-date.
+- Example and integration-test READMEs are accurate, minimal, and up-to-date.
 
 ---
 

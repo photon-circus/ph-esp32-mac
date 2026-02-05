@@ -3,9 +3,9 @@
 //! This module provides synchronization primitives and concurrency-safe wrappers
 //! for the EMAC driver. It includes:
 //!
-//! - **Primitives** (`primitives`): Low-level synchronization types
-//!   - [`CriticalSectionCell`] - ISR-safe interior mutability
-//!   - [`AtomicWaker`] - Async waker storage for interrupts
+//! - **Primitives** (`primitives`): Low-level synchronization types (internal)
+//!   - `CriticalSectionCell` - ISR-safe interior mutability
+//!   - `AtomicWaker` - Async waker storage for interrupts
 //!
 //! - **Shared Wrappers** (`shared`): ISR-safe EMAC wrappers
 //!   - [`SharedEmac`] - Synchronous critical-section protected EMAC
@@ -25,7 +25,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use ph_esp32_mac::sync::{SharedEmac, AtomicWaker, CriticalSectionCell};
+//! use ph_esp32_mac::sync::SharedEmac;
 //!
 //! // Static ISR-safe EMAC
 //! static EMAC: SharedEmac<10, 10, 1600> = SharedEmac::new();
@@ -50,7 +50,7 @@
 // Primitives module (requires critical-section)
 mod primitives;
 
-pub use primitives::{AtomicWaker, CriticalSectionCell};
+pub(crate) use primitives::{AtomicWaker, CriticalSectionCell};
 
 // Shared wrappers (requires critical-section)
 mod shared;
@@ -62,9 +62,11 @@ pub use shared::{
 
 // Async support (requires async feature)
 #[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod asynch;
 
 #[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub use asynch::{
     AsyncEmacExt, AsyncEmacState, ErrorFuture, RxFuture, TxFuture, async_interrupt_handler,
     peek_interrupt_status, reset_async_state,

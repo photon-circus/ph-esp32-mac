@@ -19,8 +19,7 @@ pub(crate) struct VolatileCell<T: Copy> {
     value: core::cell::UnsafeCell<T>,
 }
 
-// Safety: VolatileCell is safe to share between threads because all access
-// is through volatile operations which are atomic for u32 on ESP32.
+// SAFETY: VolatileCell is safe to share because all access is via volatile ops.
 unsafe impl<T: Copy> Sync for VolatileCell<T> {}
 
 impl<T: Copy> VolatileCell<T> {
@@ -35,12 +34,14 @@ impl<T: Copy> VolatileCell<T> {
     /// Read the value (volatile read)
     #[inline(always)]
     pub fn get(&self) -> T {
+        // SAFETY: Volatile access to a valid UnsafeCell-backed pointer.
         unsafe { core::ptr::read_volatile(self.value.get()) }
     }
 
     /// Write a value (volatile write)
     #[inline(always)]
     pub fn set(&self, value: T) {
+        // SAFETY: Volatile access to a valid UnsafeCell-backed pointer.
         unsafe { core::ptr::write_volatile(self.value.get(), value) }
     }
 

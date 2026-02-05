@@ -77,6 +77,7 @@ pub const EXT_BASE: usize = 0x5008_4800;
 /// The caller must ensure the address is valid and properly aligned.
 #[inline(always)]
 pub unsafe fn read_reg(addr: usize) -> u32 {
+    // SAFETY: Caller guarantees `addr` is valid and properly aligned.
     unsafe { core::ptr::read_volatile(addr as *const u32) }
 }
 
@@ -86,6 +87,7 @@ pub unsafe fn read_reg(addr: usize) -> u32 {
 /// The caller must ensure the address is valid and properly aligned.
 #[inline(always)]
 pub unsafe fn write_reg(addr: usize, value: u32) {
+    // SAFETY: Caller guarantees `addr` is valid and properly aligned.
     unsafe { core::ptr::write_volatile(addr as *mut u32, value) }
 }
 
@@ -98,8 +100,9 @@ pub unsafe fn modify_reg<F>(addr: usize, f: F)
 where
     F: FnOnce(u32) -> u32,
 {
-    // SAFETY: caller guarantees address validity
+    // SAFETY: caller guarantees address validity.
     let value = unsafe { read_reg(addr) };
+    // SAFETY: caller guarantees address validity.
     unsafe { write_reg(addr, f(value)) }
 }
 
@@ -141,12 +144,14 @@ macro_rules! reg_rw {
         #[doc = concat!("Read ", $doc)]
         #[inline(always)]
         pub fn $read_fn() -> u32 {
+            // SAFETY: Register address is valid for this peripheral.
             unsafe { $crate::internal::register::read_reg($base + $offset) }
         }
 
         #[doc = concat!("Write ", $doc)]
         #[inline(always)]
         pub fn $write_fn(value: u32) {
+            // SAFETY: Register address is valid for this peripheral.
             unsafe { $crate::internal::register::write_reg($base + $offset, value) }
         }
     };
@@ -158,6 +163,7 @@ macro_rules! reg_ro {
         #[doc = concat!("Read ", $doc)]
         #[inline(always)]
         pub fn $read_fn() -> u32 {
+            // SAFETY: Register address is valid for this peripheral.
             unsafe { $crate::internal::register::read_reg($base + $offset) }
         }
     };
@@ -177,12 +183,14 @@ macro_rules! reg_bit_ops {
         #[doc = concat!($set_verb, " ", $what)]
         #[inline(always)]
         pub fn $set_fn() {
+            // SAFETY: Register address is valid for this peripheral.
             unsafe { $crate::internal::register::set_bits($base + $offset, $bit) }
         }
 
         #[doc = concat!($clear_verb, " ", $what)]
         #[inline(always)]
         pub fn $clear_fn() {
+            // SAFETY: Register address is valid for this peripheral.
             unsafe { $crate::internal::register::clear_bits($base + $offset, $bit) }
         }
     };
@@ -194,6 +202,7 @@ macro_rules! reg_bit_check_clear {
         #[doc = $doc]
         #[inline(always)]
         pub fn $fn() -> bool {
+            // SAFETY: Register address is valid for this peripheral.
             unsafe { ($crate::internal::register::read_reg($base + $offset) & $bit) == 0 }
         }
     };

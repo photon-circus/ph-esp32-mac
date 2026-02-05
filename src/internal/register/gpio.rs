@@ -134,6 +134,7 @@ impl GpioMatrix {
     /// # Safety
     /// This function directly manipulates hardware registers.
     pub fn configure_mdc(gpio_num: u8) {
+        // SAFETY: Accesses fixed ESP32 peripheral registers via volatile reads/writes for setup.
         unsafe {
             // 1. Configure IO_MUX to use GPIO Matrix (function 2)
             let iomux_addr = Self::iomux_addr_for_gpio(gpio_num);
@@ -178,6 +179,7 @@ impl GpioMatrix {
     /// # Safety
     /// This function directly manipulates hardware registers.
     pub fn configure_mdio(gpio_num: u8) {
+        // SAFETY: Accesses fixed ESP32 peripheral registers via volatile reads/writes for setup.
         unsafe {
             // 1. Configure IO_MUX to use GPIO Matrix (function 2) with input enabled
             let iomux_addr = Self::iomux_addr_for_gpio(gpio_num);
@@ -287,6 +289,7 @@ impl GpioMatrix {
             return;
         }
 
+        // SAFETY: Accesses fixed ESP32 IOMUX/GPIO Matrix registers via volatile reads/writes.
         unsafe {
             let current = read_reg(iomux_addr);
             // Set MCU_SEL field to specified function
@@ -320,6 +323,7 @@ impl GpioMatrix {
             return;
         }
 
+        // SAFETY: Accesses fixed ESP32 IOMUX/GPIO Matrix registers via volatile reads/writes.
         unsafe {
             let current = read_reg(iomux_addr);
             // Set MCU_SEL field to specified function

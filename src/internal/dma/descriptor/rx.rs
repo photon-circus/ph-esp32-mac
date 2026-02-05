@@ -284,8 +284,9 @@ impl Default for RxDescriptor {
     }
 }
 
-// Safety: RxDescriptor uses volatile cells for all DMA-accessed fields
+// SAFETY: RxDescriptor uses volatile cells for all DMA-accessed fields.
 unsafe impl Sync for RxDescriptor {}
+// SAFETY: RxDescriptor uses volatile cells for all DMA-accessed fields.
 unsafe impl Send for RxDescriptor {}
 
 #[cfg(test)]

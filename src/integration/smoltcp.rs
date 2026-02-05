@@ -1,4 +1,5 @@
 //! smoltcp Network Stack Integration
+#![cfg_attr(docsrs, doc(cfg(feature = "smoltcp")))]
 //!
 //! This module provides integration with the [smoltcp](https://docs.rs/smoltcp) network stack.
 //! It implements the `smoltcp::phy::Device` trait for the EMAC driver, allowing it to be
@@ -67,6 +68,9 @@ use smoltcp::time::Instant;
 /// It uses a raw pointer internally to satisfy smoltcp's API requirement
 /// that `receive()` returns both RX and TX tokens simultaneously.
 ///
+/// This type is an implementation detail of the smoltcp integration and is
+/// considered advanced; most users won't need to name it directly.
+///
 /// # Safety
 ///
 /// The raw pointer is safe because:
@@ -89,9 +93,7 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> smoltcp::phy::RxTok
         // This avoids heap allocation while being compatible with smoltcp's API
         let mut buffer = [0u8; MAX_FRAME_SIZE];
 
-        // SAFETY: The pointer is valid for the lifetime 'a, and this token
-        // is consumed (self by value) so no aliasing occurs after this point.
-        // The RX descriptor ring is separate from TX, so concurrent TX is safe.
+        // SAFETY: The pointer is valid for 'a; token is consumed by value, so no aliasing, and RX/TX rings are separate.
         let emac = unsafe { &mut *self.emac };
 
         // Receive the frame
@@ -111,6 +113,9 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> smoltcp::phy::RxTok
 /// This token represents the ability to transmit a frame.
 /// It uses a raw pointer internally to satisfy smoltcp's API requirement
 /// that `receive()` returns both RX and TX tokens simultaneously.
+///
+/// This type is an implementation detail of the smoltcp integration and is
+/// considered advanced; most users won't need to name it directly.
 ///
 /// # Safety
 ///
@@ -139,9 +144,7 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> smoltcp::phy::TxTok
         // Let smoltcp fill in the frame data
         let result = f(&mut buffer[..len]);
 
-        // SAFETY: The pointer is valid for the lifetime 'a, and this token
-        // is consumed (self by value) so no aliasing occurs after this point.
-        // The TX descriptor ring is separate from RX, so concurrent RX is safe.
+        // SAFETY: The pointer is valid for 'a; token is consumed by value, so no aliasing, and TX/RX rings are separate.
         let emac = unsafe { &mut *self.emac };
 
         // Transmit the frame (ignore errors, smoltcp will retry)

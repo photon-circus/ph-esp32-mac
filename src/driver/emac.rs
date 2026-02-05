@@ -585,6 +585,9 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
 
     /// Write to a PHY register via MDIO
     ///
+    /// This is a low-level convenience for bare-metal use. Most users should
+    /// prefer [`crate::hal::mdio::MdioController`] for PHY access.
+    ///
     /// # Arguments
     /// * `phy_addr` - PHY address (0-31)
     /// * `reg` - Register address (0-31)
@@ -606,6 +609,9 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     }
 
     /// Read from a PHY register via MDIO
+    ///
+    /// This is a low-level convenience for bare-metal use. Most users should
+    /// prefer [`crate::hal::mdio::MdioController`] for PHY access.
     ///
     /// # Arguments
     /// * `phy_addr` - PHY address (0-31)
@@ -728,12 +734,13 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Default
     }
 }
 
-// Safety: Emac can be safely shared between threads when properly synchronized
+// SAFETY: Emac can be safely shared between threads when properly synchronized.
 unsafe impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Sync
     for Emac<RX_BUFS, TX_BUFS, BUF_SIZE>
 {
 }
 
+// SAFETY: Emac can be safely shared between threads when properly synchronized.
 unsafe impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Send
     for Emac<RX_BUFS, TX_BUFS, BUF_SIZE>
 {

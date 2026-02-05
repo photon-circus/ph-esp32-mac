@@ -465,6 +465,7 @@ impl MacRegs {
     /// Set duplex mode
     #[inline(always)]
     pub fn set_duplex_full(full: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let cfg = read_reg(MAC_BASE + GMACCONFIG_OFFSET);
             let cfg = if full {
@@ -479,6 +480,7 @@ impl MacRegs {
     /// Set speed to 100 Mbps
     #[inline(always)]
     pub fn set_speed_100mbps(is_100: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let cfg = read_reg(MAC_BASE + GMACCONFIG_OFFSET);
             let cfg = if is_100 {
@@ -493,6 +495,7 @@ impl MacRegs {
     /// Enable checksum offload
     #[inline(always)]
     pub fn set_checksum_offload(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let cfg = read_reg(MAC_BASE + GMACCONFIG_OFFSET);
             let cfg = if enable {
@@ -507,6 +510,7 @@ impl MacRegs {
     /// Enable promiscuous mode
     #[inline(always)]
     pub fn set_promiscuous(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
             let ff = if enable {
@@ -608,6 +612,7 @@ impl MacRegs {
 
     /// Enable hash unicast filtering
     pub fn enable_hash_unicast(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
             let ff = if enable {
@@ -625,6 +630,7 @@ impl MacRegs {
     /// This is more efficient than "pass all multicast" for subscribing
     /// to specific multicast groups.
     pub fn enable_hash_multicast(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
             let ff = if enable {
@@ -641,6 +647,7 @@ impl MacRegs {
     /// When enabled (HPF=1): Perfect filter for unicast, hash for multicast
     /// When disabled (HPF=0): Hash filter OR perfect filter passes frame
     pub fn set_hash_perfect_filter(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
             let ff = if enable {
@@ -660,6 +667,7 @@ impl MacRegs {
     ///
     /// When enabled, frames are filtered based on the VLAN tag.
     pub fn enable_vlan_filter(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
             let ff = if enable {
@@ -720,6 +728,7 @@ impl MacRegs {
 
     /// Check if VLAN filtering is enabled
     pub fn is_vlan_filter_enabled() -> bool {
+        // SAFETY: Accesses fixed MAC register addresses using a volatile read.
         unsafe { (read_reg(MAC_BASE + GMACFF_OFFSET) & GMACFF_VTFE) != 0 }
     }
 
@@ -736,6 +745,7 @@ impl MacRegs {
     /// Enable TX flow control (transmit PAUSE frames)
     #[inline(always)]
     pub fn enable_tx_flow_control(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let fc = read_reg(MAC_BASE + GMACFC_OFFSET);
             let fc = if enable {
@@ -750,6 +760,7 @@ impl MacRegs {
     /// Enable RX flow control (respond to PAUSE frames)
     #[inline(always)]
     pub fn enable_rx_flow_control(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let fc = read_reg(MAC_BASE + GMACFC_OFFSET);
             let fc = if enable {
@@ -799,6 +810,7 @@ impl MacRegs {
             fc |= GMACFC_RFE;
         }
 
+        // SAFETY: Accesses fixed MAC register addresses using a volatile write.
         unsafe { write_reg(MAC_BASE + GMACFC_OFFSET, fc) }
     }
 
@@ -810,6 +822,7 @@ impl MacRegs {
     /// In full-duplex mode: FCB (Flow Control Busy) triggers PAUSE TX
     /// In half-duplex mode: BPA (Backpressure Activate) asserts carrier
     pub fn send_pause_frame(activate: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let fc = read_reg(MAC_BASE + GMACFC_OFFSET);
             let fc = if activate {
@@ -830,6 +843,7 @@ impl MacRegs {
     /// Enable pass all multicast frames
     #[inline(always)]
     pub fn set_pass_all_multicast(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
             let ff = if enable {
@@ -846,6 +860,7 @@ impl MacRegs {
     /// When disabled, broadcast frames are filtered out.
     #[inline(always)]
     pub fn set_broadcast_enabled(enable: bool) {
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads/writes.
         unsafe {
             let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
             let ff = if enable {
@@ -911,7 +926,7 @@ impl MacRegs {
     /// * `slot` - Filter slot (1-4)
     /// * `addr` - MAC address to filter
     /// * `source_addr` - If true, filter by source address; if false, by destination
-    /// * `mask` - Byte mask (each bit masks one byte, bit 0 = addr[0])
+    /// * `mask` - Byte mask (each bit masks one byte, bit 0 = `addr[0]`)
     ///
     /// # Returns
     /// `true` if successful, `false` if slot is invalid
@@ -940,6 +955,7 @@ impl MacRegs {
         // Enable the filter
         high |= GMACADDRH_AE;
 
+        // SAFETY: Accesses fixed MAC register addresses using volatile writes.
         unsafe {
             write_reg(MAC_BASE + low_off, low);
             write_reg(MAC_BASE + high_off, high);
@@ -960,6 +976,7 @@ impl MacRegs {
             return false;
         };
 
+        // SAFETY: Accesses fixed MAC register addresses using volatile writes.
         unsafe {
             write_reg(MAC_BASE + low_off, 0);
             write_reg(MAC_BASE + high_off, 0); // AE = 0 disables the filter
@@ -977,6 +994,7 @@ impl MacRegs {
     /// `Some(true)` if enabled, `Some(false)` if disabled, `None` if invalid slot
     pub fn is_mac_filter_enabled(slot: usize) -> Option<bool> {
         let (high_off, _) = Self::addr_filter_offsets(slot)?;
+        // SAFETY: Accesses fixed MAC register addresses using a volatile read.
         let high = unsafe { read_reg(MAC_BASE + high_off) };
         Some((high & GMACADDRH_AE) != 0)
     }
@@ -991,8 +1009,8 @@ impl MacRegs {
     pub fn get_mac_filter(slot: usize) -> Option<([u8; 6], bool)> {
         let (high_off, low_off) = Self::addr_filter_offsets(slot)?;
 
-        let low = unsafe { read_reg(MAC_BASE + low_off) };
-        let high = unsafe { read_reg(MAC_BASE + high_off) };
+        // SAFETY: Accesses fixed MAC register addresses using volatile reads.
+        let (low, high) = unsafe { (read_reg(MAC_BASE + low_off), read_reg(MAC_BASE + high_off)) };
 
         let addr = [
             (low & 0xFF) as u8,

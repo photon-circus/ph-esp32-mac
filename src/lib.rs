@@ -9,7 +9,7 @@
 //!
 //! The driver is organized into three layers:
 //!
-//! 1. **MAC Layer** ([`mac`]): Main EMAC driver with TX/RX operations
+//! 1. **MAC Layer** ([`driver::emac`]): Main EMAC driver with TX/RX operations
 //! 2. **PHY Layer** ([`phy`]): Ethernet PHY drivers (e.g., LAN8720A)
 //! 3. **HAL Layer** ([`hal`]): Hardware abstraction for clocks, GPIO, MDIO
 //!
@@ -95,7 +95,7 @@
 //! ## GPIO Pins
 //!
 //! The ESP32 EMAC uses **dedicated internal routing** for RMII data pins.
-//! These pins are fixed and automatically configured - see [`hal::gpio::esp32_gpio`]
+//! These pins are fixed and automatically configured - see [`boards::wt32_eth01::Wt32Eth01`]
 //! for pin assignments. No user configuration is needed.
 //!
 //! ## Async Support
@@ -116,6 +116,7 @@
 //! - ✅ Split error types (`ConfigError`, `DmaError`, `IoError`)
 //! - ✅ PHY driver abstraction with LAN8720A support
 
+#![cfg_attr(docsrs, doc(cfg_hide(feature = "esp32p4")))]
 #![no_std]
 #![deny(missing_docs)]
 #![allow(unsafe_code)]
@@ -176,6 +177,9 @@ compile_error!("Either feature 'esp32' or 'esp32p4' must be enabled. The default
 // Modules
 // =============================================================================
 
+#[cfg(feature = "esp32")]
+#[cfg_attr(docsrs, doc(cfg(feature = "esp32")))]
+pub mod boards;
 pub mod driver;
 pub mod hal;
 pub mod phy;
@@ -184,9 +188,14 @@ pub mod phy;
 mod internal;
 
 #[cfg(any(feature = "smoltcp", feature = "esp-hal", feature = "embassy-net"))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(feature = "smoltcp", feature = "esp-hal", feature = "embassy-net")))
+)]
 pub mod integration;
 
 #[cfg(feature = "critical-section")]
+#[cfg_attr(docsrs, doc(cfg(feature = "critical-section")))]
 pub mod sync;
 
 // Test utilities (only available during testing)
@@ -208,16 +217,21 @@ pub use driver::error::{
 };
 pub use driver::interrupt::InterruptStatus;
 
-// Re-export register access types
-pub use internal::register::dma::DmaRegs;
-pub use internal::register::ext::ExtRegs;
-pub use internal::register::mac::MacRegs;
-
-// Re-export HAL types
-pub use hal::{
-    ClockController, ClockState, MdcClockDivider, MdioBus, MdioController, PhyStatus,
-    ResetController, ResetManager, ResetState,
-};
+/// Low-level register accessors for advanced use.
+///
+/// These are intentionally separated from the primary facade. Most users should
+/// prefer the safe driver APIs instead of touching registers directly.
+///
+/// # Safety
+///
+/// Direct register access bypasses driver invariants. Use only if you fully
+/// understand the ESP32 EMAC hardware and accept responsibility for correct
+/// sequencing and synchronization.
+pub mod unsafe_registers {
+    pub use crate::internal::register::dma::DmaRegs;
+    pub use crate::internal::register::ext::ExtRegs;
+    pub use crate::internal::register::mac::MacRegs;
+}
 
 // Re-export PHY types
 pub use phy::{Lan8720a, Lan8720aWithReset, LinkStatus, PhyCapabilities, PhyDriver};
@@ -233,49 +247,185 @@ pub mod esp_hal {
     //!
     //! This module re-exports esp-hal integration helpers for ergonomic access.
 
-    pub use crate::integration::esp_hal::*;
+    #![cfg_attr(docsrs, doc(cfg(feature = "esp-hal")))]
+
+    #[cfg(feature = "esp32")]
+    pub use crate::integration::esp_hal::Wt32Eth01;
+    pub use crate::integration::esp_hal::{
+        Delay, EMAC_INTERRUPT, EmacBuilder, EmacExt, EmacPhyBundle, Interrupt, InterruptHandler,
+        Priority,
+    };
     pub use crate::{emac_async_isr, emac_isr};
 }
 
 // Re-export async types when async feature is enabled
 #[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub use sync::asynch::{AsyncEmacExt, AsyncEmacState, async_interrupt_handler};
 
 // Re-export embassy-net types when embassy-net feature is enabled
 #[cfg(feature = "embassy-net")]
+#[cfg_attr(docsrs, doc(cfg(feature = "embassy-net")))]
 pub use integration::embassy_net::{EmbassyEmac, EmbassyEmacState, EmbassyRxToken, EmbassyTxToken};
 
+/// Shared driver constants.
+///
+/// These are grouped into a dedicated module to keep the top-level facade
+/// focused on driver types and integration points.
+pub mod constants {
+    pub use crate::internal::constants::{
+        // Frame/buffer sizes
+        CRC_SIZE,
+        DEFAULT_BUFFER_SIZE,
+        // Flow control
+        DEFAULT_FLOW_HIGH_WATER,
+        DEFAULT_FLOW_LOW_WATER,
+        // MAC address
+        DEFAULT_MAC_ADDR,
+        // Buffer counts
+        DEFAULT_RX_BUFFERS,
+        DEFAULT_TX_BUFFERS,
+        ETH_HEADER_SIZE,
+        // Timing
+        FLUSH_TIMEOUT,
+        MAC_ADDR_LEN,
+        MAX_FRAME_SIZE,
+        // Clocks
+        MDC_MAX_FREQ_HZ,
+        MII_10M_CLK_HZ,
+        MII_100M_CLK_HZ,
+        MII_BUSY_TIMEOUT,
+        MIN_FRAME_SIZE,
+        MTU,
+        PAUSE_TIME_MAX,
+        RESET_POLL_INTERVAL_US,
+        RMII_CLK_HZ,
+        SOFT_RESET_TIMEOUT_MS,
+        VLAN_TAG_SIZE,
+    };
+}
+
 // =============================================================================
-// Constants (re-exported from internal constants module)
+// Macro Helpers
 // =============================================================================
 
-pub use internal::constants::{
-    // Frame/buffer sizes
-    CRC_SIZE,
-    DEFAULT_BUFFER_SIZE,
-    // Flow control
-    DEFAULT_FLOW_HIGH_WATER,
-    DEFAULT_FLOW_LOW_WATER,
-    // MAC address
-    DEFAULT_MAC_ADDR,
-    // Buffer counts
-    DEFAULT_RX_BUFFERS,
-    DEFAULT_TX_BUFFERS,
-    ETH_HEADER_SIZE,
-    // Timing
-    FLUSH_TIMEOUT,
-    MAC_ADDR_LEN,
-    MAX_FRAME_SIZE,
-    // Clocks
-    MDC_MAX_FREQ_HZ,
-    MII_10M_CLK_HZ,
-    MII_100M_CLK_HZ,
-    MII_BUSY_TIMEOUT,
-    MIN_FRAME_SIZE,
-    MTU,
-    PAUSE_TIME_MAX,
-    RESET_POLL_INTERVAL_US,
-    RMII_CLK_HZ,
-    SOFT_RESET_TIMEOUT_MS,
-    VLAN_TAG_SIZE,
-};
+/// Declare a static, ISR-safe EMAC instance for synchronous use.
+///
+/// This macro expands to a `SharedEmac` static placed in DMA-capable memory on
+/// ESP32, reducing boilerplate for esp-hal synchronous bring-up.
+///
+/// # Examples
+///
+/// ```ignore
+/// ph_esp32_mac::emac_static_sync!(EMAC);
+///
+/// EMAC.with(|emac| {
+///     emac.init(EmacConfig::rmii_esp32_default(), &mut delay).unwrap();
+///     emac.start().unwrap();
+/// });
+/// ```
+#[cfg(feature = "critical-section")]
+#[macro_export]
+macro_rules! emac_static_sync {
+    ($name:ident) => {
+        $crate::emac_static_sync!($name, 10, 10, 1600);
+    };
+    ($name:ident, $rx:expr, $tx:expr, $buf:expr) => {
+        #[cfg_attr(feature = "esp32", unsafe(link_section = ".dram1"))]
+        static $name: $crate::sync::SharedEmac<$rx, $tx, $buf> = $crate::sync::SharedEmac::new();
+    };
+}
+
+/// Declare static storage for async EMAC usage (EMAC + AsyncEmacState).
+///
+/// This macro expands to a `StaticCell<Emac<..>>` and an `AsyncEmacState`.
+/// It requires the `async` feature and a `static_cell` dependency in your
+/// application crate.
+///
+/// # Examples
+///
+/// ```ignore
+/// ph_esp32_mac::emac_static_async!(EMAC, ASYNC_STATE);
+///
+/// emac_async_isr!(EMAC_IRQ, Priority::Priority1, &ASYNC_STATE);
+/// let emac_ptr = EMAC.init(Emac::new()) as *mut Emac<10, 10, 1600>;
+/// ```
+#[cfg(feature = "async")]
+#[macro_export]
+macro_rules! emac_static_async {
+    ($emac:ident, $state:ident) => {
+        $crate::emac_static_async!($emac, $state, 10, 10, 1600);
+    };
+    ($emac:ident, $state:ident, $rx:expr, $tx:expr, $buf:expr) => {
+        #[cfg_attr(feature = "esp32", unsafe(link_section = ".dram1"))]
+        static $emac: static_cell::StaticCell<$crate::Emac<$rx, $tx, $buf>> =
+            static_cell::StaticCell::new();
+        static $state: $crate::AsyncEmacState = $crate::AsyncEmacState::new();
+    };
+}
+
+/// Declare static embassy-net driver state and stack resources.
+///
+/// This macro requires the `embassy-net` feature plus `embassy_net` and
+/// `static_cell` dependencies in your application crate.
+///
+/// # Examples
+///
+/// ```ignore
+/// ph_esp32_mac::embassy_net_statics!(EMAC, EMAC_STATE, RESOURCES, 10, 10, 1600, 4);
+/// ```
+#[cfg(feature = "embassy-net")]
+#[macro_export]
+macro_rules! embassy_net_statics {
+    ($emac:ident, $state:ident, $resources:ident, $rx:expr, $tx:expr, $buf:expr, $res:expr) => {
+        #[cfg_attr(feature = "esp32", unsafe(link_section = ".dram1"))]
+        static $emac: static_cell::StaticCell<$crate::Emac<$rx, $tx, $buf>> =
+            static_cell::StaticCell::new();
+        static $state: $crate::EmbassyEmacState =
+            $crate::EmbassyEmacState::new(embassy_net_driver::LinkState::Down);
+        static $resources: static_cell::StaticCell<embassy_net::StackResources<$res>> =
+            static_cell::StaticCell::new();
+    };
+}
+
+/// Create an embassy-net driver from a static EMAC pointer and state.
+///
+/// This macro performs the unsafe pointer cast for you. The caller must ensure
+/// the EMAC pointer is valid for the duration of the program.
+///
+/// # Examples
+///
+/// ```ignore
+/// let driver = ph_esp32_mac::embassy_net_driver!(emac_ptr, &EMAC_STATE);
+/// ```
+#[cfg(feature = "embassy-net")]
+#[macro_export]
+macro_rules! embassy_net_driver {
+    ($emac_ptr:expr, $state:expr) => {{
+        // SAFETY: The caller guarantees that the EMAC pointer is valid for the program lifetime.
+        unsafe { $crate::EmbassyEmac::new(&mut *($emac_ptr), $state) }
+    }};
+}
+
+/// Create an embassy-net stack and runner with static resources.
+///
+/// This macro reduces boilerplate for `embassy_net::new`.
+///
+/// # Examples
+///
+/// ```ignore
+/// let (stack, runner) = ph_esp32_mac::embassy_net_stack!(
+///     driver,
+///     RESOURCES,
+///     Config::default(),
+///     seed
+/// );
+/// ```
+#[cfg(feature = "embassy-net")]
+#[macro_export]
+macro_rules! embassy_net_stack {
+    ($driver:expr, $resources:ident, $config:expr, $seed:expr) => {{
+        let resources = $resources.init(embassy_net::StackResources::new());
+        embassy_net::new($driver, $config, resources, $seed)
+    }};
+}

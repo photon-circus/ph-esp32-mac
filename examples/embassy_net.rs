@@ -22,7 +22,7 @@
 #![no_main]
 
 use embassy_executor::Spawner;
-use embassy_net::{Config, ConfigV4, DhcpConfig, StackResources, udp::UdpSocket};
+use embassy_net::{udp::UdpSocket, Config, ConfigV4, DhcpConfig};
 use embassy_net_driver::{Capabilities, Driver, HardwareAddress, LinkState, RxToken, TxToken};
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -37,22 +37,14 @@ use esp_hal::{
 use log::{info, warn};
 use static_cell::StaticCell;
 
-use ph_esp32_mac::integration::esp_hal::{EmacExt, EmacPhyBundle};
+use ph_esp32_mac::integration::esp_hal::{EmacBuilder, EmacExt, EmacPhyBundle, Wt32Eth01};
 use ph_esp32_mac::{
-    Emac, EmacConfig, EmbassyEmac, EmbassyEmacState, Lan8720a, MdioController, PhyDriver,
-    PhyInterface, RmiiClockMode,
+    Emac, EmbassyEmac, EmbassyEmacState, MdioController,
 };
 
 // =============================================================================
 // Board Configuration
 // =============================================================================
-
-/// PHY address (WT32-ETH01 has PHYAD0 pulled high = address 1).
-const PHY_ADDR: u8 = 1;
-
-/// GPIO for external oscillator enable.
-#[allow(dead_code)]
-const CLK_EN_GPIO: u8 = 16;
 
 /// UDP echo port.
 const UDP_ECHO_PORT: u16 = 7;
@@ -70,10 +62,7 @@ const DHCP_PROMISCUOUS: bool = true;
 // Static EMAC Instance and Embassy Resources
 // =============================================================================
 
-#[unsafe(link_section = ".dram1")]
-static EMAC: StaticCell<Emac<10, 10, 1600>> = StaticCell::new();
-static EMAC_STATE: EmbassyEmacState = EmbassyEmacState::new(LinkState::Down);
-static RESOURCES: StaticCell<StackResources<4>> = StaticCell::new();
+ph_esp32_mac::embassy_net_statics!(EMAC, EMAC_STATE, RESOURCES, 10, 10, 1600, 4);
 static UDP_RX_META: StaticCell<[embassy_net::udp::PacketMetadata; 4]> = StaticCell::new();
 static UDP_TX_META: StaticCell<[embassy_net::udp::PacketMetadata; 4]> = StaticCell::new();
 static UDP_RX_BUF: StaticCell<[u8; UDP_BUF_SIZE]> = StaticCell::new();
@@ -402,7 +391,7 @@ async fn udp_echo_task(stack: embassy_net::Stack<'static>) -> ! {
 #[embassy_executor::task]
 async fn link_task(state: &'static EmbassyEmacState, emac: *mut Emac<10, 10, 1600>) -> ! {
     let mut mdio = MdioController::new(Delay::new());
-    let mut phy = Lan8720a::new(PHY_ADDR);
+    let mut phy = Wt32Eth01::lan8720a();
     let mut last_state = state.link_state();
 
     loop {
@@ -462,27 +451,23 @@ async fn main(spawner: Spawner) -> ! {
 
     let mut delay = Delay::new();
     delay.delay_millis(10);
-    info!("External oscillator enabled (GPIO{} = HIGH)", CLK_EN_GPIO);
+    info!(
+        "External oscillator enabled (GPIO{} = HIGH)",
+        Wt32Eth01::CLK_EN_GPIO
+    );
 
     // Initialize EMAC.
     let emac_ptr = EMAC.init(Emac::new()) as *mut Emac<10, 10, 1600>;
-    let config = EmacConfig::new()
-        .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
-        .with_phy_interface(PhyInterface::Rmii)
-        .with_rmii_clock(RmiiClockMode::ExternalInput { gpio: 0 })
+    let config = Wt32Eth01::emac_config_with_mac([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
         .with_promiscuous(DEBUG_PROMISCUOUS);
 
     // Safety: EMAC is in static storage for the duration of the program.
     let emac = unsafe { &mut *emac_ptr };
-    emac.init(config, &mut delay).unwrap();
+    EmacBuilder::new(emac).with_config(config).init(&mut delay).unwrap();
 
     // Initialize PHY and set initial MAC speed/duplex.
     {
-        let mut emac_phy = EmacPhyBundle::new(
-            emac,
-            Lan8720a::new(PHY_ADDR),
-            MdioController::new(Delay::new()),
-        );
+        let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(emac, Delay::new());
         emac_phy.init_phy().unwrap();
 
         match emac_phy.link_status().unwrap() {
@@ -502,12 +487,11 @@ async fn main(spawner: Spawner) -> ! {
     info!("EMAC started");
 
     // Create embassy-net stack.
-    let driver = LoggingDriver::new(unsafe { EmbassyEmac::new(&mut *emac_ptr, &EMAC_STATE) });
+    let driver = LoggingDriver::new(ph_esp32_mac::embassy_net_driver!(emac_ptr, &EMAC_STATE));
     let config = Config::default();
     let rng = Rng::new();
     let seed = ((rng.random() as u64) << 32) | (rng.random() as u64);
-    let resources = RESOURCES.init(StackResources::new());
-    let (stack, runner) = embassy_net::new(driver, config, resources, seed);
+    let (stack, runner) = ph_esp32_mac::embassy_net_stack!(driver, RESOURCES, config, seed);
 
     spawner.spawn(net_task(runner)).unwrap();
     spawner.spawn(config_task(stack, emac_ptr)).unwrap();

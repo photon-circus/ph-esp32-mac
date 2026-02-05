@@ -1,4 +1,5 @@
 //! esp-hal Integration Module
+#![cfg_attr(docsrs, doc(cfg(feature = "esp-hal")))]
 //!
 //! This module provides ergonomic integration with `esp-hal` when the `esp-hal` feature
 //! is enabled. It offers:
@@ -8,7 +9,8 @@
 //! - [`emac_async_isr!`]: Macro for defining EMAC async ISR handlers
 //! - [`EmacBuilder`]: Builder for minimal-boilerplate esp-hal bring-up
 //! - [`EmacPhyBundle`]: Convenience wrapper for PHY + MDIO bring-up
-//! - Type aliases and re-exports for common esp-hal types
+//! - [`Wt32Eth01`]: Board helper for the canonical WT32-ETH01 bring-up (ESP32 only)
+//! - Re-exports for common esp-hal types
 //!
 //! # Usage
 //!
@@ -58,6 +60,26 @@
 //! let _status = emac_phy.wait_link_up(&mut delay, 10_000, 200).unwrap();
 //! ```
 //!
+//! # WT32-ETH01 Canonical Happy Path (ESP32)
+//!
+//! This is the recommended esp-hal bring-up path for this crate.
+//!
+//! ```ignore
+//! use esp_hal::delay::Delay;
+//! use ph_esp32_mac::esp_hal::{EmacBuilder, EmacPhyBundle, Wt32Eth01};
+//!
+//! let mut delay = Delay::new();
+//! let emac = unsafe { &mut EMAC };
+//!
+//! EmacBuilder::wt32_eth01_with_mac(emac, [0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+//!     .init(&mut delay)
+//!     .unwrap();
+//!
+//! let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(emac, Delay::new());
+//! emac_phy.init_phy().unwrap();
+//! let _status = emac_phy.wait_link_up(&mut delay, 10_000, 200).unwrap();
+//! ```
+//!
 //! # Async Usage (per-instance wakers)
 //!
 //! ```ignore
@@ -85,14 +107,21 @@
 //! ```
 
 // Re-export esp-hal types for convenience
+#[cfg(feature = "esp32")]
+#[cfg_attr(docsrs, doc(cfg(feature = "esp32")))]
+pub use crate::boards::wt32_eth01::Wt32Eth01;
 pub use esp_hal::delay::Delay;
-pub use esp_hal::interrupt::{self, InterruptHandler, Priority};
+pub use esp_hal::interrupt::{InterruptHandler, Priority};
 pub use esp_hal::peripherals::Interrupt;
 
 use embedded_hal::delay::DelayNs;
 
 use crate::driver::error::{ConfigError, IoError};
 use crate::hal::mdio::MdioBus;
+#[cfg(feature = "esp32")]
+use crate::hal::mdio::MdioController;
+#[cfg(feature = "esp32")]
+use crate::phy::Lan8720a;
 use crate::phy::{LinkStatus, PhyDriver};
 
 /// Builder for esp-hal-friendly EMAC initialization.
@@ -136,6 +165,46 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmacBuilder<'a, RX,
         Self {
             emac,
             config: crate::EmacConfig::rmii_esp32_default(),
+        }
+    }
+
+    /// Create a WT32-ETH01 builder with board defaults.
+    ///
+    /// # Arguments
+    ///
+    /// * `emac` - EMAC instance already placed in its final memory location
+    ///
+    /// # Returns
+    ///
+    /// A builder pre-configured for WT32-ETH01.
+    #[cfg(feature = "esp32")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "esp32")))]
+    pub fn wt32_eth01(emac: &'a mut crate::Emac<RX, TX, BUF>) -> Self {
+        Self {
+            emac,
+            config: Wt32Eth01::emac_config(),
+        }
+    }
+
+    /// Create a WT32-ETH01 builder with a custom MAC address.
+    ///
+    /// # Arguments
+    ///
+    /// * `emac` - EMAC instance already placed in its final memory location
+    /// * `mac_address` - 6-byte MAC address
+    ///
+    /// # Returns
+    ///
+    /// A builder pre-configured for WT32-ETH01.
+    #[cfg(feature = "esp32")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "esp32")))]
+    pub fn wt32_eth01_with_mac(
+        emac: &'a mut crate::Emac<RX, TX, BUF>,
+        mac_address: [u8; 6],
+    ) -> Self {
+        Self {
+            emac,
+            config: Wt32Eth01::emac_config_with_mac(mac_address),
         }
     }
 
@@ -337,6 +406,32 @@ where
         Err(IoError::Timeout.into())
     }
 
+    /// Initialize the PHY and wait for link-up with a timeout.
+    ///
+    /// # Arguments
+    ///
+    /// * `delay` - Delay provider
+    /// * `timeout_ms` - Total timeout in milliseconds
+    /// * `poll_interval_ms` - Poll interval in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Link status once a link is established.
+    ///
+    /// # Errors
+    ///
+    /// Propagates PHY/MDIO errors from the underlying driver.
+    /// Returns [`IoError::Timeout`] if the timeout expires.
+    pub fn init_and_wait_link_up<D: DelayNs>(
+        &mut self,
+        delay: &mut D,
+        timeout_ms: u32,
+        poll_interval_ms: u32,
+    ) -> crate::Result<LinkStatus> {
+        self.init_phy()?;
+        self.wait_link_up(delay, timeout_ms, poll_interval_ms)
+    }
+
     /// Consume the bundle and return the parts.
     pub fn into_parts(self) -> (&'a mut crate::Emac<RX, TX, BUF>, P, M) {
         (self.emac, self.phy, self.mdio)
@@ -347,6 +442,28 @@ where
             self.emac.set_speed(status.speed);
             self.emac.set_duplex(status.duplex);
         }
+    }
+}
+
+#[cfg(feature = "esp32")]
+#[cfg_attr(docsrs, doc(cfg(feature = "esp32")))]
+impl<'a, const RX: usize, const TX: usize, const BUF: usize, D>
+    EmacPhyBundle<'a, RX, TX, BUF, Lan8720a, MdioController<D>>
+where
+    D: DelayNs,
+{
+    /// Create a WT32-ETH01 LAN8720A + MDIO bundle.
+    ///
+    /// # Arguments
+    ///
+    /// * `emac` - Initialized EMAC instance in its final memory location
+    /// * `delay` - Delay provider for MDIO timeouts
+    ///
+    /// # Returns
+    ///
+    /// A bundle configured for WT32-ETH01.
+    pub fn wt32_eth01_lan8720a(emac: &'a mut crate::Emac<RX, TX, BUF>, delay: D) -> Self {
+        Self::new(emac, Wt32Eth01::lan8720a(), MdioController::new(delay))
     }
 }
 
@@ -509,92 +626,6 @@ macro_rules! emac_async_isr {
             __emac_async_isr_internal
         };
     };
-}
-
-/// Helper struct for managing EMAC with esp-hal peripheral ownership.
-///
-/// This wrapper provides a path toward full esp-hal integration by tracking
-/// peripheral ownership. For now, it's a marker that documents the intended
-/// future API.
-///
-/// # Future API (when esp-hal adds EMAC support)
-///
-/// ```ignore
-/// use esp_hal::peripherals::{EMAC_DMA, EMAC_MAC, EMAC_EXT};
-/// use ph_esp32_mac::esp_hal::EspHalEmac;
-///
-/// let emac = EspHalEmac::new(
-///     peripherals.EMAC_DMA,
-///     peripherals.EMAC_MAC,
-///     peripherals.EMAC_EXT,
-///     config,
-/// );
-/// ```
-pub struct EspHalEmac<'a, const RX: usize, const TX: usize, const BUF: usize> {
-    inner: &'a mut crate::Emac<RX, TX, BUF>,
-    // Future: add peripheral ownership tokens
-    // _dma: EMAC_DMA,
-    // _mac: EMAC_MAC,
-    // _ext: EMAC_EXT,
-}
-
-impl<'a, const RX: usize, const TX: usize, const BUF: usize> EspHalEmac<'a, RX, TX, BUF> {
-    /// Create a new esp-hal EMAC wrapper.
-    ///
-    /// This is a transitional API. In the future, this will take peripheral
-    /// ownership tokens from esp-hal.
-    pub fn new(inner: &'a mut crate::Emac<RX, TX, BUF>) -> Self {
-        Self { inner }
-    }
-
-    /// Get a reference to the underlying EMAC driver.
-    pub fn inner(&self) -> &crate::Emac<RX, TX, BUF> {
-        self.inner
-    }
-
-    /// Get a mutable reference to the underlying EMAC driver.
-    pub fn inner_mut(&mut self) -> &mut crate::Emac<RX, TX, BUF> {
-        self.inner
-    }
-
-    /// Initialize the EMAC with esp-hal delay.
-    ///
-    /// Uses `esp_hal::delay::Delay` for timing operations.
-    pub fn init_with_delay(&mut self, config: crate::EmacConfig) -> crate::Result<()> {
-        let mut delay = Delay::new();
-        self.inner.init(config, &mut delay)
-    }
-}
-
-impl<'a, const RX: usize, const TX: usize, const BUF: usize> core::ops::Deref
-    for EspHalEmac<'a, RX, TX, BUF>
-{
-    type Target = crate::Emac<RX, TX, BUF>;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner
-    }
-}
-
-impl<'a, const RX: usize, const TX: usize, const BUF: usize> core::ops::DerefMut
-    for EspHalEmac<'a, RX, TX, BUF>
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner
-    }
-}
-
-// Also implement EmacExt for the wrapper
-impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmacExt
-    for EspHalEmac<'a, RX, TX, BUF>
-{
-    fn bind_interrupt(&mut self, handler: InterruptHandler) {
-        self.inner.bind_interrupt(handler);
-    }
-
-    fn disable_interrupt(&mut self) {
-        self.inner.disable_interrupt();
-    }
 }
 
 #[cfg(test)]

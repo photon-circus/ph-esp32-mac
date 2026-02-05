@@ -31,31 +31,17 @@ use esp_hal::{
     timer::timg::TimerGroup,
 };
 use log::{info, warn};
-use static_cell::StaticCell;
 
-use ph_esp32_mac::esp_hal::{EmacBuilder, EmacExt, EmacPhyBundle, emac_async_isr};
-use ph_esp32_mac::{
-    AsyncEmacExt, AsyncEmacState, Emac, EmacConfig, Lan8720a, MdioController, PhyInterface,
-    RmiiClockMode,
+use ph_esp32_mac::esp_hal::{
+    emac_async_isr, EmacBuilder, EmacExt, EmacPhyBundle, Wt32Eth01,
 };
-
-// =============================================================================
-// Board Configuration
-// =============================================================================
-
-/// PHY address (WT32-ETH01 has PHYAD0 pulled high = address 1).
-const PHY_ADDR: u8 = 1;
-
-/// GPIO for external oscillator enable.
-const CLK_EN_GPIO: u8 = 16;
+use ph_esp32_mac::{AsyncEmacExt, Emac};
 
 // =============================================================================
 // Static EMAC + Async State
 // =============================================================================
 
-#[unsafe(link_section = ".dram1")]
-static EMAC: StaticCell<Emac<10, 10, 1600>> = StaticCell::new();
-static ASYNC_STATE: AsyncEmacState = AsyncEmacState::new();
+ph_esp32_mac::emac_static_async!(EMAC, ASYNC_STATE, 10, 10, 1600);
 
 emac_async_isr!(EMAC_IRQ, Priority::Priority1, &ASYNC_STATE);
 
@@ -110,32 +96,23 @@ async fn main(spawner: Spawner) -> ! {
     clk_en.set_high();
     let mut delay = Delay::new();
     delay.delay_millis(10);
-    info!("External oscillator enabled (GPIO{} = HIGH)", CLK_EN_GPIO);
+    info!(
+        "External oscillator enabled (GPIO{} = HIGH)",
+        Wt32Eth01::CLK_EN_GPIO
+    );
 
     // Initialize EMAC in static storage.
     let emac_ptr = EMAC.init(Emac::new()) as *mut Emac<10, 10, 1600>;
-    let config = EmacConfig::rmii_esp32_default()
-        .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
-        .with_phy_interface(PhyInterface::Rmii)
-        .with_rmii_clock(RmiiClockMode::ExternalInput { gpio: 0 });
-
     // SAFETY: EMAC is in static storage for the duration of the program.
     let emac = unsafe { &mut *emac_ptr };
-    EmacBuilder::new(emac)
-        .with_config(config)
+    EmacBuilder::wt32_eth01_with_mac(emac, [0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
         .init(&mut delay)
         .unwrap();
 
     // Initialize PHY and wait for link.
     {
-        let mut emac_phy = EmacPhyBundle::new(
-            emac,
-            Lan8720a::new(PHY_ADDR),
-            MdioController::new(Delay::new()),
-        );
-        emac_phy.init_phy().unwrap();
-
-        match emac_phy.wait_link_up(&mut delay, 10_000, 200) {
+        let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(emac, Delay::new());
+        match emac_phy.init_and_wait_link_up(&mut delay, 10_000, 200) {
             Ok(status) => info!("Link up: {:?}", status),
             Err(err) => warn!("Link wait failed: {:?}", err),
         }

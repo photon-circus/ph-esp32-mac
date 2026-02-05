@@ -111,7 +111,7 @@ pub struct MacAddressFilter {
     /// Filter type (source or destination)
     pub filter_type: MacFilterType,
     /// Byte mask - each bit masks one byte of the address comparison
-    /// Bit 0 masks addr[0], bit 5 masks addr[5]
+    /// Bit 0 masks `addr[0]`, bit 5 masks `addr[5]`.
     /// Masked bytes are not compared (act as wildcards)
     pub byte_mask: u8,
 }
@@ -168,7 +168,7 @@ impl MacAddressFilter {
 // SMI (MDIO) pins typically use GPIO23 (MDC) and GPIO18 (MDIO) but
 // can be routed via GPIO matrix. Pin configuration is handled by esp-hal.
 //
-// See `hal::gpio::esp32_gpio` for constant definitions.
+// See `internal::gpio_pins` or the WT32-ETH01 board helper for pin definitions.
 
 /// Checksum offload configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

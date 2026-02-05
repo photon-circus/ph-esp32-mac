@@ -215,8 +215,9 @@ impl Default for TxDescriptor {
     }
 }
 
-// Safety: TxDescriptor uses volatile cells for all DMA-accessed fields
+// SAFETY: TxDescriptor uses volatile cells for all DMA-accessed fields.
 unsafe impl Sync for TxDescriptor {}
+// SAFETY: TxDescriptor uses volatile cells for all DMA-accessed fields.
 unsafe impl Send for TxDescriptor {}
 
 #[cfg(test)]

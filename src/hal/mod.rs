@@ -7,7 +7,6 @@
 //! # Modules
 //!
 //! - [`clock`]: Clock configuration and control
-//! - [`gpio`]: GPIO pin configuration traits and types
 //! - [`mdio`]: MDIO/SMI bus for PHY communication
 //! - [`reset`]: Reset controller for the EMAC peripheral
 //!
@@ -17,7 +16,6 @@
 //! Pass any delay implementation from your HAL (e.g., `esp_hal::delay::Delay`).
 
 pub mod clock;
-pub mod gpio;
 pub mod mdio;
 pub mod reset;
 

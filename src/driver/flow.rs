@@ -24,6 +24,11 @@
 //! // In your RX processing loop
 //! emac.check_flow_control();
 //! ```
+//!
+//! # Testing Notes
+//!
+//! Flow control is an advanced feature and has limited hardware validation so far.
+//! Treat it as best-effort until broader testing confirms behavior.
 
 use super::config::FlowControlConfig;
 use super::emac::Emac;

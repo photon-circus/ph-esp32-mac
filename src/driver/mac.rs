@@ -1201,12 +1201,13 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Default
     }
 }
 
-// Safety: Emac can be safely shared between threads when properly synchronized
+// SAFETY: Emac can be safely shared between threads when properly synchronized.
 unsafe impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Sync
     for Emac<RX_BUFS, TX_BUFS, BUF_SIZE>
 {
 }
 
+// SAFETY: Emac can be safely shared between threads when properly synchronized.
 unsafe impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Send
     for Emac<RX_BUFS, TX_BUFS, BUF_SIZE>
 {

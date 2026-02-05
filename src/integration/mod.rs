@@ -40,20 +40,26 @@
 //! ```
 
 #[cfg(feature = "esp-hal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "esp-hal")))]
 pub mod esp_hal;
 
 #[cfg(feature = "smoltcp")]
+#[cfg_attr(docsrs, doc(cfg(feature = "smoltcp")))]
 pub mod smoltcp;
 
 #[cfg(feature = "embassy-net")]
+#[cfg_attr(docsrs, doc(cfg(feature = "embassy-net")))]
 pub mod embassy_net;
 
 // Re-export key types for convenience when both features are enabled
 #[cfg(feature = "esp-hal")]
-pub use esp_hal::{EMAC_INTERRUPT, EmacBuilder, EmacExt, EmacPhyBundle, EspHalEmac};
+#[cfg_attr(docsrs, doc(cfg(feature = "esp-hal")))]
+pub use esp_hal::{EMAC_INTERRUPT, EmacBuilder, EmacExt, EmacPhyBundle};
 
 #[cfg(feature = "smoltcp")]
+#[cfg_attr(docsrs, doc(cfg(feature = "smoltcp")))]
 pub use smoltcp::{EmacRxToken, EmacTxToken, ethernet_address};
 
 #[cfg(feature = "embassy-net")]
+#[cfg_attr(docsrs, doc(cfg(feature = "embassy-net")))]
 pub use embassy_net::{EmbassyEmac, EmbassyEmacState, EmbassyRxToken, EmbassyTxToken};

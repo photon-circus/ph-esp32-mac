@@ -467,13 +467,13 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Default
     }
 }
 
-// Safety: DmaEngine can be shared between threads when properly synchronized
-// The caller must ensure exclusive access during init/transmit/receive
+// SAFETY: DmaEngine can be shared between threads when properly synchronized.
 unsafe impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Sync
     for DmaEngine<RX_BUFS, TX_BUFS, BUF_SIZE>
 {
 }
 
+// SAFETY: DmaEngine can be shared between threads when properly synchronized.
 unsafe impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize> Send
     for DmaEngine<RX_BUFS, TX_BUFS, BUF_SIZE>
 {

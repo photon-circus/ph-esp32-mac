@@ -22,6 +22,11 @@
 //!
 //! The MAC can filter frames based on 802.1Q VLAN tags, accepting only frames
 //! with a specific VLAN ID.
+//!
+//! # Testing Notes
+//!
+//! These filtering features are advanced and have limited hardware validation
+//! so far. Treat them as best-effort until broader testing confirms behavior.
 
 use super::config::{MacAddressFilter, MacFilterType};
 use super::emac::Emac;

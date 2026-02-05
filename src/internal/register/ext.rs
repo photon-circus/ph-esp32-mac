@@ -187,6 +187,7 @@ impl ExtRegs {
     /// access will fail or return garbage.
     #[inline(always)]
     pub fn enable_peripheral_clock() {
+        // SAFETY: DPORT register address is valid for this SoC.
         unsafe {
             let current = read_reg(DPORT_WIFI_CLK_EN_REG);
 
@@ -218,6 +219,7 @@ impl ExtRegs {
     /// the EMAC peripheral at the system level.
     #[inline(always)]
     pub fn enable_clocks() {
+        // SAFETY: Extension register addresses are valid for this SoC.
         unsafe {
             let ctrl = read_reg(EXT_BASE + EX_CLK_CTRL_OFFSET);
             write_reg(
@@ -230,6 +232,7 @@ impl ExtRegs {
     /// Disable EMAC clocks
     #[inline(always)]
     pub fn disable_clocks() {
+        // SAFETY: Extension register addresses are valid for this SoC.
         unsafe {
             let ctrl = read_reg(EXT_BASE + EX_CLK_CTRL_OFFSET);
             write_reg(
@@ -248,6 +251,7 @@ impl ExtRegs {
     /// Sets phy_intf_sel = 4 (RMII mode)
     #[inline(always)]
     pub fn set_rmii_mode() {
+        // SAFETY: Extension register addresses are valid for this SoC.
         unsafe {
             let conf = read_reg(EXT_BASE + EX_PHYINF_CONF_OFFSET);
             // Clear phy_intf_sel bits and set to 4 (RMII)
@@ -265,6 +269,7 @@ impl ExtRegs {
     /// Sets phy_intf_sel = 0 (MII mode)
     #[inline(always)]
     pub fn set_mii_mode() {
+        // SAFETY: Extension register addresses are valid for this SoC.
         unsafe {
             let conf = read_reg(EXT_BASE + EX_PHYINF_CONF_OFFSET);
             // Clear phy_intf_sel bits (MII = 0)
@@ -280,6 +285,7 @@ impl ExtRegs {
     /// - clk_sel = 1 (select external clock)
     #[inline(always)]
     pub fn set_rmii_clock_external() {
+        // SAFETY: Extension register addresses are valid for this SoC.
         unsafe {
             // Configure clock control: enable external, disable internal
             let ctrl = read_reg(EXT_BASE + EX_CLK_CTRL_OFFSET);
@@ -312,6 +318,7 @@ impl ExtRegs {
     /// the 50MHz clock on GPIO0, this function enables the clock input path.
     #[inline(always)]
     pub fn configure_gpio0_rmii_clock_input() {
+        // SAFETY: IO_MUX register addresses are valid for this SoC.
         unsafe {
             let addr = IO_MUX_BASE + IO_MUX_GPIO0_OFFSET;
             let current = read_reg(addr);
@@ -352,6 +359,7 @@ impl ExtRegs {
     /// the APLL must be properly configured (typically done by esp-hal or esp-idf).
     #[inline(always)]
     pub fn set_rmii_clock_internal() {
+        // SAFETY: Extension register addresses are valid for this SoC.
         unsafe {
             // Configure clock control: disable external, enable internal
             let ctrl = read_reg(EXT_BASE + EX_CLK_CTRL_OFFSET);
