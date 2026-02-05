@@ -40,6 +40,7 @@ use esp_hal::{
 };
 use log::{error, info, warn};
 
+use ph_esp32_mac::esp_hal::EmacBuilder;
 use ph_esp32_mac::{
     Duplex, Emac, EmacConfig, Lan8720a, MdioController, PhyDriver, PhyInterface, RmiiClockMode,
     Speed,
@@ -95,7 +96,7 @@ fn main() -> ! {
     });
 
     // Configure for WT32-ETH01 board
-    let config = EmacConfig::new()
+    let config = EmacConfig::rmii_esp32_default()
         .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
         .with_phy_interface(PhyInterface::Rmii)
         .with_rmii_clock(RmiiClockMode::ExternalInput { gpio: 0 });
@@ -104,8 +105,8 @@ fn main() -> ! {
     critical_section::with(|cs| {
         let mut emac_ref = EMAC.borrow_ref_mut(cs);
         let emac = emac_ref.as_mut().expect("EMAC static unavailable");
-        match emac.init(config, &mut delay) {
-            Ok(()) => info!("EMAC initialized successfully"),
+        match EmacBuilder::new(emac).with_config(config).init(&mut delay) {
+            Ok(_) => info!("EMAC initialized successfully"),
             Err(e) => {
                 error!("EMAC initialization failed: {:?}", e);
                 panic!("Cannot continue without EMAC");

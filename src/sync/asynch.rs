@@ -426,8 +426,10 @@ mod tests {
         state_b.register_rx(&test_waker(rx_counter_b.clone()));
         state_a.register_tx(&test_waker(tx_counter_a.clone()));
 
-        let mut status = InterruptStatus::default();
-        status.rx_complete = true;
+        let status = InterruptStatus {
+            rx_complete: true,
+            ..InterruptStatus::default()
+        };
         state_a.on_interrupt(status);
 
         assert_eq!(rx_counter_a.count(), 1);

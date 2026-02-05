@@ -334,6 +334,19 @@ impl EmacConfig {
         }
     }
 
+    /// Create a default configuration for ESP32 RMII with esp-hal defaults.
+    ///
+    /// This uses RMII with an external 50 MHz clock on GPIO0, which is the
+    /// most common ESP32 board configuration.
+    ///
+    /// # Returns
+    ///
+    /// Default RMII configuration for ESP32.
+    #[must_use]
+    pub const fn rmii_esp32_default() -> Self {
+        Self::new()
+    }
+
     // =========================================================================
     // Builder Methods
     // =========================================================================
@@ -475,6 +488,16 @@ mod tests {
         assert_eq!(from_default.mac_address, from_new.mac_address);
         assert_eq!(from_default.phy_interface, from_new.phy_interface);
         assert_eq!(from_default.dma_burst_len, from_new.dma_burst_len);
+    }
+
+    #[test]
+    fn config_rmii_esp32_default_matches_new() {
+        let from_rmii = EmacConfig::rmii_esp32_default();
+        let from_new = EmacConfig::new();
+
+        assert_eq!(from_rmii.mac_address, from_new.mac_address);
+        assert_eq!(from_rmii.phy_interface, from_new.phy_interface);
+        assert_eq!(from_rmii.rmii_clock, from_new.rmii_clock);
     }
 
     // =========================================================================

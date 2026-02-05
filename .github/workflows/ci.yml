@@ -59,6 +59,8 @@ jobs:
         run: cargo clippy --lib --tests --features "smoltcp,async,critical-section,embassy-net" -- -D warnings
       - name: Clippy (defmt)
         run: cargo clippy --lib --features "defmt" -- -D warnings
+      - name: Clippy (smoltcp + async + embassy)
+        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section,embassy-net" -- -D warnings
 
   coverage:
     runs-on: ubuntu-latest

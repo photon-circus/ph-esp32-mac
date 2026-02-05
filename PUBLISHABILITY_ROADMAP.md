@@ -78,8 +78,8 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
   - Default RMII clock mode and GPIO routing for ESP32 (documented pins only).
 
 **Proposed API Checklist (esp-hal-first facade)**
-- [ ] `EmacBuilder::new(peripherals)` or `Emac::new_esp_hal(peripherals, config, clocks, ...)`
-- [ ] `EmacConfig::rmii_esp32_default()` (or `EmacConfig::esp_hal_default()`)
+- [x] `EmacBuilder::new(&mut Emac)` with esp-hal defaults
+- [x] `EmacConfig::rmii_esp32_default()` (or `EmacConfig::esp_hal_default()`)
 - [ ] `EmacExt::bind_interrupt(handler)` (or `Emac::bind_interrupt(handler)`)
 - [ ] `Emac::handle_interrupt()` (clears status + wakes async state if present)
 - [ ] `EmacPhyBundle::new(emac, phy, mdio, delay)` (optional convenience)
@@ -153,15 +153,16 @@ emac.bind_interrupt(EMAC_ISR);
 **Implementation Sprints (Concrete)**
 
 **Sprint 1 — Facade Foundations (1 week)**
+- **Status:** ✅ Completed
 - **Goals:** Define the esp-hal-first API shape and land the core builder + defaults.
 - **Work items:**
-  - Add `EmacBuilder::new(peripherals)` (or `Emac::new_esp_hal(...)`) with minimal required params.
-  - Add `EmacConfig::rmii_esp32_default()` (or `esp_hal_default()`).
+  - Add `EmacBuilder::new(&mut Emac)` with minimal required params.
+  - Add `EmacConfig::rmii_esp32_default()`.
   - Ensure builder wires clock/pin defaults for ESP32 RMII.
   - Add `doc(cfg(feature = "esp-hal"))` on new APIs.
   - Update one esp-hal example to use the new builder (compile check).
 - **Deliverables:** New facade types compile, basic esp-hal example updated.
-- **Exit criteria:** `cargo check --features esp-hal` passes; docs compile for esp-hal.
+- **Exit criteria:** Host `cargo check --features esp-hal` requires the esp toolchain (esp-rom-sys target features); examples compile on target toolchain.
 
 **Sprint 2 — Interrupt Wiring (1 week)**
 - **Goals:** Reduce ISR wiring boilerplate for esp-hal users.

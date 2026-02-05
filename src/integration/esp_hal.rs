@@ -5,6 +5,7 @@
 //!
 //! - [`EmacExt`]: Extension trait for interrupt handler registration
 //! - [`emac_isr!`]: Macro for defining EMAC interrupt handlers with esp-hal semantics
+//! - [`EmacBuilder`]: Builder for minimal-boilerplate esp-hal bring-up
 //! - Type aliases and re-exports for common esp-hal types
 //!
 //! # Usage
@@ -30,7 +31,10 @@
 //!     let mut delay = Delay::new();
 //!     let emac = unsafe { &mut EMAC };
 //!     
-//!     emac.init(config, &mut delay).unwrap();
+//!     EmacBuilder::new(emac)
+//!         .with_config(config)
+//!         .init(&mut delay)
+//!         .unwrap();
 //!     
 //!     // Enable interrupt with esp-hal
 //!     emac.enable_emac_interrupt(EMAC_IRQ);
@@ -52,6 +56,124 @@
 pub use esp_hal::delay::Delay;
 pub use esp_hal::interrupt::{self, InterruptHandler, Priority};
 pub use esp_hal::peripherals::Interrupt;
+
+/// Builder for esp-hal-friendly EMAC initialization.
+///
+/// This builder reduces boilerplate by bundling common setup steps for
+/// esp-hal users while keeping the driver implementation unchanged.
+///
+/// # Important
+///
+/// The EMAC must already be placed in its final memory location before
+/// calling [`EmacBuilder::init`]. This is required for DMA descriptors.
+///
+/// # Example
+///
+/// ```ignore
+/// let mut delay = Delay::new();
+/// let emac = unsafe { &mut EMAC };
+///
+/// EmacBuilder::new(emac)
+///     .with_config(EmacConfig::rmii_esp32_default())
+///     .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+///     .init(&mut delay)
+///     .unwrap();
+/// ```
+pub struct EmacBuilder<'a, const RX: usize, const TX: usize, const BUF: usize> {
+    emac: &'a mut crate::Emac<RX, TX, BUF>,
+    config: crate::EmacConfig,
+}
+
+impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmacBuilder<'a, RX, TX, BUF> {
+    /// Create a new esp-hal EMAC builder.
+    ///
+    /// # Arguments
+    ///
+    /// * `emac` - EMAC instance already placed in its final memory location
+    ///
+    /// # Returns
+    ///
+    /// A builder with ESP32 RMII defaults.
+    pub fn new(emac: &'a mut crate::Emac<RX, TX, BUF>) -> Self {
+        Self {
+            emac,
+            config: crate::EmacConfig::rmii_esp32_default(),
+        }
+    }
+
+    /// Override the full EMAC configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Complete EMAC configuration
+    #[must_use]
+    pub const fn with_config(mut self, config: crate::EmacConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Set the MAC address.
+    ///
+    /// # Arguments
+    ///
+    /// * `mac_address` - 6-byte MAC address
+    #[must_use]
+    pub const fn with_mac_address(mut self, mac_address: [u8; 6]) -> Self {
+        self.config = self.config.with_mac_address(mac_address);
+        self
+    }
+
+    /// Set the RMII clock mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `rmii_clock` - RMII clock configuration
+    #[must_use]
+    pub const fn with_rmii_clock(mut self, rmii_clock: crate::RmiiClockMode) -> Self {
+        self.config = self.config.with_rmii_clock(rmii_clock);
+        self
+    }
+
+    /// Initialize the EMAC using an esp-hal delay provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `delay` - esp-hal delay provider
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the initialized EMAC.
+    ///
+    /// # Errors
+    ///
+    /// Propagates initialization errors from [`Emac::init`].
+    pub fn init(self, delay: &mut Delay) -> crate::Result<&'a mut crate::Emac<RX, TX, BUF>> {
+        self.emac.init(self.config, delay)?;
+        Ok(self.emac)
+    }
+
+    /// Initialize and start the EMAC using an esp-hal delay provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `delay` - esp-hal delay provider
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the initialized EMAC.
+    ///
+    /// # Errors
+    ///
+    /// Propagates initialization or start errors.
+    pub fn init_and_start(
+        self,
+        delay: &mut Delay,
+    ) -> crate::Result<&'a mut crate::Emac<RX, TX, BUF>> {
+        self.emac.init(self.config, delay)?;
+        self.emac.start()?;
+        Ok(self.emac)
+    }
+}
 
 /// The EMAC peripheral interrupt source.
 ///

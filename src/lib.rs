@@ -226,6 +226,16 @@ pub use phy::{Lan8720a, Lan8720aWithReset, LinkStatus, PhyCapabilities, PhyDrive
 #[cfg(feature = "critical-section")]
 pub use sync::{SharedEmac, SharedEmacDefault, SharedEmacLarge, SharedEmacSmall};
 
+// esp-hal facade re-export (for ergonomic access)
+#[cfg(feature = "esp-hal")]
+pub mod esp_hal {
+    //! esp-hal integration facade.
+    //!
+    //! This module re-exports esp-hal integration helpers for ergonomic access.
+
+    pub use crate::integration::esp_hal::*;
+}
+
 // Re-export async types when async feature is enabled
 #[cfg(feature = "async")]
 pub use sync::asynch::{AsyncEmacExt, AsyncEmacState, async_interrupt_handler};
