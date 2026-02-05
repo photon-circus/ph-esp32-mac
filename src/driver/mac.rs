@@ -679,6 +679,13 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         MacRegs::set_pass_all_multicast(enable);
     }
 
+    /// Enable or disable broadcast frame reception.
+    ///
+    /// When disabled, broadcast frames are filtered out.
+    pub fn set_broadcast_enabled(&mut self, enable: bool) {
+        MacRegs::set_broadcast_enabled(enable);
+    }
+
     // =========================================================================
     // Flow Control
     // =========================================================================

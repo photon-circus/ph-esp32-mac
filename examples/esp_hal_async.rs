@@ -28,6 +28,7 @@ use esp_hal::{
     delay::Delay,
     gpio::{Level, Output, OutputConfig},
     interrupt::Priority,
+    timer::timg::TimerGroup,
 };
 use log::{info, warn};
 use static_cell::StaticCell;
@@ -100,6 +101,10 @@ async fn main(spawner: Spawner) -> ! {
 
     let peripherals = esp_hal::init(esp_hal::Config::default());
 
+    // Start the embassy time driver (required by the esp-rtos executor).
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    esp_rtos::start(timg0.timer0);
+
     // Enable external oscillator (WT32-ETH01 specific).
     let mut clk_en = Output::new(peripherals.GPIO16, Level::Low, OutputConfig::default());
     clk_en.set_high();
@@ -142,5 +147,7 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.spawn(rx_task(emac_ptr)).unwrap();
 
-    core::future::pending::<()>().await;
+    loop {
+        core::future::pending::<()>().await;
+    }
 }

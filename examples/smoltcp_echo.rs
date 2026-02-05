@@ -32,6 +32,7 @@
 #![no_main]
 
 use core::cell::RefCell;
+use core::marker::PhantomData;
 use critical_section::Mutex;
 
 use esp_backtrace as _;
@@ -47,6 +48,7 @@ use log::{debug, info, warn};
 
 use smoltcp::{
     iface::{Config, Interface, SocketSet},
+    phy::{Device, RxToken, TxToken},
     socket::dhcpv4,
     socket::tcp::{Socket as TcpSocket, SocketBuffer as TcpSocketBuffer},
     time::Instant as SmolInstant,
@@ -75,6 +77,13 @@ const MAC_ADDR: [u8; 6] = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
 const PHY_ADDR: u8 = 1;
 #[allow(dead_code)]
 const CLK_EN_GPIO: u8 = 16;
+/// Delay before starting DHCP after link-up (seconds).
+const DHCP_START_DELAY_SECS: u64 = 2;
+
+/// Enable DHCP TX/RX logging.
+const DHCP_LOG: bool = true;
+/// Temporarily enable promiscuous mode while waiting for DHCP.
+const DHCP_PROMISCUOUS: bool = true;
 
 // =============================================================================
 // Static EMAC Instance
@@ -82,6 +91,234 @@ const CLK_EN_GPIO: u8 = 16;
 
 /// Static EMAC instance
 static EMAC: Mutex<RefCell<Option<Emac<10, 10, 1600>>>> = Mutex::new(RefCell::new(None));
+
+// =============================================================================
+// DHCP Logging Helpers
+// =============================================================================
+
+struct DhcpInfo {
+    src_ip: [u8; 4],
+    dst_ip: [u8; 4],
+    src_port: u16,
+    dst_port: u16,
+    msg_type: Option<u8>,
+    len: usize,
+}
+
+fn parse_dhcp(buf: &[u8]) -> Option<DhcpInfo> {
+    if buf.len() < 14 + 20 + 8 {
+        return None;
+    }
+
+    let ethertype = u16::from_be_bytes([buf[12], buf[13]]);
+    if ethertype != 0x0800 {
+        return None;
+    }
+
+    let ip = 14usize;
+    let ihl = (buf[ip] & 0x0F) as usize * 4;
+    if ihl < 20 || buf.len() < ip + ihl + 8 {
+        return None;
+    }
+
+    if buf[ip + 9] != 17 {
+        return None;
+    }
+
+    let src_ip = [buf[ip + 12], buf[ip + 13], buf[ip + 14], buf[ip + 15]];
+    let dst_ip = [buf[ip + 16], buf[ip + 17], buf[ip + 18], buf[ip + 19]];
+
+    let udp = ip + ihl;
+    let src_port = u16::from_be_bytes([buf[udp], buf[udp + 1]]);
+    let dst_port = u16::from_be_bytes([buf[udp + 2], buf[udp + 3]]);
+    let is_dhcp = (src_port == 67 && dst_port == 68) || (src_port == 68 && dst_port == 67);
+    if !is_dhcp {
+        return None;
+    }
+
+    let payload = &buf[udp + 8..];
+    let msg_type = parse_dhcp_msg_type(payload);
+
+    Some(DhcpInfo {
+        src_ip,
+        dst_ip,
+        src_port,
+        dst_port,
+        msg_type,
+        len: buf.len(),
+    })
+}
+
+fn parse_dhcp_msg_type(payload: &[u8]) -> Option<u8> {
+    const DHCP_FIXED_LEN: usize = 236;
+    const COOKIE: [u8; 4] = [99, 130, 83, 99];
+    if payload.len() < DHCP_FIXED_LEN + 4 {
+        return None;
+    }
+    if payload[DHCP_FIXED_LEN..DHCP_FIXED_LEN + 4] != COOKIE {
+        return None;
+    }
+
+    let mut idx = DHCP_FIXED_LEN + 4;
+    while idx < payload.len() {
+        let opt = payload[idx];
+        idx += 1;
+        match opt {
+            0 => continue, // Pad
+            255 => break,  // End
+            _ => {
+                if idx >= payload.len() {
+                    break;
+                }
+                let len = payload[idx] as usize;
+                idx += 1;
+                if idx + len > payload.len() {
+                    break;
+                }
+                if opt == 53 && len >= 1 {
+                    return Some(payload[idx]);
+                }
+                idx += len;
+            }
+        }
+    }
+    None
+}
+
+fn msg_type_name(msg_type: Option<u8>) -> &'static str {
+    match msg_type {
+        Some(1) => "Discover",
+        Some(2) => "Offer",
+        Some(3) => "Request",
+        Some(4) => "Decline",
+        Some(5) => "Ack",
+        Some(6) => "Nak",
+        Some(7) => "Release",
+        Some(8) => "Inform",
+        _ => "Unknown",
+    }
+}
+
+fn log_dhcp(direction: &str, info: &DhcpInfo) {
+    info!(
+        "{} DHCP {}->{} {}.{}.{}.{}:{} -> {}.{}.{}.{}:{} len={}",
+        direction,
+        msg_type_name(info.msg_type),
+        if info.src_port == 68 {
+            "client"
+        } else {
+            "server"
+        },
+        info.src_ip[0],
+        info.src_ip[1],
+        info.src_ip[2],
+        info.src_ip[3],
+        info.src_port,
+        info.dst_ip[0],
+        info.dst_ip[1],
+        info.dst_ip[2],
+        info.dst_ip[3],
+        info.dst_port,
+        info.len
+    );
+}
+
+// =============================================================================
+// smoltcp Logging Device Wrapper
+// =============================================================================
+
+struct LoggingEmac<'a, const RX: usize, const TX: usize, const BUF: usize> {
+    emac: *mut Emac<RX, TX, BUF>,
+    _marker: PhantomData<&'a mut Emac<RX, TX, BUF>>,
+}
+
+impl<'a, const RX: usize, const TX: usize, const BUF: usize> LoggingEmac<'a, RX, TX, BUF> {
+    fn new(emac: &'a mut Emac<RX, TX, BUF>) -> Self {
+        Self {
+            emac: emac as *mut Emac<RX, TX, BUF>,
+            _marker: PhantomData,
+        }
+    }
+}
+
+struct LoggingRxToken<T> {
+    inner: T,
+}
+
+struct LoggingTxToken<T> {
+    inner: T,
+}
+
+impl<T: RxToken> RxToken for LoggingRxToken<T> {
+    fn consume<R, F>(self, f: F) -> R
+    where
+        F: FnOnce(&[u8]) -> R,
+    {
+        self.inner.consume(|buf| {
+            if DHCP_LOG {
+                if let Some(info) = parse_dhcp(buf) {
+                    log_dhcp("RX", &info);
+                }
+            }
+            f(buf)
+        })
+    }
+}
+
+impl<T: TxToken> TxToken for LoggingTxToken<T> {
+    fn consume<R, F>(self, len: usize, f: F) -> R
+    where
+        F: FnOnce(&mut [u8]) -> R,
+    {
+        self.inner.consume(len, |buf| {
+            let result = f(buf);
+            if DHCP_LOG {
+                if let Some(info) = parse_dhcp(buf) {
+                    log_dhcp("TX", &info);
+                }
+            }
+            result
+        })
+    }
+}
+
+impl<const RX: usize, const TX: usize, const BUF: usize> Device for LoggingEmac<'_, RX, TX, BUF> {
+    type RxToken<'a>
+        = LoggingRxToken<<Emac<RX, TX, BUF> as Device>::RxToken<'a>>
+    where
+        Self: 'a;
+    type TxToken<'a>
+        = LoggingTxToken<<Emac<RX, TX, BUF> as Device>::TxToken<'a>>
+    where
+        Self: 'a;
+
+    fn receive(
+        &mut self,
+        timestamp: SmolInstant,
+    ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
+        // SAFETY: emac points to a static EMAC instance.
+        let emac = unsafe { &mut *self.emac };
+        <Emac<RX, TX, BUF> as Device>::receive(emac, timestamp).map(|(rx, tx)| {
+            (
+                LoggingRxToken { inner: rx },
+                LoggingTxToken { inner: tx },
+            )
+        })
+    }
+
+    fn transmit(&mut self, timestamp: SmolInstant) -> Option<Self::TxToken<'_>> {
+        // SAFETY: emac points to a static EMAC instance.
+        let emac = unsafe { &mut *self.emac };
+        <Emac<RX, TX, BUF> as Device>::transmit(emac, timestamp)
+            .map(|tx| LoggingTxToken { inner: tx })
+    }
+
+    fn capabilities(&self) -> smoltcp::phy::DeviceCapabilities {
+        // SAFETY: emac points to a static EMAC instance.
+        let emac = unsafe { &mut *self.emac };
+        <Emac<RX, TX, BUF> as Device>::capabilities(emac)
+    }
+}
 
 // =============================================================================
 // Main Entry Point
@@ -165,12 +402,39 @@ fn main() -> ! {
     });
     info!("EMAC started");
 
+    critical_section::with(|cs| {
+        let mut emac_ref = EMAC.borrow_ref_mut(cs);
+        let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+        emac.set_broadcast_enabled(true);
+        emac.set_pass_all_multicast(true);
+        emac.set_promiscuous(false);
+    });
+    info!("Broadcast + multicast filters relaxed for DHCP");
+    let mut dhcp_promisc_enabled = false;
+    if DHCP_PROMISCUOUS {
+        critical_section::with(|cs| {
+            let mut emac_ref = EMAC.borrow_ref_mut(cs);
+            let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+            emac.set_promiscuous(true);
+        });
+        dhcp_promisc_enabled = true;
+        info!("Promiscuous mode enabled for DHCP");
+    }
+
+    if DHCP_START_DELAY_SECS > 0 {
+        delay.delay_millis((DHCP_START_DELAY_SECS * 1000) as u32);
+    }
+
     // ==========================================================================
     // smoltcp Interface Setup
     // ==========================================================================
 
     // Create smoltcp configuration
-    let hw_addr = EthernetAddress(MAC_ADDR);
+    let hw_addr = critical_section::with(|cs| {
+        let emac_ref = EMAC.borrow_ref_mut(cs);
+        let emac = emac_ref.as_ref().expect("EMAC static unavailable");
+        EthernetAddress(*emac.mac_address())
+    });
     let mut smol_config = Config::new(hw_addr.into());
     let rng = Rng::new();
     smol_config.random_seed = ((rng.random() as u64) << 32) | (rng.random() as u64);
@@ -233,7 +497,8 @@ fn main() -> ! {
         critical_section::with(|cs| {
             let mut emac_ref = EMAC.borrow_ref_mut(cs);
             let emac = emac_ref.as_mut().expect("EMAC static unavailable");
-            let _activity = iface.poll(smol_now, emac, &mut sockets);
+            let mut device = LoggingEmac::new(emac);
+            let _activity = iface.poll(smol_now, &mut device, &mut sockets);
         });
 
         // Handle DHCP events
@@ -266,6 +531,16 @@ fn main() -> ! {
 
                     dhcp_last_address = Some(config.address);
                     dhcp_configured = true;
+                    if DHCP_PROMISCUOUS && dhcp_promisc_enabled {
+                        critical_section::with(|cs| {
+                            let mut emac_ref = EMAC.borrow_ref_mut(cs);
+                            let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+                            emac.set_promiscuous(false);
+                        });
+                        dhcp_promisc_enabled = false;
+                        info!("Promiscuous mode disabled after DHCP");
+                    }
+
                 }
                 dhcpv4::Event::Deconfigured => {
                     iface.update_ip_addrs(|addrs| addrs.clear());
@@ -276,6 +551,15 @@ fn main() -> ! {
                         warn!("DHCP deconfigured");
                     }
                     dhcp_configured = false;
+                    if DHCP_PROMISCUOUS && !dhcp_promisc_enabled {
+                        critical_section::with(|cs| {
+                            let mut emac_ref = EMAC.borrow_ref_mut(cs);
+                            let emac = emac_ref.as_mut().expect("EMAC static unavailable");
+                            emac.set_promiscuous(true);
+                        });
+                        dhcp_promisc_enabled = true;
+                        info!("Promiscuous mode re-enabled for DHCP");
+                    }
                 }
             }
         }

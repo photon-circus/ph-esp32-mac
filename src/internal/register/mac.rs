@@ -841,6 +841,22 @@ impl MacRegs {
         }
     }
 
+    /// Enable or disable broadcast frame reception.
+    ///
+    /// When disabled, broadcast frames are filtered out.
+    #[inline(always)]
+    pub fn set_broadcast_enabled(enable: bool) {
+        unsafe {
+            let ff = read_reg(MAC_BASE + GMACFF_OFFSET);
+            let ff = if enable {
+                ff & !GMACFF_DBF
+            } else {
+                ff | GMACFF_DBF
+            };
+            write_reg(MAC_BASE + GMACFF_OFFSET, ff);
+        }
+    }
+
     /// Set the primary MAC address (6 bytes)
     pub fn set_mac_address(addr: &[u8; 6]) {
         // Low register: addr[0] | (addr[1] << 8) | (addr[2] << 16) | (addr[3] << 24)

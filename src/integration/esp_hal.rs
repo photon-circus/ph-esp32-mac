@@ -396,8 +396,7 @@ pub trait EmacExt {
 
 impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt for crate::Emac<RX, TX, BUF> {
     fn bind_interrupt(&mut self, handler: InterruptHandler) {
-        // Disable on other cores if multi-core
-        #[cfg(multi_core)]
+        // Disable on other cores when present.
         for core in esp_hal::system::Cpu::other() {
             esp_hal::interrupt::disable(core, EMAC_INTERRUPT);
         }
