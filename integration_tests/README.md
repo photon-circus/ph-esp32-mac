@@ -134,6 +134,8 @@ espflash monitor
 
 ### Expected Output
 
+Example output (counts may change as tests evolve):
+
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║       WT32-ETH01 Integration Test Suite                      ║
@@ -170,19 +172,19 @@ Entering continuous RX monitoring mode...
 
 ### Test Groups
 
-The test suite runs 47 tests organized into 9 groups:
+The test suite is organized into 9 groups:
 
-| Group | Tests | Description |
-|-------|-------|-----------|
-| 1. Register Access | 4 | EMAC clock, DMA/MAC/extension registers |
-| 2. EMAC Initialization | 3 | Init, RMII pins, DMA descriptors |
-| 3. PHY Communication | 3 | MDIO read, PHY init, link detection |
-| 4. EMAC Operations | 4 | Start, TX, RX (3s), stop/start |
-| 5. Link Status | 1 | Link status query |
-| 6. smoltcp Integration | 3 | Interface, capabilities, poll |
-| 7. State/Interrupts/Utils | 11 | State, interrupts, TX/RX utilities |
-| 8. Advanced Features | 7 | Promiscuous, force link, PHY caps, int enable |
-| 9. Edge Cases | 11 | MAC/hash/VLAN filtering, flow control, EDPD, cleanup |
+| Group | Description |
+|-------|-----------|
+| 1. Register Access | EMAC clock, DMA/MAC/extension registers |
+| 2. EMAC Initialization | Init, RMII pins, DMA descriptors |
+| 3. PHY Communication | MDIO read, PHY init, link detection |
+| 4. EMAC Operations | Start, TX, RX (3s), stop/start |
+| 5. Link Status | Link status query |
+| 6. smoltcp Integration | Interface, capabilities, poll |
+| 7. State/Interrupts/Utils | State, interrupts, TX/RX utilities |
+| 8. Advanced Features | Promiscuous, force link, PHY caps, int enable |
+| 9. Edge Cases | MAC/hash/VLAN filtering, flow control, EDPD, cleanup |
 
 Tests in later groups may be skipped if dependencies in earlier groups fail
 (e.g., EMAC operations require successful initialization and link).
@@ -228,13 +230,15 @@ To add smoltcp for full IP/TCP/UDP support, see the main library documentation.
 The basic pattern is:
 
 ```rust
-use ph_esp32_mac::smoltcp::EmacDevice;
+use smoltcp::iface::{Config, Interface};
+use smoltcp::time::Instant as SmolInstant;
+use smoltcp::wire::EthernetAddress;
 
-// Wrap EMAC in smoltcp Device
-let device = EmacDevice::new(&mut emac);
+let hw_addr = EthernetAddress(*emac.mac_address());
+let config = Config::new(hw_addr.into());
 
-// Use with smoltcp Interface
-let mut iface = Interface::new(config, &mut device, Instant::now());
+// Emac implements smoltcp::phy::Device directly
+let mut iface = Interface::new(config, &mut emac, SmolInstant::from_millis(0));
 ```
 
 ## Board Configuration Module

@@ -114,7 +114,7 @@ cargo run --bin smoltcp_echo --features smoltcp-example --release
 
 **Features**:
 ```toml
-ph-esp32-mac = { version = "0.1", features = ["esp32", "critical-section"] }
+ph-esp32-mac = { version = "0.1", features = ["esp32", "critical-section", "esp-hal"] }
 esp-hal = { version = "1.0", features = ["esp32"] }
 ```
 
@@ -148,7 +148,7 @@ ph-esp32-mac = { version = "0.1", features = ["esp32", "async", "critical-sectio
 
 **Key Points**:
 - Creates a TCP echo server on port 7
-- Static IP configuration (easily changed to DHCP)
+- Uses DHCPv4 and logs the assigned address
 - Handles ARP, ICMP (ping), and TCP
 - Shows socket creation and management
 
@@ -181,7 +181,7 @@ All examples are configured for the **WT32-ETH01** board by default:
 For other boards, modify the constants at the top of each example:
 - `PHY_ADDR` - MDIO address of your PHY
 - `CLK_EN_GPIO` - GPIO that enables the clock (if applicable)
-- `RmiiClockMode` - Use `ExternalGpio0` or `InternalGpio0` depending on your hardware
+- `RmiiClockMode` - Use `ExternalInput { gpio: 0 }` or `InternalOutput { gpio: 16 }` (or 17)
 
 ### 4. embassy-net Async Example (`embassy_net.rs`)
 
@@ -216,11 +216,15 @@ static-cell = "2"
 
 **Interrupt Wiring**:
 ```rust
-use ph_esp32_mac::esp_hal::{emac_isr, Priority};
+use esp_hal::interrupt::InterruptHandler;
+use ph_esp32_mac::esp_hal::Priority;
 
-emac_isr!(EMAC_IRQ, Priority::Priority1, {
+#[esp_hal::handler(priority = Priority::Priority1)]
+fn emac_handler() {
     EMAC_STATE.handle_interrupt();
-});
+}
+
+const EMAC_IRQ: InterruptHandler = emac_handler;
 ```
 
 **Embassy Time Driver**:
@@ -235,8 +239,8 @@ With default configuration (10 RX/TX buffers, 1600 bytes each):
 
 | Component | Size |
 |-----------|------|
-| RX Descriptors | 160 bytes |
-| TX Descriptors | 160 bytes |
+| RX Descriptors | 320 bytes |
+| TX Descriptors | 320 bytes |
 | RX Buffers | 16,000 bytes |
 | TX Buffers | 16,000 bytes |
 | **Total** | **~32 KB** |
