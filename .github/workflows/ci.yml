@@ -93,7 +93,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Check esp32 target
-        run: cargo +esp check --target xtensa-esp32-none-elf
+        run: cargo +esp check --target xtensa-esp32-none-elf -Zbuild-std=core
 
   doc:
     runs-on: ubuntu-latest

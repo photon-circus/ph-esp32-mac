@@ -86,9 +86,18 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 
 ### 3.4 Async/Waker Architecture
 
-- Replace global wakers with per-instance state where practical to avoid cross-instance interference.
-- Use interrupt-driven wakeups for RX/TX/link to avoid busy-loop polling.
-- Keep all async paths `no_std`/`no_alloc`, relying on static buffers and existing DMA rings.
+- **Current state:** `sync::asynch` uses global RX/TX/ERR wakers and a global interrupt handler, while the Embassy driver already uses per-instance wakers in `EmbassyEmacState`. This split risks cross-instance interference and duplicates logic.
+- **Target architecture:**
+  - Introduce a per-instance async state (e.g., `AsyncEmacState`) with RX/TX/ERR (and optional link) wakers plus any cached interrupt/link flags, stored in static memory with `CriticalSectionCell` and `const fn new`.
+  - Bind async operations to a specific state (`AsyncEmac<'a, ...>` wrapper or `Emac::with_async_state(&'a AsyncEmacState)`), and have futures register wakers on that state instead of global statics.
+  - Provide `async_interrupt_handler(state: &AsyncEmacState)` and `reset_async_state(state)` helpers; share common interrupt handling logic with `EmbassyEmacState::handle_interrupt` to avoid divergence.
+  - Preserve the “register → recheck → Pending” pattern to avoid missed wakeups.
+- **Compatibility:** Break the API if needed; remove the global-waker path entirely in favor of per-instance state.
+- **Constraints:** Keep async paths `no_std`/`no_alloc` and rely on static buffers and existing DMA rings.
+- **Validation:**
+  - Unit tests prove wakers are isolated across multiple async states.
+  - Re-initialization clears stale wakers (`reset_async_state`).
+  - Docs include the ISR call pattern and esp-hal interrupt binding example.
 
 ### 3.5 Embassy Examples and Runner Model
 
