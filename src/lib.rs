@@ -25,10 +25,11 @@
 //!
 //! Additional PHY drivers can be added by implementing [`PhyDriver`].
 //!
+//! This release targets ESP32 only.
+//!
 //! # Features
 //!
 //! - `esp32` (default): Target the original ESP32
-//! - `esp32p4`: Target the ESP32-P4 variant
 //! - `defmt`: Enable defmt formatting for error types
 //! - `smoltcp`: Enable smoltcp network stack integration
 //! - `critical-section`: Enable ISR-safe `SharedEmac` wrapper
@@ -119,6 +120,12 @@
 #![deny(missing_docs)]
 #![allow(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
+
+#[cfg(all(feature = "esp32", feature = "esp32p4"))]
+compile_error!("Features 'esp32' and 'esp32p4' are mutually exclusive.");
+
+#[cfg(not(any(feature = "esp32", feature = "esp32p4")))]
+compile_error!("Either feature 'esp32' or 'esp32p4' must be enabled. The default is 'esp32'.");
 // Clippy lint levels live here; thresholds and config are in clippy.toml.
 #![deny(clippy::correctness)]
 #![warn(

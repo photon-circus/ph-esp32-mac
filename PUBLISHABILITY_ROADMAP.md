@@ -23,7 +23,7 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 - Missing publish metadata and entry docs: no root `README.md`, no `CHANGELOG.md`, and `Cargo.toml` lacks `repository`, `documentation`, `homepage`, and `readme` fields.
 - Doc inconsistencies: multiple public docs still reference the old crate name `esp32_emac` in `src/lib.rs`, `src/phy/mod.rs`, `src/phy/lan8720a.rs`, and `src/integration/smoltcp.rs`.
 - Integration docs are stale: `integration_tests/README.md` references `ph_esp32_mac::smoltcp::EmacDevice`, which does not exist (the `Device` impl is on `Emac`).
-- `esp32p4` is advertised but incomplete (placeholder pins in `src/internal/gpio_pins.rs` and partial register differences).
+- ESP32-P4 is out of scope for this release; keep it experimental/hidden and avoid advertising it in user-facing docs.
 - CI covers clippy/coverage only; no `cargo test --lib`, no `cargo fmt -- --check`, no `cargo doc --no-deps`, and no MSRV enforcement.
 - Packaging is not curated; older/internal docs and local artifacts are likely to be included unless excluded.
 
@@ -31,9 +31,9 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 
 ## Phase 0: Scope
 
-- Decide publish target (crates.io vs internal) and explicitly declare supported hardware scope (ESP32-only vs ESP32+P4).
-- Declare primary consumers: `esp-hal` and `embassy-net`, with async support as a first-class goal.
-- Lock the MSRV policy and make `rust-version` in `Cargo.toml` match CI’s toolchain.
+- Publish target: crates.io. Explicitly declare supported hardware scope (ESP32-only for the next release).
+- Primary consumer: `esp-hal` (with `embassy-net` support as a secondary integration).
+- MSRV is locked to Rust 1.92.0; keep `rust-version` aligned with CI’s toolchain.
 
 ---
 
@@ -112,7 +112,7 @@ This document captures the current publishability analysis of `ph-esp32-mac` and
 ## Phase 4: API and Feature Hygiene
 
 - Enforce feature exclusivity (`esp32` vs `esp32p4`) with `compile_error!` and document the behavior.
-- Either implement ESP32-P4 fully (pins, register map, descriptor alignment, tests) or mark it “experimental/unsupported” and hide from docs.
+- Keep ESP32-P4 as experimental/unsupported and hidden from docs until fully implemented.
 - Perform an unsafe-audit pass to ensure every `unsafe` block has a `SAFETY:` comment and every unsafe public API has a `# Safety` section.
 - Add `cfg_attr(docsrs, doc(cfg(...)))` for feature-gated APIs to improve docs.rs clarity.
 

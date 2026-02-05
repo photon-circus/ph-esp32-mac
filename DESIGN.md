@@ -647,7 +647,6 @@ default = ["esp32"]
 
 # Target selection (mutually exclusive)
 esp32 = []
-esp32p4 = []
 
 # Optional integrations
 smoltcp = ["dep:smoltcp"]           # smoltcp network stack integration
@@ -665,6 +664,9 @@ critical-section = { version = "1.2", optional = true }
 esp-hal = { version = "1.0", optional = true, default-features = false }
 defmt = { version = "0.3", optional = true }
 ```
+
+Note: ESP32-P4 support is reserved for future work and is intentionally out of
+scope for this release.
 
 ### esp-hal Feature
 

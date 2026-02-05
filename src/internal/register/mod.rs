@@ -10,28 +10,27 @@ pub mod ext;
 pub mod gpio;
 pub mod mac;
 
-// ESP32 and ESP32-P4 are mutually exclusive; if both are enabled, prefer ESP32
-// If neither is enabled, default to ESP32 addresses
+// ESP32 and ESP32-P4 are mutually exclusive (enforced at crate root).
 
 /// DMA register block base address
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const DMA_BASE: usize = 0x3FF6_9000;
 
 /// MAC register block base address
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const MAC_BASE: usize = 0x3FF6_A000;
 
 /// Extension register block base address
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const EXT_BASE: usize = 0x3FF6_9800;
 
 /// DPORT WiFi clock enable register (contains EMAC clock bit)
 /// Note: DPORT base is 0x3FF00000, WIFI_CLK_EN offset is 0x0CC
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const DPORT_WIFI_CLK_EN_REG: usize = 0x3FF0_00CC;
 
 /// EMAC clock enable bit in DPORT_WIFI_CLK_EN_REG
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const DPORT_WIFI_CLK_EMAC_EN: u32 = 1 << 14;
 
 // =============================================================================
@@ -39,12 +38,12 @@ pub const DPORT_WIFI_CLK_EMAC_EN: u32 = 1 << 14;
 // =============================================================================
 
 /// IO_MUX base address for ESP32
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const IO_MUX_BASE: usize = 0x3FF4_9000;
 
 /// IO_MUX GPIO0 register offset from IO_MUX_BASE
 /// Note: GPIO0 is at offset 0x44 in the IO_MUX register block
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const IO_MUX_GPIO0_OFFSET: usize = 0x44;
 
 /// IO_MUX FUN_IE bit (input enable) - bit 9
@@ -61,15 +60,15 @@ pub const IO_MUX_MCU_SEL_MASK: u32 = 0x7 << 12;
 pub const IO_MUX_GPIO0_FUNC_EMAC_TX_CLK: u32 = 5;
 
 /// DMA register block base address (ESP32-P4)
-#[cfg(all(feature = "esp32p4", not(feature = "esp32")))]
+#[cfg(feature = "esp32p4")]
 pub const DMA_BASE: usize = 0x5008_4000;
 
 /// MAC register block base address (ESP32-P4)
-#[cfg(all(feature = "esp32p4", not(feature = "esp32")))]
+#[cfg(feature = "esp32p4")]
 pub const MAC_BASE: usize = 0x5008_5000;
 
 /// Extension register block base address (ESP32-P4)
-#[cfg(all(feature = "esp32p4", not(feature = "esp32")))]
+#[cfg(feature = "esp32p4")]
 pub const EXT_BASE: usize = 0x5008_4800;
 
 /// Read a 32-bit register at the given address

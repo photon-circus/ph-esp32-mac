@@ -82,11 +82,12 @@ pub mod esp32 {
 // ESP32-P4 GPIO Assignments (Placeholder)
 // =============================================================================
 
-/// EMAC GPIO assignments for ESP32-P4
+/// EMAC GPIO assignments for ESP32-P4 (experimental placeholder).
 #[cfg(feature = "esp32p4")]
+#[doc(hidden)]
 pub mod esp32p4 {
-    // TODO: Add ESP32-P4 specific GPIO assignments when available
-    // The ESP32-P4 has a different EMAC peripheral with different pin mappings
+    // Experimental placeholder: ESP32-P4 has a different EMAC peripheral with
+    // different pin mappings. This is intentionally incomplete for this release.
 
     /// Placeholder for ESP32-P4 TXD0
     pub const TXD0_GPIO: u8 = 0; // TBD

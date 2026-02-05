@@ -22,7 +22,7 @@ use super::{read_reg, write_reg};
 // =============================================================================
 
 /// GPIO peripheral base address
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const GPIO_BASE: usize = 0x3FF4_4000;
 
 /// GPIO output enable set register (W1TS)
@@ -92,7 +92,7 @@ pub const GPIO_SIG_IN_SEL: u32 = 1 << 7;
 // =============================================================================
 
 /// IO_MUX base address
-#[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+#[cfg(feature = "esp32")]
 pub const IO_MUX_BASE: usize = 0x3FF4_9000;
 
 /// IO_MUX register offsets for relevant GPIOs
@@ -345,7 +345,7 @@ impl GpioMatrix {
     fn iomux_addr_for_gpio(gpio_num: u8) -> usize {
         // IO_MUX offsets are not sequential - each GPIO has a specific offset
         // Based on ESP32 Technical Reference Manual Table 4-3
-        #[cfg(any(feature = "esp32", not(feature = "esp32p4")))]
+        #[cfg(feature = "esp32")]
         let offset = match gpio_num {
             0 => 0x44,
             1 => 0x88,
@@ -385,7 +385,7 @@ impl GpioMatrix {
             _ => return 0,
         };
 
-        #[cfg(all(feature = "esp32p4", not(feature = "esp32")))]
+        #[cfg(feature = "esp32p4")]
         let offset = 0; // ESP32-P4 has different layout, not implemented yet
 
         if offset == 0 {
@@ -400,7 +400,7 @@ impl GpioMatrix {
 // Tests
 // =============================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "esp32"))]
 mod tests {
     use super::*;
 

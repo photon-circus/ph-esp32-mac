@@ -14,6 +14,7 @@ default = ["esp32"]
 
 # Target chip selection (mutually exclusive)
 esp32 = []
+# Experimental placeholder for future ESP32-P4 support (not part of this release)
 esp32p4 = []
 
 # Optional integrations
