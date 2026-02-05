@@ -150,6 +150,47 @@ emac_isr!(EMAC_ISR, Priority::Priority1, {
 emac.bind_interrupt(EMAC_ISR);
 ```
 
+**Implementation Sprints (Concrete)**
+
+**Sprint 1 — Facade Foundations (1 week)**
+- **Goals:** Define the esp-hal-first API shape and land the core builder + defaults.
+- **Work items:**
+  - Add `EmacBuilder::new(peripherals)` (or `Emac::new_esp_hal(...)`) with minimal required params.
+  - Add `EmacConfig::rmii_esp32_default()` (or `esp_hal_default()`).
+  - Ensure builder wires clock/pin defaults for ESP32 RMII.
+  - Add `doc(cfg(feature = "esp-hal"))` on new APIs.
+  - Update one esp-hal example to use the new builder (compile check).
+- **Deliverables:** New facade types compile, basic esp-hal example updated.
+- **Exit criteria:** `cargo check --features esp-hal` passes; docs compile for esp-hal.
+
+**Sprint 2 — Interrupt Wiring (1 week)**
+- **Goals:** Reduce ISR wiring boilerplate for esp-hal users.
+- **Work items:**
+  - Add `Emac::handle_interrupt()` and `EmacExt::bind_interrupt(handler)` (or equivalent).
+  - Add esp-hal glue (`emac_isr!` helper or stub) for a ready-to-use handler.
+  - Document ISR wiring in a single “happy path” section.
+- **Deliverables:** ISR wiring helper(s) and esp-hal example updated to use them.
+- **Exit criteria:** esp-hal example builds with no manual status read/clear.
+
+**Sprint 3 — Async Integration (1 week)**
+- **Goals:** Integrate per-instance async state into esp-hal flows.
+- **Work items:**
+  - Ensure async path uses `AsyncEmacState` in esp-hal example(s).
+  - Wire async ISR glue to call `async_interrupt_handler(&AsyncEmacState)`.
+  - Add async-specific docs section with the exact ISR + task pattern.
+- **Deliverables:** Async example updated; ISR glue references `AsyncEmacState`.
+- **Exit criteria:** esp-hal + async example builds; async ISR wiring is one-line.
+
+**Sprint 4 — PHY/Link Convenience & Polishing (1 week)**
+- **Goals:** Minimize bring-up steps and consolidate PHY handling.
+- **Work items:**
+  - Add `EmacPhyBundle` (or `EmacWithPhy`) convenience wrapper.
+  - Add `wait_link_up()` helper with timeout/backoff.
+  - Update examples to use bundle + link helper.
+  - Add concise “bring-up in ~10 lines” snippet in docs.
+- **Deliverables:** PHY/link helper API + updated docs/examples.
+- **Exit criteria:** esp-hal example is < ~10 lines of setup; docs show minimal flow.
+
 **API Alignment + Docs**
 - Consolidate esp-hal specific docs into one section with a single “happy path” snippet.
 - Ensure `EmacExt` matches esp-hal 1.0.0 API names, interrupt model, and ownership patterns.
