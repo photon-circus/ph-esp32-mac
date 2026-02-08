@@ -1,138 +1,127 @@
 # QA Runner
 
-This directory contains the QA runner for the `ph-esp32-mac` driver
-running on real ESP32 hardware. It is a **standalone crate** and is not
-packaged with the published library crate.
+Hardware QA runner for the `ph-esp32-mac` driver on real ESP32 devices. This is
+a standalone crate used for verification and is not published to crates.io.
 
-## Project Structure
+---
 
-```
-apps/qa-runner/
-├── Cargo.toml           # Standalone crate configuration
-├── rust-toolchain.toml  # ESP32 toolchain selector
-├── qa_runner.rs         # WT32-ETH01 QA runner binary
-└── README.md            # This file
-```
+## Table of Contents
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Running With `cargo xtask`](#running-with-cargo-xtask)
+- [Hardware: WT32-ETH01](#hardware-wt32-eth01)
+- [Test Suite](#test-suite)
+- [Troubleshooting](#troubleshooting)
+- [Board Support](#board-support)
+- [License](#license)
+
+---
+
+## Overview
+
+The QA runner validates the EMAC driver against real hardware. Tests are grouped
+into a fixed sequence; later groups are skipped if earlier prerequisites fail.
+
+---
 
 ## Prerequisites
 
-### Install ESP32 Rust Toolchain
+Install the ESP toolchain and flash tool:
 
 ```bash
-# Install espup (ESP32 Rust toolchain manager)
 cargo install espup
 espup install
 
-# Install flashing tool
 cargo install espflash
-
-# Source the environment (or restart terminal)
-# On Windows: the installer should configure this automatically
-# On Linux/macOS: source $HOME/export-esp.sh
 ```
 
-### Verify Installation
+---
+
+## Running With `cargo xtask`
+
+Run from the repo root. `xtask` selects the right crate, target, and features,
+injects the required linker flags, and invokes the ESP toolchain.
 
 ```bash
-# Check that esp toolchain is available
-rustup show
-
-# Should list "esp" channel
-```
-
-## WT32-ETH01 QA Target
-
-The primary QA target is the WT32-ETH01 board, a compact and
-affordable ESP32 development board with built-in Ethernet.
-
-### Hardware Requirements
-
-- **WT32-ETH01 board** (~$7-15 USD)
-- **USB-TTL adapter** (3.3V TTL, not 5V or RS-232!)
-- **Ethernet cable** (connected to a switch/router)
-- **Jumper wires** for programming connections
-
-### WT32-ETH01 Specifications
-
-| Component | Details |
-|-----------|---------|
-| MCU | ESP32-D0WD-V3 (via WT32-S1 module) |
-| Flash | 4MB |
-| PHY | LAN8720A (RMII interface) |
-| PHY Address | **1** (PHYAD0 pulled high) |
-| Clock | External 50MHz oscillator (enable via GPIO16) |
-| Power | 5V (onboard 3.3V regulator) or 3.3V direct |
-
-### Wiring for Programming
-
-Connect your USB-TTL adapter:
-
-| USB-TTL | WT32-ETH01 | Notes |
-|---------|------------|-------|
-| 3.3V    | 3V3        | Or use 5V to 5V if regulator needed |
-| GND     | GND        | |
-| TX      | IO3 (RXD)  | USB TX → ESP RX |
-| RX      | IO1 (TXD)  | USB RX ← ESP TX |
-
-**To enter bootloader mode:**
-1. Connect IO0 to GND
-2. Press reset (or power cycle)
-3. Release IO0 after flashing starts
-
-Or use a programmer with auto-boot circuit (like M5Stack ESP32 Downloader).
-
-### Recommended: xtask Runner
-
-From the repo root:
-
-```bash
-# Build, flash, and monitor
 cargo xtask run qa-runner
+```
 
-# Build only (no flash)
+Build only:
+
+```bash
 cargo xtask build qa-runner
 ```
 
-Add `--debug` if you want a debug build:
+Debug build:
 
 ```bash
 cargo xtask run qa-runner --debug
 ```
 
-The runner uses the ESP toolchain (`rustup run esp`) and configures the
-target/runner/rustflags needed for the WT32-ETH01 QA binary. You can pass
-the short target name (recommended) or a `.rs` entry path.
+Environment overrides:
 
-You can set `ESPFLASH_PORT` and `ESPFLASH_BAUD` as environment variables
-if you prefer not to pass them on the command line.
+```bash
+$env:ESPFLASH_PORT = "COM7"
+$env:ESPFLASH_BAUD = "921600"
+```
 
-### Manual Cargo Commands (Optional)
+---
 
-If you prefer direct cargo commands, follow the exact command printed by xtask
-(it includes the required target, build-std, runner, and QA-specific rustflags).
+## Hardware: WT32-ETH01
+
+The default QA target is the WT32-ETH01 board.
+
+| Component | Details |
+|-----------|---------|
+| MCU | ESP32-D0WD-V3 (WT32-S1 module) |
+| Flash | 4MB |
+| PHY | LAN8720A (RMII) |
+| PHY Address | 1 |
+| Clock | External 50 MHz oscillator (GPIO16 enable) |
+| Power | 5V (onboard regulator) or 3.3V direct |
+
+### Wiring for Programming
+
+| USB-TTL | WT32-ETH01 | Notes |
+|---------|------------|-------|
+| 3.3V    | 3V3        | Use 5V only if regulator needed |
+| GND     | GND        | |
+| TX      | IO3 (RXD)  | USB TX → ESP RX |
+| RX      | IO1 (TXD)  | USB RX ← ESP TX |
+
+Bootloader mode:
+1. Connect IO0 to GND
+2. Reset or power-cycle
+3. Release IO0 after flashing starts
+
+---
+
+## Test Suite
+
+### Groups
+
+| Group | ID Range | Category |
+|-------|----------|----------|
+| 1 | IT-1-xxx | Register Access |
+| 2 | IT-2-xxx | EMAC Initialization |
+| 3 | IT-3-xxx | PHY Communication |
+| 4 | IT-4-xxx | EMAC Operations |
+| 5 | IT-5-xxx | Link Status |
+| 6 | IT-6-xxx | smoltcp Integration |
+| 7 | IT-7-xxx | State & Interrupts |
+| 8 | IT-8-xxx | Advanced Features |
+| 9 | IT-9-xxx | Edge Cases |
 
 ### Expected Output
 
-Example output (counts may change as tests evolve):
-
-```
+```text
 ╔══════════════════════════════════════════════════════════════╗
 ║       WT32-ETH01 Integration Test Suite                      ║
 ║       ph-esp32-mac Driver Verification                       ║
 ╚══════════════════════════════════════════════════════════════╝
 
-Enabling external 50MHz oscillator...
-Oscillator enabled
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  GROUP 1: Register Access
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-▶ EMAC clock enable
-  DPORT WIFI_CLK_EN=0x..., EMAC_EN=1
-  ✓ PASS
 ...
-
 ══════════════════════════════════════════════════════════════════
   TEST SUMMARY
 ══════════════════════════════════════════════════════════════════
@@ -141,115 +130,47 @@ Oscillator enabled
   Passed:  47 ✓
   Failed:  0 ✗
   Skipped: 0 ○
-
-╔══════════════════════════════════════════════════════════════╗
-║                    ALL TESTS PASSED! ✓                       ║
-╚══════════════════════════════════════════════════════════════╝
-
-Entering continuous RX monitoring mode...
 ```
 
-### Test Groups
+After tests complete, the runner enters continuous RX monitoring mode and logs
+received frames.
 
-The test suite is organized into 9 groups:
+---
 
-| Group | Description |
-|-------|-----------|
-| 1. Register Access | EMAC clock, DMA/MAC/extension registers |
-| 2. EMAC Initialization | Init, RMII pins, DMA descriptors |
-| 3. PHY Communication | MDIO read, PHY init, link detection |
-| 4. EMAC Operations | Start, TX, RX (3s), stop/start |
-| 5. Link Status | Link status query |
-| 6. smoltcp Integration | Interface, capabilities, poll |
-| 7. State/Interrupts/Utils | State, interrupts, TX/RX utilities |
-| 8. Advanced Features | Promiscuous, force link, PHY caps, int enable |
-| 9. Edge Cases | MAC/hash/VLAN filtering, flow control, EDPD, cleanup |
+## Troubleshooting
 
-Tests in later groups may be skipped if dependencies in earlier groups fail
-(e.g., EMAC operations require successful initialization and link).
+### Timeout waiting for link
 
-### What the Tests Verify
+- Check the Ethernet cable and link partner
+- Confirm the oscillator enable (GPIO16 HIGH)
+- Power-cycle the board
 
-1. **Register Access** - Verifies EMAC peripheral clock and register accessibility
-2. **EMAC Initialization** - Tests driver initialization and hardware configuration
-3. **PHY Communication** - Validates MDIO bus and LAN8720A PHY functionality
-4. **EMAC Operations** - End-to-end packet TX/RX verification
-5. **Link Status** - PHY link monitoring capability
-6. **smoltcp Integration** - Network stack Device trait implementation
-7. **State/Interrupts/Utils** - State machine, interrupt handling, TX ready, RX peek, frame sizes
-8. **Advanced Features** - Promiscuous mode, forced link, PHY capabilities, interrupt enable/disable
-9. **Edge Cases** - MAC/hash/VLAN filtering, flow control, PHY energy detect, async API
+### PHY init failed
 
-After tests complete, the binary enters a continuous RX monitoring mode that
-logs all received packets for debugging.
-
-### Troubleshooting
-
-#### "Timeout waiting for link"
-- Check Ethernet cable connection
-- Verify the other end is connected to an active port
-- Try a different cable
-
-#### "PHY init failed"
-- Check oscillator is working (GPIO16 should be HIGH)
 - Verify MDIO wiring (GPIO18=MDIO, GPIO23=MDC)
-- Try power cycling the board
+- Confirm the LAN8720A address (default: 1)
+- Re-check the external 50 MHz clock
 
-#### "EMAC init failed"
-- Usually a clock issue - check GPIO0 is receiving 50MHz
-- Verify GPIO16 is correctly enabling the oscillator
+---
 
-#### "Unexpected PHY ID"
-- You may have a different board/PHY
-- Check if this is really a WT32-ETH01
+## Board Support
 
-### Adding Network Stack Integration
-
-To add smoltcp for full IP/TCP/UDP support, see the main library documentation.
-The basic pattern is:
-
-```rust
-use smoltcp::iface::{Config, Interface};
-use smoltcp::time::Instant as SmolInstant;
-use smoltcp::wire::EthernetAddress;
-
-let hw_addr = EthernetAddress(*emac.mac_address());
-let config = Config::new(hw_addr.into());
-
-// Emac implements smoltcp::phy::Device directly
-let mut iface = Interface::new(config, &mut emac, SmolInstant::from_millis(0));
-```
-
-## Board Support (Driver Crate)
-
-Board scaffolding is provided by the main driver crate:
+The QA runner uses board helpers from the driver crate:
 
 ```rust
 use ph_esp32_mac::boards::wt32_eth01::Wt32Eth01;
 
-// PHY instance for WT32-ETH01
 let phy = Wt32Eth01::lan8720a();
-
-// Board-specific EMAC configuration
 let config = Wt32Eth01::emac_config_with_mac(my_mac);
 ```
 
-## Adding Support for Other Boards
+To add another board:
+1. Add a board helper under `src/boards/` in the driver crate
+2. Update the QA runner to use it
+3. Document the wiring and PHY details here
 
-To add support for another ESP32+Ethernet board:
-
-1. Add a board helper under `src/boards/` in the main crate
-2. Update documentation and examples to use the new helper
-3. Update this QA runner to use the new board helper
-
-### Known Compatible Boards
-
-| Board | PHY | Addr | Clock | Notes |
-|-------|-----|------|-------|-------|
-| WT32-ETH01 | LAN8720A | 1 | Ext 50MHz GPIO0 | GPIO16 enables osc |
-| Olimex ESP32-POE | LAN8720A | 0 | Ext 50MHz GPIO0 | Has PoE option |
-| wESP32 | LAN8720A | 0 | Ext 50MHz GPIO0 | Industrial grade |
+---
 
 ## License
 
-Licensed under MIT OR Apache-2.0, same as the main crate.
+Licensed under Apache-2.0. See [LICENSE](../../LICENSE).

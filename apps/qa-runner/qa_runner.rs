@@ -1,7 +1,19 @@
-//! QA Runner for WT32-ETH01 Board
+//! QA runner for the WT32-ETH01 board.
 //!
-//! This binary runs a series of hardware QA tests on the WT32-ETH01
-//! development board to verify the ph-esp32-mac driver functionality.
+//! This binary executes a sequence of hardware tests to verify the
+//! `ph-esp32-mac` driver on real ESP32 devices.
+//!
+//! # Overview
+//!
+//! The runner is designed for the WT32-ETH01 board and uses the driver crate's
+//! board helpers for MAC/PHY bring-up. Tests are grouped and executed in order;
+//! later groups are skipped if earlier prerequisites fail.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! cargo xtask run qa-runner
+//! ```
 //!
 //! # Test Groups
 //!
@@ -17,11 +29,9 @@
 //! | 8 | IT-8-xxx | Advanced Features |
 //! | 9 | IT-9-xxx | Edge Cases |
 //!
-//! # Building and Flashing
+//! # Hardware
 //!
-//! ```bash
-//! cargo xtask run qa-runner
-//! ```
+//! Default target: WT32-ETH01 (LAN8720A, external 50 MHz clock).
 
 #![no_std]
 #![no_main]
