@@ -113,15 +113,27 @@ EMAC.with(|emac| {
 
 ## Examples
 
-See the examples in the repository for build and run instructions:
-https://github.com/photon-circus/ph-esp32-mac/tree/main/examples
+Examples are provided as a **separate crate** in this repository and are not
+packaged with the published library crate.
 
-The examples include:
+See the examples for build and run instructions:
+https://github.com/photon-circus/ph-esp32-mac/tree/main/apps/examples
+
+Recommended runner (from repo root):
+```bash
+cargo xtask run ex-embassy
+```
+
+Included examples:
 
 - `smoltcp_echo`
 - `esp_hal_integration`
 - `esp_hal_async`
 - `embassy_net`
+
+Hardware QA runner (separate crate):
+- https://github.com/photon-circus/ph-esp32-mac/tree/main/apps/qa-runner
+- `cargo xtask run qa-runner`
 
 ---
 
@@ -149,9 +161,9 @@ The examples include:
 
 ## Documentation
 
-- [DESIGN.md](DESIGN.md)
-- [TESTING.md](TESTING.md)
-- [DOCUMENTATION_STANDARDS.md](DOCUMENTATION_STANDARDS.md)
+- [DESIGN.md](docs/DESIGN.md)
+- [TESTING.md](docs/TESTING.md)
+- [DOCUMENTATION_STANDARDS.md](docs/DOCUMENTATION_STANDARDS.md)
 
 ---
 

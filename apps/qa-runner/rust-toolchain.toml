@@ -1,4 +1,4 @@
-# Rust toolchain configuration for ESP32 integration tests
+# Rust toolchain configuration for ESP32 QA runner
 #
 # This requires the esp-rs toolchain installed via espup:
 #   cargo install espup

@@ -19,6 +19,4 @@ This document tracks notable changes to `ph-esp32-mac` using semantic versioning
 
 ## 0.1.0
 
-- Initial public release targeting ESP32 with LAN8720A support.
-- smoltcp integration, embassy-net driver integration, and esp-hal helpers.
-- Async/waker support with no allocation.
+Baseline release. Changelog entries begin after 0.1.0.

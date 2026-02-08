@@ -6,7 +6,9 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 
 use esp_hal::gpio::Output;
-use ph_esp32_mac::{Duplex, Emac, Lan8720a, MdioController, Speed};
+use ph_esp32_mac::{Duplex, Emac, Lan8720a, Speed};
+use ph_esp32_mac::boards::wt32_eth01::Wt32Eth01;
+use ph_esp32_mac::hal::MdioController;
 
 // =============================================================================
 // Test Result
@@ -84,9 +86,9 @@ pub struct TestContext<'a> {
 }
 
 impl<'a> TestContext<'a> {
-    pub fn new(clk_pin: Output<'a>, phy_addr: u8) -> Self {
+    pub fn new(clk_pin: Output<'a>) -> Self {
         Self {
-            phy: Lan8720a::new(phy_addr),
+            phy: Wt32Eth01::lan8720a(),
             mdio: MdioController::new(esp_hal::delay::Delay::new()),
             clk_pin: Some(clk_pin),
             link_speed: Speed::Mbps100,

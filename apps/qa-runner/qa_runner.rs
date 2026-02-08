@@ -1,6 +1,6 @@
-//! Integration Test Binary for WT32-ETH01 Board
+//! QA Runner for WT32-ETH01 Board
 //!
-//! This binary runs a series of hardware integration tests on the WT32-ETH01
+//! This binary runs a series of hardware QA tests on the WT32-ETH01
 //! development board to verify the ph-esp32-mac driver functionality.
 //!
 //! # Test Groups
@@ -20,14 +20,12 @@
 //! # Building and Flashing
 //!
 //! ```bash
-//! cd integration_tests
-//! cargo run --release
+//! cargo xtask run qa-runner
 //! ```
 
 #![no_std]
 #![no_main]
 
-mod boards;
 mod tests;
 
 use esp_backtrace as _;
@@ -46,7 +44,7 @@ use ph_esp32_mac::PhyDriver;
 // Re-export framework types for the run_test! macro
 use tests::{TestContext, TestResult, TestStats, EMAC};
 
-use boards::wt32_eth01::Wt32Eth01Config as Board;
+use ph_esp32_mac::boards::wt32_eth01::Wt32Eth01 as Board;
 
 // =============================================================================
 // Run Test Macro (with test ID)
@@ -78,7 +76,7 @@ fn main() -> ! {
     
     info!("");
     info!("╔══════════════════════════════════════════════════════════════╗");
-    info!("║       WT32-ETH01 Integration Test Suite                      ║");
+    info!("║       WT32-ETH01 QA Runner                                   ║");
     info!("║       ph-esp32-mac Driver Verification                       ║");
     info!("╚══════════════════════════════════════════════════════════════╝");
     info!("");
@@ -88,12 +86,15 @@ fn main() -> ! {
     // Enable external oscillator
     info!("Enabling external 50MHz oscillator...");
     let clk_pin = Output::new(peripherals.GPIO16, Level::High, OutputConfig::default());
-    esp_hal::delay::Delay::new().delay_millis(10);
-    info!("Oscillator enabled");
+    esp_hal::delay::Delay::new().delay_millis(Board::OSC_STARTUP_MS);
+    info!(
+        "Oscillator enabled (GPIO{} = HIGH)",
+        Board::CLK_EN_GPIO
+    );
     info!("");
 
     let mut stats = TestStats::new();
-    let mut ctx = TestContext::new(clk_pin, Board::PHY_ADDR);
+    let mut ctx = TestContext::new(clk_pin);
 
     // =========================================================================
     // Test Group 1: Register Access

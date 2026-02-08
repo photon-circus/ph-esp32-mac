@@ -30,61 +30,41 @@ They require the xtensa toolchain.
    cargo install espflash
    ```
 
-### Cargo Aliases (Recommended)
+### Recommended: xtask Runner
 
-The `examples/` directory includes Cargo aliases for the common example commands.
-Run these from the `examples/` folder:
+Run examples from the repo root using the xtask helper:
 
 ```bash
-cd examples
-
-# Build (release)
-cargo ex-build-esp
-cargo ex-build-esp-async
-cargo ex-build-smoltcp
-cargo ex-build-embassy
-
-# Flash + monitor (uses espflash runner)
-cargo ex-run-esp
-cargo ex-run-esp-async
-cargo ex-run-smoltcp
-cargo ex-run-embassy
+cargo xtask run ex-esp-hal
+cargo xtask run ex-esp-hal-async
+cargo xtask run ex-smoltcp
+cargo xtask run ex-embassy
 ```
+
+Build only (no flash) if you want to inspect artifacts:
+
+```bash
+cargo xtask build ex-esp-hal
+```
+
+Add `--debug` for a debug build:
+
+```bash
+cargo xtask run ex-esp-hal --debug
+```
+
+The runner discovers the correct crate, bin name, and feature flags from the
+`Cargo.toml`. It uses the ESP toolchain (`rustup run esp`) and sets the
+ESP32 target/runner automatically. You can pass a short target name
+(recommended) or a `.rs` entry path.
 
 You can set `ESPFLASH_PORT` and `ESPFLASH_BAUD` as environment variables
 if you prefer not to pass them on the command line.
 
-### Manual Cargo Commands
+### Manual Cargo Commands (Optional)
 
-```bash
-# Build
-cargo build --manifest-path examples/Cargo.toml --bin esp_hal_integration \
-    --features esp-hal-example --release
-
-# Build async esp-hal example
-cargo build --manifest-path examples/Cargo.toml --bin esp_hal_async \
-    --features esp-hal-async-example --release
-
-# Flash + monitor (runner is set in examples/.cargo/config.toml)
-cargo run --manifest-path examples/Cargo.toml --bin smoltcp_echo --features smoltcp-example --release
-
-# Embassy example
-cargo run --manifest-path examples/Cargo.toml --bin embassy_net \
-    --features embassy-net-example --release
-```
-
-**Important**: Examples must be built with the `esp` toolchain (installed via `espup`).
-If you run cargo from the repo root, use one of these patterns:
-
-```bash
-# Use the esp toolchain explicitly
-cargo +esp run --manifest-path examples/Cargo.toml --bin smoltcp_echo \
-    --features smoltcp-example --release
-
-# Or run from the examples directory (uses examples/rust-toolchain.toml)
-cd examples
-cargo run --bin smoltcp_echo --features smoltcp-example --release
-```
+If you prefer to run cargo directly, follow the exact command that xtask prints
+(it includes the required target, build-std, and feature flags).
 
 ### Example Feature Mapping
 
@@ -253,6 +233,6 @@ static mut EMAC: Emac<4, 4, 1600> = Emac::new();  // ~13 KB
 
 ## See Also
 
-- [integration_tests/](../integration_tests/) - Full working example with build configuration
-- [DESIGN.md](../DESIGN.md) - Architecture documentation
-- [TESTING.md](../TESTING.md) - Testing guide
+- [qa-runner/](../qa-runner/) - Hardware QA runner for WT32-ETH01
+- [DESIGN.md](../docs/DESIGN.md) - Architecture documentation
+- [TESTING.md](../docs/TESTING.md) - Testing guide

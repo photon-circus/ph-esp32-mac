@@ -43,43 +43,43 @@ and take precedence if anything diverges.
 ```
 +--------------------------------------------------------------+
 | Application Layer                                            |
-| smoltcp / embassy-net / raw Ethernet processing               |
+| smoltcp / embassy-net / raw Ethernet processing              |
 +--------------------------------------------------------------+
                               |
                               v
 +--------------------------------------------------------------+
-| Integration Layer                                             |
-| integration/{smoltcp, embassy_net, esp_hal}                   |
+| Integration Layer                                            |
+| integration/{smoltcp, embassy_net, esp_hal}                  |
 +--------------------------------------------------------------+
                               |
                               v
 +--------------------------------------------------------------+
-| Sync Layer                                                    |
-| sync::{SharedEmac, AsyncEmacState, AsyncEmacExt}              |
+| Sync Layer                                                   |
+| sync::{SharedEmac, AsyncEmacState, AsyncEmacExt}             |
 +--------------------------------------------------------------+
                               |
                               v
 +--------------------------------------------------------------+
-| Driver Layer                                                  |
-| driver::{emac, config, interrupt, filtering, flow}            |
+| Driver Layer                                                 |
+| driver::{emac, config, interrupt, filtering, flow}           |
 +--------------------------------------------------------------+
                               |
                               v
 +--------------------------------------------------------------+
-| HAL Layer                                                     |
-| hal::{clock, reset, mdio, gpio}                               |
+| HAL Layer                                                    |
+| hal::{clock, reset, mdio, gpio}                              |
 +--------------------------------------------------------------+
                               |
                               v
 +--------------------------------------------------------------+
-| Internal Layer                                                |
-| internal::{register, dma, phy_regs, constants}                |
+| Internal Layer                                               |
+| internal::{register, dma, phy_regs, constants}               |
 +--------------------------------------------------------------+
                               |
                               v
 +--------------------------------------------------------------+
-| ESP32 Hardware                                                |
-| EMAC MAC + DMA + EXT + External PHY                           |
+| ESP32 Hardware                                               |
+| EMAC MAC + DMA + EXT + External PHY                          |
 +--------------------------------------------------------------+
 ```
 
@@ -216,7 +216,7 @@ without depending on `embassy-net` directly.
 ## Testing
 
 Testing strategy, coverage goals, and integration test guidance live in
-`TESTING.md`.
+`docs/TESTING.md`.
 
 ---
 

@@ -48,9 +48,7 @@
 //! ```
 
 // Primitives module (requires critical-section)
-mod primitives;
-
-pub(crate) use primitives::{AtomicWaker, CriticalSectionCell};
+pub(crate) mod primitives;
 
 // Shared wrappers (requires critical-section)
 mod shared;

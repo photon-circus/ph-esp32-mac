@@ -35,9 +35,9 @@ This document defines the documentation standards for the ESP32 EMAC driver proj
 
 ```
 README.md           → Project overview, quick start, links to other docs
-DESIGN.md           → Architecture decisions, system design
-TESTING.md          → Test strategy, coverage, running tests
-DOCUMENTATION_STANDARDS.md → This document
+docs/DESIGN.md      → Architecture decisions, system design
+docs/TESTING.md     → Test strategy, coverage, running tests
+docs/DOCUMENTATION_STANDARDS.md → This document
 AGENTS.md           → AI agent guidance
 src/lib.rs          → Crate-level documentation
 src/<module>/mod.rs → Module-level documentation

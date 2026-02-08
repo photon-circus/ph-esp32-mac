@@ -11,10 +11,9 @@
 use log::{error, info, warn};
 
 use ph_esp32_mac::{Duplex, Speed};
+use ph_esp32_mac::boards::wt32_eth01::Wt32Eth01 as Board;
 
 use super::framework::{TestContext, TestResult, EMAC};
-use crate::boards::wt32_eth01::Wt32Eth01Config as Board;
-
 /// IT-3-001: Verify PHY responds to MDIO read operations
 pub fn test_phy_mdio_read(ctx: &mut TestContext) -> TestResult {
     use ph_esp32_mac::PhyDriver;
@@ -23,10 +22,10 @@ pub fn test_phy_mdio_read(ctx: &mut TestContext) -> TestResult {
         Ok(phy_id) => {
             info!("  PHY ID={:#010x}", phy_id);
             
-            if phy_id & Board::PHY_ID_MASK == Board::PHY_ID {
-                info!("  Confirmed: {}", Board::PHY_TYPE);
+            if Board::is_valid_phy_id(phy_id) {
+                info!("  Confirmed: LAN8720A");
             } else {
-                warn!("  Unexpected PHY ID (expected {})", Board::PHY_TYPE);
+                warn!("  Unexpected PHY ID (expected LAN8720A)");
             }
             TestResult::Pass
         }

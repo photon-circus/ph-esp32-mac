@@ -2,7 +2,7 @@
 
 This document tracks the current publishability status of `ph-esp32-mac` and a sprint plan to reach a crates.io-ready release. It prioritizes API correctness, embedded-Rust idioms, and minimal user boilerplate.
 
-Last updated: 2026-02-05
+Last updated: 2026-02-08
 
 ---
 
@@ -19,7 +19,7 @@ Last updated: 2026-02-05
 ## Snapshot
 
 - Examples are working: `smoltcp_echo`, `esp_hal_integration`, `esp_hal_async`, and `embassy_net` now run as expected.
-- Integration tests run as expected (per latest local runs).
+- QA runner tests run as expected (per latest local runs).
 - Async/waker architecture is per-instance and no-alloc, using `AsyncEmacState` and explicit ISR helpers.
 - esp-hal (1.0.0) and embassy-net (0.7.0) integrations are present and exercised via examples.
 - Packaging baseline is in place: root `README.md`, `CHANGELOG.md`, `RELEASE.md`, docs.rs metadata, and publish metadata are set.
@@ -56,7 +56,7 @@ Last updated: 2026-02-05
 **Status**: ✅ Completed
 
 **Work items**
-- Add root `README.md` (aligned with `DOCUMENTATION_STANDARDS.md`) and set `readme = "README.md"`.
+- Add root `README.md` (aligned with `docs/DOCUMENTATION_STANDARDS.md`) and set `readme = "README.md"`.
 - Add `repository`, `documentation`, `homepage`, and `package.metadata.docs.rs`.
 - Add `CHANGELOG.md` and `RELEASE.md` with a publish checklist.
 - Add `exclude` list to `Cargo.toml` for non-package artifacts.
@@ -88,19 +88,19 @@ Last updated: 2026-02-05
   - All unsafe public APIs have a `# Safety` section.
 
 **Exit criteria**
-- A “Public API report” is captured in `API.md` (or embedded here).
+- A “Public API report” is captured in `docs/API.md` (or embedded here).
 - All public APIs follow documented style and safety requirements.
 - No clippy warnings for `missing_docs` or unsafe documentation in public items.
 
 **Progress**
 - Demoted low-level register re-exports into `unsafe_registers::{DmaRegs, ExtRegs, MacRegs}`.
-- Created initial `API.md` inventory.
+- Created initial `docs/API.md` inventory.
 - Removed top-level HAL re-exports and moved constants under `ph_esp32_mac::constants`.
 - Added `doc(cfg)` coverage for feature-gated modules and re-exports.
 - Simplified esp-hal facade: removed `EspHalEmac` placeholder and made explicit esp-hal re-exports.
 - Marked ESP32-P4 as experimental and hidden from docs (feature is present but not documented).
 - Added WT32-ETH01 board helper and esp-hal convenience constructors for the canonical bring-up.
-- Completed API inventory and stability classification in `API.md`.
+- Completed API inventory and stability classification in `docs/API.md`.
 - Removed `hal::gpio::esp32_gpio` (breaking removal allowed for first release).
 - Documented advanced/testing gaps for filtering and flow control.
 - Documented token types as implementation details for smoltcp/embassy-net.
@@ -117,9 +117,9 @@ Last updated: 2026-02-05
   - Add a concise **feature-flag matrix** (what each flag unlocks).
   - Add a **memory/footprint** section (DMA descriptor counts, buffer sizes, defaults).
   - Ensure all docs use the correct crate name and current API (no legacy references).
-- **Examples + integration tests docs**
-  - Update `examples/README.md` to match current `cargo` aliases and example layout.
-  - Update `integration_tests/README.md` with the latest board wiring + run steps.
+- **Examples + QA runner docs**
+  - Update `apps/examples/README.md` to match the xtask runner and current app layout.
+  - Update `apps/qa-runner/README.md` with the latest board wiring + run steps.
   - Add a small troubleshooting note for DHCP bring-up timing and link readiness.
 - **Packaging narrative**
   - Document the decision to keep examples repo-only (or spin out a separate examples crate).
@@ -172,4 +172,4 @@ Last updated: 2026-02-05
 - README/CHANGELOG present; docs and examples reflect the current API.
 - Supported hardware/features are explicit and ESP32-P4 is documented as experimental/hidden.
 - esp-hal and embassy-net examples compile for the target toolchain.
-- Integration tests are documented, reproducible, and run cleanly.
+- QA runner tests are documented, reproducible, and run cleanly.

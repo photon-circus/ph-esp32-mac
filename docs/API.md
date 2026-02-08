@@ -2,6 +2,10 @@
 
 This document inventories the public API surface of `ph-esp32-mac`, recommends stability classifications, and evaluates placement/ergonomics against embedded-Rust conventions.
 
+**Note**: This is a transitional planning document intended for the **0.1.0
+publishability** phase. It is not expected to be maintained long-term after the
+initial release is published.
+
 Last updated: 2026-02-05
 
 ---

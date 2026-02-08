@@ -1,4 +1,4 @@
-//! Build script for integration tests
+//! Build script for the QA runner
 //!
 //! This primarily provides helpful error messages if building on the wrong target.
 
@@ -16,8 +16,8 @@ fn main() {
         println!("cargo:warning=   espup install");
         println!("cargo:warning=");
         println!("cargo:warning= Then build with:");
-        println!("cargo:warning=   cargo build --release");
-        println!("cargo:warning= (target is set in .cargo/config.toml)");
+        println!("cargo:warning=   cargo xtask build qa-runner");
+        println!("cargo:warning= (or set --target xtensa-esp32-none-elf -Zbuild-std=core manually)");
         println!("cargo:warning==============================================");
     }
 

@@ -28,7 +28,7 @@ This checklist defines the steps required to publish `ph-esp32-mac` to crates.io
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test --lib`
 - [ ] `cargo doc --no-deps`
-- [ ] Target toolchain build for ESP32 examples (documented in `examples/README.md`).
+- [ ] Target toolchain build for ESP32 examples (documented in `apps/examples/README.md`).
 
 ---
 

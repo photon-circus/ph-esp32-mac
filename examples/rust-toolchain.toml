@@ -1,9 +1,0 @@
-# Rust toolchain configuration for ESP32 examples
-#
-# This requires the esp-rs toolchain installed via espup:
-#   cargo install espup
-#   espup install
-
-[toolchain]
-channel = "esp"
-components = ["rust-src"]

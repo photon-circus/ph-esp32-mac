@@ -76,6 +76,7 @@ embassy-net-example = [
   "dep:log",
   "dep:esp-rtos",
   "dep:static_cell",
+  "ph-esp32-mac/async",
   "ph-esp32-mac/critical-section",
   "ph-esp32-mac/embassy-net",
   "ph-esp32-mac/log",
@@ -83,7 +84,7 @@ embassy-net-example = [
 ]
 
 [dependencies]
-ph-esp32-mac = { path = ".." }
+ph-esp32-mac = { path = "../.." }
 embedded-hal = "1.0"
 
 # Optional example dependencies

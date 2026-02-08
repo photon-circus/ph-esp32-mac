@@ -1,20 +1,16 @@
-# Integration Tests
+# QA Runner
 
-This directory contains integration tests for the `ph-esp32-mac` driver
-running on real ESP32 hardware.
+This directory contains the QA runner for the `ph-esp32-mac` driver
+running on real ESP32 hardware. It is a **standalone crate** and is not
+packaged with the published library crate.
 
 ## Project Structure
 
 ```
-integration_tests/
+apps/qa-runner/
 ├── Cargo.toml           # Standalone crate configuration
 ├── rust-toolchain.toml  # ESP32 toolchain selector
-├── .cargo/
-│   └── config.toml      # Build target configuration
-├── wt32_eth01.rs        # WT32-ETH01 test binary
-├── boards/
-│   ├── mod.rs           # Board configuration module
-│   └── wt32_eth01.rs    # WT32-ETH01 pin mappings
+├── qa_runner.rs         # WT32-ETH01 QA runner binary
 └── README.md            # This file
 ```
 
@@ -44,9 +40,9 @@ rustup show
 # Should list "esp" channel
 ```
 
-## WT32-ETH01 Example
+## WT32-ETH01 QA Target
 
-The primary integration test target is the WT32-ETH01 board, a compact and
+The primary QA target is the WT32-ETH01 board, a compact and
 affordable ESP32 development board with built-in Ethernet.
 
 ### Hardware Requirements
@@ -85,52 +81,35 @@ Connect your USB-TTL adapter:
 
 Or use a programmer with auto-boot circuit (like M5Stack ESP32 Downloader).
 
-### Building
+### Recommended: xtask Runner
 
-Build from the integration_tests directory:
-
-```bash
-cd integration_tests
-
-# Build release (recommended for flash size)
-cargo build --release
-
-# Or build debug
-cargo build
-```
-
-Or build from the project root:
+From the repo root:
 
 ```bash
-cargo build --manifest-path integration_tests/Cargo.toml --release
-```
-
-### Flashing
-
-From the project root (recommended):
-
-```bash
-# Build, flash, and monitor using cargo alias
-cargo int
+# Build, flash, and monitor
+cargo xtask run qa-runner
 
 # Build only (no flash)
-cargo int-build
+cargo xtask build qa-runner
 ```
 
-Or from the integration_tests directory:
+Add `--debug` if you want a debug build:
 
 ```bash
-cd integration_tests
-
-# Flash and open serial monitor
-cargo run --release
-
-# Or flash manually
-espflash flash target/xtensa-esp32-none-elf/release/wt32_eth01 --monitor
-
-# Or just monitor an already-flashed device
-espflash monitor
+cargo xtask run qa-runner --debug
 ```
+
+The runner uses the ESP toolchain (`rustup run esp`) and configures the
+target/runner/rustflags needed for the WT32-ETH01 QA binary. You can pass
+the short target name (recommended) or a `.rs` entry path.
+
+You can set `ESPFLASH_PORT` and `ESPFLASH_BAUD` as environment variables
+if you prefer not to pass them on the command line.
+
+### Manual Cargo Commands (Optional)
+
+If you prefer direct cargo commands, follow the exact command printed by xtask
+(it includes the required target, build-std, runner, and QA-specific rustflags).
 
 ### Expected Output
 
@@ -241,34 +220,27 @@ let config = Config::new(hw_addr.into());
 let mut iface = Interface::new(config, &mut emac, SmolInstant::from_millis(0));
 ```
 
-## Board Configuration Module
+## Board Support (Driver Crate)
 
-The `boards/` directory contains reusable configuration for supported boards:
-
-- `boards/wt32_eth01.rs` - WT32-ETH01 pin mappings and constants
-
-Use the configuration like:
+Board scaffolding is provided by the main driver crate:
 
 ```rust
-use boards::wt32_eth01::{Wt32Eth01Config, Wt32Eth01Ext};
+use ph_esp32_mac::boards::wt32_eth01::Wt32Eth01;
 
-// Get PHY address
-let phy = Lan8720a::new(Wt32Eth01Config::PHY_ADDR);
+// PHY instance for WT32-ETH01
+let phy = Wt32Eth01::lan8720a();
 
-// Easy EMAC config
-let config = EmacConfig::new()
-    .with_mac_address(my_mac)
-    .for_wt32_eth01();  // Extension method
+// Board-specific EMAC configuration
+let config = Wt32Eth01::emac_config_with_mac(my_mac);
 ```
 
 ## Adding Support for Other Boards
 
 To add support for another ESP32+Ethernet board:
 
-1. Create `boards/your_board.rs` with pin mappings
-2. Add to `boards/mod.rs`
-3. Create an example `your_board.rs` based on the WT32-ETH01 example
-4. Update this README
+1. Add a board helper under `src/boards/` in the main crate
+2. Update documentation and examples to use the new helper
+3. Update this QA runner to use the new board helper
 
 ### Known Compatible Boards
 

@@ -10,19 +10,13 @@
 
 use log::{error, info};
 
-use ph_esp32_mac::{Emac, EmacConfig, PhyInterface, RmiiClockMode};
+use ph_esp32_mac::Emac;
+use ph_esp32_mac::boards::wt32_eth01::Wt32Eth01 as Board;
 
 use super::framework::{TestContext, TestResult, EMAC, IO_MUX_BASE, DMA_BASE};
-use crate::boards::wt32_eth01::Wt32Eth01Config as Board;
-
 /// IT-2-001: Test EMAC initialization with board-specific configuration
 pub fn test_emac_init(ctx: &mut TestContext) -> TestResult {
-    let config = EmacConfig::new()
-        .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
-        .with_phy_interface(PhyInterface::Rmii)
-        .with_rmii_clock(RmiiClockMode::ExternalInput { 
-            gpio: Board::REF_CLK_GPIO 
-        });
+    let config = Board::emac_config_with_mac([0x02, 0x00, 0x00, 0x12, 0x34, 0x56]);
 
     // Place EMAC in static location BEFORE init (required for DMA descriptors)
     critical_section::with(|cs| {

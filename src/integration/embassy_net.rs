@@ -65,7 +65,7 @@
 //!
 //! With `esp-hal` 1.0.0, the recommended Embassy runtime integration is via
 //! `esp-rtos` with its `embassy` feature enabled. Ensure the time driver is
-//! started before running the executor (see the example in `examples/embassy_net.rs`).
+//! started before running the executor (see the example in `apps/examples/embassy_net.rs`).
 
 use core::{marker::PhantomData, task::Context};
 
@@ -78,7 +78,7 @@ use crate::hal::mdio::MdioBus;
 use crate::internal::constants::{MAX_FRAME_SIZE, MTU};
 use crate::internal::register::dma::DmaRegs;
 use crate::phy::{LinkStatus, PhyDriver};
-use crate::sync::{AtomicWaker, CriticalSectionCell};
+use crate::sync::primitives::{AtomicWaker, CriticalSectionCell};
 use crate::{Emac, InterruptStatus};
 
 // =============================================================================

@@ -3,6 +3,7 @@
 //! Low-level primitives used by the sync and async EMAC wrappers.
 
 use core::cell::RefCell;
+#[cfg(any(feature = "async", feature = "embassy-net"))]
 use core::task::Waker;
 use critical_section::Mutex;
 
@@ -52,6 +53,7 @@ impl<T> CriticalSectionCell<T> {
     }
 
     /// Execute a closure with immutable access.
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[inline]
     pub fn with_ref<R, F>(&self, f: F) -> R
     where
@@ -70,10 +72,12 @@ unsafe impl<T> Sync for CriticalSectionCell<T> {}
 /// Thread-safe, interrupt-safe waker storage for async I/O.
 ///
 /// Register a waker from async poll, wake from interrupt handler.
+#[cfg(any(feature = "async", feature = "embassy-net"))]
 pub struct AtomicWaker {
     waker: CriticalSectionCell<Option<Waker>>,
 }
 
+#[cfg(any(feature = "async", feature = "embassy-net"))]
 impl AtomicWaker {
     /// Create a new empty waker (const, suitable for static initialization).
     pub const fn new() -> Self {
@@ -111,6 +115,7 @@ impl AtomicWaker {
     }
 }
 
+#[cfg(any(feature = "async", feature = "embassy-net"))]
 impl Default for AtomicWaker {
     fn default() -> Self {
         Self::new()
@@ -118,8 +123,10 @@ impl Default for AtomicWaker {
 }
 
 // SAFETY: AtomicWaker uses CriticalSectionCell for synchronization.
+#[cfg(any(feature = "async", feature = "embassy-net"))]
 unsafe impl Send for AtomicWaker {}
 // SAFETY: AtomicWaker uses CriticalSectionCell for synchronization.
+#[cfg(any(feature = "async", feature = "embassy-net"))]
 unsafe impl Sync for AtomicWaker {}
 
 #[cfg(test)]
@@ -128,14 +135,19 @@ mod tests {
     extern crate std;
 
     use super::*;
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     use core::task::{RawWaker, RawWakerVTable};
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     use std::sync::Arc;
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     struct WakeCounter {
         count: AtomicUsize,
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     impl WakeCounter {
         fn new() -> Arc<Self> {
             Arc::new(Self {
@@ -148,6 +160,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     fn test_waker(counter: Arc<WakeCounter>) -> Waker {
         fn clone_fn(ptr: *const ()) -> RawWaker {
             // SAFETY: `ptr` originates from `Arc::into_raw` in this test helper.
@@ -214,6 +227,7 @@ mod tests {
         assert_eq!(result, Some(42));
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn critical_section_cell_with_ref_reads() {
         let cell: CriticalSectionCell<u32> = CriticalSectionCell::new(42);
@@ -229,18 +243,21 @@ mod tests {
         assert_eq!(value, 100);
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_new_is_empty() {
         let waker = AtomicWaker::new();
         assert!(!waker.is_registered());
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_default_is_empty() {
         let waker = AtomicWaker::default();
         assert!(!waker.is_registered());
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_register_stores_waker() {
         let atomic_waker = AtomicWaker::new();
@@ -251,6 +268,7 @@ mod tests {
         assert!(atomic_waker.is_registered());
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_wake_calls_waker() {
         let atomic_waker = AtomicWaker::new();
@@ -264,6 +282,7 @@ mod tests {
         assert_eq!(counter.count(), 1);
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_wake_clears_waker() {
         let atomic_waker = AtomicWaker::new();
@@ -277,6 +296,7 @@ mod tests {
         assert!(!atomic_waker.is_registered());
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_wake_without_registered_is_noop() {
         let atomic_waker = AtomicWaker::new();
@@ -284,6 +304,7 @@ mod tests {
         assert!(!atomic_waker.is_registered());
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_register_overwrites_previous() {
         let atomic_waker = AtomicWaker::new();
@@ -300,6 +321,7 @@ mod tests {
         assert_eq!(counter2.count(), 1);
     }
 
+    #[cfg(any(feature = "async", feature = "embassy-net"))]
     #[test]
     fn atomic_waker_double_wake_only_wakes_once() {
         let atomic_waker = AtomicWaker::new();

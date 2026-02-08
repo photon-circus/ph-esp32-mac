@@ -1,20 +1,20 @@
 [package]
-name = "ph-esp32-mac-integration-tests"
+name = "ph-esp32-mac-qa-runner"
 version = "0.1.0"
 edition = "2024"
 authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
-description = "Integration tests for ph-esp32-mac on real ESP32 hardware"
+description = "QA runner for ph-esp32-mac on real ESP32 hardware"
 publish = false
 rust-version = "1.92.0"
 
 [[bin]]
-name = "wt32_eth01"
-path = "wt32_eth01.rs"
+name = "qa-runner"
+path = "qa_runner.rs"
 test = false
 
 [dependencies]
 # The EMAC driver we're testing
-ph-esp32-mac = { path = "..", features = ["esp32", "critical-section", "smoltcp"] }
+ph-esp32-mac = { path = "../..", features = ["esp32", "critical-section", "smoltcp"] }
 
 # ESP32 HAL and support crates
 esp-hal = { version = "1.0", features = ["esp32", "unstable"] }
@@ -37,16 +37,8 @@ log = "0.4"
 # Interrupt-safe access
 critical-section = "1.2"
 
-[profile.dev]
-# Rust debug is too slow.
-# For debug builds always builds with some optimization
-opt-level = "s"
-
 [profile.release]
-codegen-units    = 1     # LLVM can perform better optimizations using a single thread
 debug            = 2
-debug-assertions = false
-incremental      = false
-lto              = 'fat'
-opt-level        = 's'
-overflow-checks  = false
+debug-assertions = true
+lto              = "fat"
+codegen-units    = 1

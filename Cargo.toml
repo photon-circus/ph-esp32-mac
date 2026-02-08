@@ -18,10 +18,8 @@ exclude = [
     ".cargo/",
     ".github/",
     "target/",
-    "examples/target/",
-    "integration_tests/target/",
-    "DESIGN_old.md",
-    "REORGANIZATION.md",
+    "apps/",
+    "xtask/",
     "CLAUDE.md",
     "PUBLISHABILITY_ROADMAP.md",
     "Cargo.toml.orig",
@@ -84,9 +82,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 # =============================================================================
 # Integration Test Dependencies (only needed when building for target hardware)
 # =============================================================================
-# The integration tests in `integration_tests/` require the xtensa target.
+# The QA runner in `apps/qa-runner/` requires the xtensa target.
 # They are NOT examples (to avoid host compilation issues) - they're standalone.
 #
 # To build and flash:
-#   cargo build --manifest-path integration_tests/Cargo.toml --release
-#   espflash flash target/xtensa-esp32-none-elf/release/wt32_eth01 --monitor
+#   cargo xtask run qa-runner
