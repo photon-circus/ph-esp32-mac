@@ -136,6 +136,8 @@ See [xtask/README.md](xtask/README.md) for details.
 
 Examples are provided as a **separate crate** in this repository and are not
 packaged with the published library crate.
+They require the Xtensa toolchain and flashing setup, so they are kept repo-only
+to avoid pulling those requirements into crates.io consumers.
 
 See [apps/examples/README.md](apps/examples/README.md) for build and run
 instructions.

@@ -15,7 +15,7 @@
 //!
 //! # See Also
 //!
-//! - [`crate::integration::esp_hal`] - esp-hal facade helpers
+//! - esp-hal facade helpers (feature-gated `esp-hal` module at crate root)
 
 #[cfg(feature = "esp32")]
 #[cfg_attr(docsrs, doc(cfg(feature = "esp32")))]

@@ -25,7 +25,7 @@
 //!
 //! # See Also
 //!
-//! - [`crate::integration`] - stack and runtime facades
+//! - Integration facades (feature-gated modules under `integration`)
 
 // Submodules
 pub mod config;

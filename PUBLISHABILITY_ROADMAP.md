@@ -111,9 +111,11 @@ Last updated: 2026-02-08
 
 **Goal**: Present a clear, minimal integration story with current examples and docs.
 
+**Status**: ✅ Completed
+
 **Work items**
 - **Root documentation pass**
-  - Add “happy path” snippets for esp-hal (WT32-ETH01), embassy-net, and smoltcp.
+  - Add “happy path” snippets for esp-hal (WT32-ETH01) and esp-hal async.
   - Add a concise **feature-flag matrix** (what each flag unlocks).
   - Add a **memory/footprint** section (DMA descriptor counts, buffer sizes, defaults).
   - Ensure all docs use the correct crate name and current API (no legacy references).
@@ -124,6 +126,20 @@ Last updated: 2026-02-08
 - **Packaging narrative**
   - Document the decision to keep examples repo-only (or spin out a separate examples crate).
   - If repo-only, add a short “why” and link from the root README.
+
+**Progress**
+- Rebuilt the root README around the esp-hal happy path (sync + async) and added a memory sizing section.
+- Added a docs index (`docs/README.md`) and rewrote `/docs` to the current standards.
+- Normalized crate name references across docs and module-level rustdocs.
+- Updated `apps/examples/README.md`, `apps/qa-runner/README.md`, `apps/README.md`, and `xtask/README.md`.
+- Updated CI fmt/doc to target the root manifest only (avoids non-crate apps/ issues).
+- Added a short “repo-only examples” rationale to the root README.
+- Added a DHCP/link troubleshooting note to the examples README.
+- Confirmed `cargo doc --no-deps` builds cleanly.
+- Kept embassy-net/smoltcp snippets in the example docs (not in the root README).
+
+**Work remaining**
+- None.
 
 **Exit criteria**
 - Docs build cleanly with `cargo doc --no-deps`.
