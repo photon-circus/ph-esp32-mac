@@ -1,3 +1,39 @@
+//! Build and flash helper for ESP32 app crates.
+//!
+//! This binary provides a small command surface for building or flashing the
+//! app crates under `apps/` without requiring manual target or feature setup.
+//!
+//! # Overview
+//!
+//! - Resolves a short target name or `.rs` path to a Cargo binary
+//! - Injects the Xtensa target and `-Zbuild-std=core`
+//! - Adds required linker flags for ESP32 applications
+//! - Uses the ESP toolchain via `rustup run esp`
+//!
+//! # Usage
+//!
+//! ```ignore
+//! cargo xtask run ex-smoltcp
+//! cargo xtask build qa-runner
+//! cargo xtask run ex-embassy-net --debug
+//! cargo xtask run ex-esp-hal -- --extra-arg
+//! ```
+//!
+//! # Targets
+//!
+//! - qa-runner | qa
+//! - ex-esp-hal | ex-esp-hal-async
+//! - ex-smoltcp
+//! - ex-embassy | ex-embassy-net
+//!
+//! # Notes
+//!
+//! - If no command is supplied, `build` is assumed.
+//! - `--debug` selects a debug build (release is the default).
+//! - `--` passes arguments to the target binary.
+//! - `ESP_LOG`, `ESP_IDF_VERSION`, and `CARGO_TARGET_DIR` are defaulted
+//!   if not set by the caller.
+
 use std::{
     env,
     error::Error,
@@ -8,24 +44,28 @@ use std::{
 
 const XTASK_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
+/// Operational mode for the xtask invocation.
 #[derive(Clone, Copy)]
 enum Mode {
     Run,
     Build,
 }
 
+/// Cargo build profile selection.
 #[derive(Clone, Copy)]
 enum Profile {
     Release,
     Debug,
 }
 
+/// Cargo binary entry discovered in a manifest.
 struct BinInfo {
     name: String,
     path: PathBuf,
     required_features: Vec<String>,
 }
 
+/// A resolved binary target with metadata needed for the cargo invocation.
 struct ResolvedBin {
     manifest_path: PathBuf,
     bin_name: Option<String>,
