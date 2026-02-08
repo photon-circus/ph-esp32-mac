@@ -1,229 +1,122 @@
-# ESP32 EMAC Design
+# Design
 
-This document describes the current architecture and behavior of `ph-esp32-mac`.
-Forward-looking work and scope changes are tracked in `PUBLISHABILITY_ROADMAP.md`
-and take precedence if anything diverges.
+This document captures design decisions, constraints, and invariants for the
+`ph-esp32-mac` driver. It focuses on why the system is shaped the way it is.
+
+---
 
 ## Table of Contents
 
-1. [Scope](#scope)
-2. [Goals](#goals)
-3. [Architecture Overview](#architecture-overview)
-4. [Module Layout](#module-layout)
-5. [Core Driver Model](#core-driver-model)
-6. [Memory Model](#memory-model)
-7. [Hardware Access](#hardware-access)
-8. [PHY Layer](#phy-layer)
-9. [Integration Layers](#integration-layers)
-10. [Feature Flags](#feature-flags)
-11. [Testing](#testing)
-12. [References](#references)
+- [Scope and Non-Goals](#scope-and-non-goals)
+- [Design Principles](#design-principles)
+- [Driver Model](#driver-model)
+- [DMA and Memory Invariants](#dma-and-memory-invariants)
+- [Safety Boundaries](#safety-boundaries)
+- [PHY Strategy](#phy-strategy)
+- [Integration Strategy](#integration-strategy)
+- [Board Support](#board-support)
+- [Feature Flags](#feature-flags)
 
 ---
 
-## Scope
+## Scope and Non-Goals
 
-- Target: ESP32 only (xtensa-esp32-none-elf).
-- The `esp32p4` feature exists as an experimental placeholder for internal
-  layout work. It is not supported in this release and is intentionally
-  undocumented.
-- `no_std`, `no_alloc`; all buffers are statically allocated.
+Scope:
+- ESP32 only (`xtensa-esp32-none-elf`)
+- `no_std`, `no_alloc`, statically allocated DMA buffers
+- LAN8720A as the canonical PHY
 
-## Goals
-
-- Provide a safe, zero-allocation EMAC driver for ESP32.
-- Keep the public API small, stable, and HAL-friendly.
-- Isolate hardware register access to internal modules.
-- Support optional integrations (smoltcp, embassy-net-driver, esp-hal).
+Non-goals:
+- WiFi support (out of scope)
+- Dynamic allocation or runtime buffer growth
+- Stable support for non-ESP32 targets (ESP32-P4 is a placeholder only)
 
 ---
 
-## Architecture Overview
+## Design Principles
 
-```
-+--------------------------------------------------------------+
-| Application Layer                                            |
-| smoltcp / embassy-net / raw Ethernet processing              |
-+--------------------------------------------------------------+
-                              |
-                              v
-+--------------------------------------------------------------+
-| Integration Layer                                            |
-| integration/{smoltcp, embassy_net, esp_hal}                  |
-+--------------------------------------------------------------+
-                              |
-                              v
-+--------------------------------------------------------------+
-| Sync Layer                                                   |
-| sync::{SharedEmac, AsyncEmacState, AsyncEmacExt}             |
-+--------------------------------------------------------------+
-                              |
-                              v
-+--------------------------------------------------------------+
-| Driver Layer                                                 |
-| driver::{emac, config, interrupt, filtering, flow}           |
-+--------------------------------------------------------------+
-                              |
-                              v
-+--------------------------------------------------------------+
-| HAL Layer                                                    |
-| hal::{clock, reset, mdio, gpio}                              |
-+--------------------------------------------------------------+
-                              |
-                              v
-+--------------------------------------------------------------+
-| Internal Layer                                               |
-| internal::{register, dma, phy_regs, constants}               |
-+--------------------------------------------------------------+
-                              |
-                              v
-+--------------------------------------------------------------+
-| ESP32 Hardware                                               |
-| EMAC MAC + DMA + EXT + External PHY                          |
-+--------------------------------------------------------------+
-```
+- **Predictable memory usage**: const generics and static allocation.
+- **Explicit lifecycle**: `Emac::new` -> `init` -> `start`.
+- **Minimal unsafe surface**: unsafe is isolated to internal modules.
+- **HAL-friendly**: ergonomic facades for esp-hal without hiding core control.
+- **Runtime-agnostic**: optional integrations for smoltcp/embassy-net.
 
 ---
 
-## Module Layout
+## Driver Model
 
-```
-src/
-├── driver/           # Core driver: Emac, config, errors, filtering, flow
-├── hal/              # Clock/reset/MDIO/GPIO abstractions
-├── phy/              # PHY drivers and traits (Lan8720a, generic helpers)
-├── integration/      # smoltcp, embassy-net-driver, esp-hal facades
-├── sync/             # SharedEmac + async waker support
-├── internal/         # Registers, DMA descriptors, constants (pub(crate))
-├── testing/          # Host test utilities (cfg(test))
-└── lib.rs            # Public API and re-exports
-```
+The driver centers on `Emac<RX, TX, BUF>` plus `EmacConfig`:
 
-Public API is surfaced via `lib.rs` re-exports. Anything inside `internal/`
-is implementation detail and may change without notice.
+- `EmacConfig::rmii_esp32_default()` captures sensible ESP32 defaults.
+- Configuration is explicit and builder-style for clarity.
+- Errors are typed and recoverable where possible.
 
 ---
 
-## Core Driver Model
+## DMA and Memory Invariants
 
-- `Emac<const RX, const TX, const BUF>` is the main driver type.
-- `EmacConfig` provides a builder-style configuration API.
-- `EmacConfig::rmii_esp32_default()` encodes the RMII defaults for ESP32.
-- `InterruptStatus` provides typed interrupt parsing.
-- Filtering and flow control live in `driver::filtering` and `driver::flow`.
-
-Driver lifecycle is explicit:
-
-```
-Created -> Initialized -> Running
-```
+- DMA descriptors and buffers are static and DMA-capable.
+- RX/TX rings are fixed-size and circular.
+- CPU and DMA ownership of descriptors is exclusive at any moment.
+- Buffer sizes must be large enough for expected frames (typically 1600 bytes).
 
 ---
 
-## Memory Model
+## Safety Boundaries
 
-The driver is `no_alloc` and uses const generics for buffer sizing. Static
-allocation is required because DMA needs stable, DMA-capable memory.
+Unsafe access is concentrated in `internal/`:
 
-Type aliases provide common presets:
+- Register reads/writes are isolated in `internal/register/*`.
+- DMA descriptor manipulation is isolated in `internal/dma/*`.
+- Public APIs provide safe abstractions and validate input where possible.
 
-- `EmacSmall`
-- `EmacDefault`
-- `EmacLarge`
-
-Place EMAC instances in DMA-capable SRAM (via a linker section if required by
-your memory map).
+Macro helpers (`emac_static_*`) place critical buffers in DMA-capable memory
+when targeting Xtensa.
 
 ---
 
-## Hardware Access
+## PHY Strategy
 
-All register access is contained in `internal/register/*` and re-exported
-as `DmaRegs`, `MacRegs`, and `ExtRegs` for internal use. This keeps unsafe
-volatile access centralized and consistent.
+The PHY layer is trait-based:
 
-DMA descriptors are implemented under `internal/dma/descriptor` and are aligned
-for ESP32. The experimental `esp32p4` feature changes descriptor alignment, but
-that target is not supported in this release.
+- `PhyDriver` defines the contract.
+- `Lan8720a` is the reference implementation.
+- A generic PHY fallback supports basic link operations.
 
----
-
-## PHY Layer
-
-The PHY layer is trait-driven and uses `hal::mdio::MdioBus` for register access.
-
-Key types:
-
-- `PhyDriver` trait for PHY implementations
-- `LinkStatus` for speed/duplex reporting
-- `Lan8720a` and `Lan8720aWithReset` as the primary PHYs
-
-The driver does not hardcode a PHY; integration layers can use helpers like
-`EmacPhyBundle` (esp-hal facade) to reduce boilerplate.
+This keeps the driver compatible with other PHYs without hardcoding one.
 
 ---
 
-## Integration Layers
+## Integration Strategy
 
-### smoltcp
+Integrations are optional and additive:
 
-`integration::smoltcp` implements `smoltcp::phy::Device` for `Emac`. The design
-uses short-lived RX/TX tokens with internal raw pointers to satisfy smoltcp's
-API requirements while keeping safety guarantees localized.
+- **esp-hal**: opinionated helpers for the WT32-ETH01 happy path.
+- **smoltcp**: implements `smoltcp::phy::Device`.
+- **embassy-net**: implements `embassy-net-driver`.
 
-### esp-hal
+The core driver remains usable without any stack or runtime.
 
-`integration::esp_hal` provides an ergonomic facade:
+---
 
-- `EmacBuilder` for HAL-friendly construction
-- `EmacPhyBundle` for PHY init and link polling
-- `EmacExt` for interrupt binding
-- `emac_isr!` and `emac_async_isr!` macros for handler setup
+## Board Support
 
-### async
+`boards::wt32_eth01` defines the canonical board configuration:
 
-`sync::asynch` provides per-instance wakers and async TX/RX:
+- Known PHY address and clock requirements
+- Convenience helpers for MAC/PHY bring-up
 
-- `AsyncEmacState` holds RX/TX/error wakers
-- `AsyncEmacExt` adds `receive_async()` and `transmit_async()`
-- `async_interrupt_handler(state)` wakes tasks from the ISR
-
-### embassy-net
-
-`integration::embassy_net` implements `embassy-net-driver` (driver-only). The
-wrapper type `EmbassyEmac` and `EmbassyEmacState` integrate with Embassy stacks
-without depending on `embassy-net` directly.
+Board helpers are public but remain experimental until more boards are added.
 
 ---
 
 ## Feature Flags
 
-```
-[features]
-- esp32 (default)            : target ESP32
-- esp32p4 (experimental)     : placeholder only, not supported
-- defmt                      : defmt formatting
-- log                        : log facade support
-- smoltcp                    : smoltcp Device integration
-- critical-section           : SharedEmac + critical-section primitives
-- async                      : async wakers and async TX/RX
-- esp-hal                    : esp-hal facade helpers
-- embassy-net                : embassy-net-driver integration
-```
-
----
-
-## Testing
-
-Testing strategy, coverage goals, and integration test guidance live in
-`docs/TESTING.md`.
-
----
-
-## References
-
-- ESP32 Technical Reference Manual (Ethernet MAC chapter)
-- Synopsys DesignWare MAC documentation
-- LAN8720A datasheet
-- embedded-hal 1.0 documentation
-- smoltcp 0.12 documentation
+- `esp32` (default): ESP32 target
+- `esp32p4`: placeholder only (not supported)
+- `critical-section`: ISR-safe shared access wrappers
+- `async`: async wakers and async TX/RX
+- `esp-hal`: esp-hal facades
+- `smoltcp`: smoltcp integration
+- `embassy-net`: embassy-net-driver integration
+- `defmt` / `log`: optional logging backends

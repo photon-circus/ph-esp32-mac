@@ -1,9 +1,9 @@
-//! Internal Implementation Details
+//! Internal implementation details.
 //!
-//! This module contains implementation details that are not part of the public API.
-//! Types in this module may change without notice between minor versions.
+//! This module contains implementation details that are not part of the public
+//! API. Types in this module may change without notice between minor versions.
 //!
-//! # Contents
+//! # Overview
 //!
 //! - [`register`]: Raw memory-mapped register definitions
 //! - [`phy_regs`]: PHY register definitions (MDIO-accessed)

@@ -1,23 +1,76 @@
-//! ESP32 EMAC Driver
+//! ESP32 EMAC driver.
 //!
-//! A `no_std`, `no_alloc` Rust implementation of the ESP32 Ethernet MAC (EMAC) controller.
+//! A `no_std`, `no_alloc` Rust implementation of the ESP32 Ethernet MAC (EMAC)
+//! peripheral with static DMA descriptors and buffers.
 //!
-//! This crate provides a bare-metal driver for the ESP32's built-in Ethernet MAC,
-//! based on the Synopsys DesignWare MAC (DWMAC) IP core.
+//! # Overview
+//!
+//! The core driver (`Emac`) is runtime-agnostic, while optional facades provide
+//! integration with esp-hal, smoltcp, and embassy-net. The canonical path for
+//! users is the esp-hal facade with WT32-ETH01 board helpers.
 //!
 //! # Architecture
 //!
-//! The driver is organized into three layers:
+//! The crate is layered (driver → hal → internal) with optional integration
+//! modules. See `docs/ARCHITECTURE.md` in the repository for diagrams and data
+//! flow details.
 //!
-//! 1. **MAC Layer** ([`driver::emac`]): Main EMAC driver with TX/RX operations
-//! 2. **PHY Layer** ([`phy`]): Ethernet PHY drivers (e.g., LAN8720A)
-//! 3. **HAL Layer** ([`hal`]): Hardware abstraction for clocks, GPIO, MDIO
+//! # Quick Start (esp-hal sync)
 //!
-//! ## Standard Compliance
+//! ```ignore
+//! use esp_hal::delay::Delay;
+//! use ph_esp32_mac::esp_hal::{EmacBuilder, EmacPhyBundle, Wt32Eth01};
 //!
-//! - **IEEE 802.3**: Frame sizes, MDIO/MDC protocol, flow control
-//! - **Synopsys DWMAC**: DMA descriptors, register layout (portable to other SoCs)
-//! - **ESP32-specific**: Memory map, clock configuration, GPIO routing
+//! ph_esp32_mac::emac_static_sync!(EMAC, 10, 10, 1600);
+//!
+//! let mut delay = Delay::new();
+//! EMAC.with(|emac| {
+//!     EmacBuilder::wt32_eth01_with_mac(emac, [0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+//!         .init(&mut delay)
+//!         .unwrap();
+//!     let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(emac, Delay::new());
+//!     let _status = emac_phy
+//!         .init_and_wait_link_up(&mut delay, 10_000, 200)
+//!         .unwrap();
+//!     emac.start().unwrap();
+//! });
+//! ```
+//!
+//! # Quick Start (esp-hal async)
+//!
+//! ```ignore
+//! use esp_hal::delay::Delay;
+//! use ph_esp32_mac::esp_hal::{EmacBuilder, EmacPhyBundle, Wt32Eth01};
+//! use ph_esp32_mac::{emac_async_isr, emac_static_async};
+//!
+//! emac_static_async!(EMAC, EMAC_STATE, 10, 10, 1600);
+//! emac_async_isr!(EMAC_IRQ, esp_hal::interrupt::Priority::Priority1, &EMAC_STATE);
+//!
+//! let mut delay = Delay::new();
+//! let emac_ptr = EMAC.init(ph_esp32_mac::Emac::new()) as *mut _;
+//! unsafe {
+//!     EmacBuilder::wt32_eth01_with_mac(&mut *emac_ptr, [0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+//!         .init(&mut delay)
+//!         .unwrap();
+//!     let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(&mut *emac_ptr, Delay::new());
+//!     let _status = emac_phy
+//!         .init_and_wait_link_up(&mut delay, 10_000, 200)
+//!         .unwrap();
+//!     (*emac_ptr).start().unwrap();
+//! }
+//! ```
+//!
+//! # Features
+//!
+//! - `esp32` (default): Target the original ESP32
+//! - `esp32p4`: Experimental placeholder (not supported)
+//! - `defmt`: Enable defmt formatting for error types
+//! - `log`: Enable log facade support
+//! - `smoltcp`: Enable smoltcp network stack integration
+//! - `critical-section`: Enable ISR-safe `SharedEmac` wrapper
+//! - `async`: Enable async/await support with wakers
+//! - `esp-hal`: Enable esp-hal ergonomic integration
+//! - `embassy-net`: Enable embassy-net-driver integration
 //!
 //! # Supported PHY Chips
 //!
@@ -25,96 +78,10 @@
 //!
 //! Additional PHY drivers can be added by implementing [`PhyDriver`].
 //!
-//! This release targets ESP32 only.
-//!
-//! # Features
-//!
-//! - `esp32` (default): Target the original ESP32
-//! - `defmt`: Enable defmt formatting for error types
-//! - `smoltcp`: Enable smoltcp network stack integration
-//! - `critical-section`: Enable ISR-safe `SharedEmac` wrapper
-//! - `async`: Enable async/await support with wakers
-//! - `esp-hal`: Enable esp-hal ergonomic integration
-//! - `embassy-net`: Enable embassy-net-driver integration
-//!
-//! # Example
-//!
-//! ```ignore
-//! use esp32_emac::{Emac, EmacConfig, Lan8720a, PhyDriver};
-//! use esp32_emac::hal::MdioController;
-//! use embedded_hal::delay::DelayNs;
-//!
-//! // Your delay implementation (from esp-hal or custom)
-//! let mut delay = /* your DelayNs implementation */;
-//!
-//! // Static allocation
-//! static mut EMAC: Emac<10, 10, 1600> = Emac::new();
-//!
-//! let emac = unsafe { &mut EMAC };
-//!
-//! // Configure with builder pattern
-//! let config = EmacConfig::new()
-//!     .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
-//!     .with_phy_interface(PhyInterface::Rmii);
-//!
-//! emac.init(config, &mut delay).unwrap();
-//!
-//! // Initialize PHY
-//! let mut mdio = MdioController::new(&mut delay);
-//! let mut phy = Lan8720a::new(0);
-//! phy.init(&mut mdio).unwrap();
-//!
-//! // Wait for link and configure MAC
-//! if let Some(link) = phy.poll_link(&mut mdio).unwrap() {
-//!     emac.set_speed(link.speed);
-//!     emac.set_duplex(link.duplex);
-//! }
-//!
-//! emac.start().unwrap();
-//! ```
-//!
 //! # Memory Requirements
 //!
 //! With default configuration (10 RX buffers, 10 TX buffers, 1600 bytes each):
 //! - Total: ~32 KB of DMA-capable SRAM
-//!
-//! # esp-hal Integration Path
-//!
-//! This crate is designed for eventual integration with `esp-hal`. The following
-//! changes would be needed:
-//!
-//! ## Peripheral Ownership
-//! ```ignore
-//! // Current (standalone)
-//! static mut EMAC: Emac<10, 10, 1600> = Emac::new();
-//!
-//! // Future esp-hal style
-//! let emac = Emac::new(peripherals.EMAC, peripherals.DMA, config);
-//! ```
-//!
-//! ## GPIO Pins
-//!
-//! The ESP32 EMAC uses **dedicated internal routing** for RMII data pins.
-//! These pins are fixed and automatically configured - see [`boards::wt32_eth01::Wt32Eth01`]
-//! for pin assignments. No user configuration is needed.
-//!
-//! ## Async Support
-//! ```ignore
-//! // Future async
-//! impl<'d> Emac<'d, Async> {
-//!     pub async fn receive(&mut self) -> Result<Frame> { ... }
-//! }
-//! ```
-//!
-//! # Completed Improvements
-//!
-//! - ✅ Centralized constants module (`constants.rs`)
-//! - ✅ Register accessor macros (`reg_rw!`, `reg_ro!`, etc.)
-//! - ✅ smoltcp integration with proper safety documentation
-//! - ✅ Conditional defmt support
-//! - ✅ Builder pattern for `EmacConfig` (`with_*` methods)
-//! - ✅ Split error types (`ConfigError`, `DmaError`, `IoError`)
-//! - ✅ PHY driver abstraction with LAN8720A support
 
 #![cfg_attr(docsrs, doc(cfg_hide(feature = "esp32p4")))]
 #![no_std]

@@ -1,4 +1,4 @@
-//! smoltcp Network Stack Integration
+//! smoltcp network stack integration.
 #![cfg_attr(docsrs, doc(cfg(feature = "smoltcp")))]
 //!
 //! This module provides integration with the [smoltcp](https://docs.rs/smoltcp) network stack.
@@ -10,7 +10,7 @@
 //! ```ignore
 //! use smoltcp::iface::{Config, Interface, SocketSet};
 //! use smoltcp::wire::{EthernetAddress, IpCidr};
-//! use esp32_emac::{Emac, EmacConfig};
+//! use ph_esp32_mac::{Emac, EmacConfig};
 //!
 //! // Create and initialize EMAC
 //! static mut EMAC: Emac<10, 10, 1600> = Emac::new();
@@ -33,10 +33,10 @@
 //! This module is only available when the `smoltcp` feature is enabled in Cargo.toml:
 //! ```toml
 //! [dependencies]
-//! esp32_emac = { version = "0.1", features = ["smoltcp"] }
+//! ph-esp32-mac = { version = "0.1", features = ["smoltcp"] }
 //! ```
 //!
-//! # Safety Notes
+//! # Safety
 //!
 //! The smoltcp `Device` trait requires `receive()` to return both an `RxToken` and
 //! `TxToken` simultaneously. This implementation uses raw pointers internally to

@@ -1,21 +1,13 @@
-//! External Stack Integrations
+//! Integration facades for external stacks and runtimes.
 //!
-//! This module provides integrations with external libraries and frameworks:
+//! This module provides optional adapters for common embedded networking
+//! stacks and runtimes.
 //!
-//! - **esp-hal** (`esp_hal`): Integration with the esp-hal hardware abstraction layer
-//!   - Interrupt handler registration
-//!   - Peripheral ownership patterns
-//!   - Requires `esp-hal` feature
+//! # Overview
 //!
-//! - **smoltcp** (`smoltcp`): Integration with the smoltcp TCP/IP network stack
-//!   - Implements `smoltcp::phy::Device` trait
-//!   - RX/TX token support
-//!   - Requires `smoltcp` feature
-//!
-//! - **embassy-net** (`embassy-net`): Integration with Embassy networking
-//!   - Implements `embassy_net_driver::Driver` trait
-//!   - RX/TX token support and waker-based polling
-//!   - Requires `embassy-net` feature
+//! - **esp-hal** (`esp_hal`): HAL-friendly builders and ISR helpers
+//! - **smoltcp** (`smoltcp`): `smoltcp::phy::Device` implementation
+//! - **embassy-net** (`embassy-net`): `embassy_net_driver::Driver` implementation
 //!
 //! # Feature Flags
 //!
@@ -23,21 +15,25 @@
 //! - `smoltcp`: Enables smoltcp integration (`smoltcp` submodule)
 //! - `embassy-net`: Enables Embassy integration (`embassy_net` submodule)
 //!
-//! # Example
+//! # Usage
 //!
 //! ```ignore
-//! // With esp-hal
+//! // esp-hal
 //! use ph_esp32_mac::integration::esp_hal::{EmacExt, Priority};
 //! emac.bind_interrupt(handler);
 //!
-//! // With smoltcp
+//! // smoltcp
 //! use smoltcp::phy::Device;
 //! let (rx, tx) = emac.receive(Instant::ZERO).unwrap();
 //!
-//! // With embassy-net
+//! // embassy-net
 //! use embassy_net_driver::Driver;
 //! let _ = emac.capabilities();
 //! ```
+//!
+//! # See Also
+//!
+//! - [`crate::esp_hal`] - re-exported esp-hal facade at the crate root
 
 #[cfg(feature = "esp-hal")]
 #[cfg_attr(docsrs, doc(cfg(feature = "esp-hal")))]

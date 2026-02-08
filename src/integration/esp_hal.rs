@@ -1,4 +1,4 @@
-//! esp-hal Integration Module
+//! esp-hal integration module.
 #![cfg_attr(docsrs, doc(cfg(feature = "esp-hal")))]
 //!
 //! This module provides ergonomic integration with `esp-hal` when the `esp-hal` feature

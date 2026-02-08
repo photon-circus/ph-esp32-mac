@@ -1,12 +1,12 @@
-//! Ethernet PHY Drivers
+//! Ethernet PHY drivers.
 //!
 //! This module provides a generic PHY driver trait and implementations for
-//! specific PHY chips commonly used with ESP32 Ethernet.
+//! common PHY chips used with ESP32 Ethernet.
 //!
-//! # Architecture
+//! # Overview
 //!
-//! The PHY layer is designed to be independent of the MAC implementation,
-//! communicating only through the MDIO bus interface. This allows:
+//! The PHY layer is independent of the MAC implementation and communicates
+//! through the MDIO bus interface. This enables:
 //!
 //! - Reuse across different MAC implementations
 //! - Easy addition of new PHY drivers
@@ -16,49 +16,37 @@
 //!
 //! - [`Lan8720a`]: Microchip/SMSC LAN8720A (most common for ESP32)
 //!
-//! # Example
+//! # Usage
 //!
 //! ```ignore
-//! use esp32_emac::phy::{Lan8720a, PhyDriver};
-//! use esp32_emac::hal::MdioController;
-//! use embedded_hal::delay::DelayNs;
+//! use ph_esp32_mac::hal::MdioController;
+//! use ph_esp32_mac::phy::{Lan8720a, PhyDriver};
 //!
-//! // Your delay implementation (from esp-hal or custom)
-//! let mut delay = /* your DelayNs implementation */;
-//!
-//! // Create MDIO controller
 //! let mut mdio = MdioController::new(&mut delay);
-//!
-//! // Create PHY driver at address 0
 //! let mut phy = Lan8720a::new(0);
-//!
-//! // Initialize and enable auto-negotiation
 //! phy.init(&mut mdio)?;
 //!
-//! // Poll for link status
-//! loop {
-//!     if let Some(link) = phy.poll_link(&mut mdio)? {
-//!         println!("Link up: {:?}", link);
-//!         break;
-//!     }
+//! if let Some(link) = phy.poll_link(&mut mdio)? {
+//!     // update MAC config
 //! }
 //! ```
 //!
-//! # esp-hal Integration Notes
+//! # Reset Pin Support
 //!
-//! For future esp-hal integration, the PHY driver should accept GPIO types
-//! for the reset pin:
+//! `Lan8720aWithReset` accepts any `embedded_hal::digital::OutputPin`:
 //!
 //! ```ignore
-//! use esp32_emac::phy::{Lan8720aWithReset, PhyDriver};
-//! use embedded_hal::digital::OutputPin;
+//! use ph_esp32_mac::phy::{Lan8720aWithReset, PhyDriver};
 //!
-//! // With esp-hal GPIO
 //! let reset_pin = io.pins.gpio5.into_push_pull_output();
 //! let mut phy = Lan8720aWithReset::new(0, reset_pin);
 //! phy.hardware_reset(&mut delay)?;
 //! phy.init(&mut mdio)?;
 //! ```
+//!
+//! # See Also
+//!
+//! - [`crate::hal::mdio`] - MDIO bus abstraction
 
 pub mod generic;
 pub mod lan8720a;

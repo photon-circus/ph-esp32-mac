@@ -1,23 +1,31 @@
-//! Core driver components for the ESP32 EMAC peripheral.
+//! Core EMAC driver components.
 //!
 //! This module contains the essential building blocks for configuring and
-//! operating the Ethernet MAC controller:
+//! operating the Ethernet MAC controller.
 //!
-//! - [`config`] - Configuration types and builder patterns
-//! - [`error`] - Error types and result aliases
-//! - [`emac`] - The main EMAC controller implementation
-//! - [`interrupt`] - Interrupt status handling
-//! - [`filtering`] - MAC address, hash, and VLAN filtering
-//! - [`flow`] - IEEE 802.3 flow control
+//! # Overview
 //!
-//! # Example
+//! - [`config`]: Configuration types and builder patterns
+//! - [`error`]: Error types and result aliases
+//! - [`emac`]: The main EMAC controller implementation
+//! - [`interrupt`]: Interrupt status handling
+//! - [`filtering`]: MAC address, hash, and VLAN filtering
+//! - [`flow`]: IEEE 802.3 flow control
+//!
+//! # Usage
 //!
 //! ```ignore
-//! use ph_esp32_mac::driver::{EmacConfig, Emac, Error};
+//! use ph_esp32_mac::driver::{Emac, EmacConfig};
 //!
-//! let config = EmacConfig::new()
+//! let config = EmacConfig::rmii_esp32_default()
 //!     .with_mac_address([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]);
+//! let mut emac: Emac<10, 10, 1600> = Emac::new();
+//! emac.init(config, &mut delay)?;
 //! ```
+//!
+//! # See Also
+//!
+//! - [`crate::integration`] - stack and runtime facades
 
 // Submodules
 pub mod config;

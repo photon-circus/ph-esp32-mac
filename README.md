@@ -7,23 +7,33 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Motivation](#motivation)
-3. [Goal](#goal)
-4. [Features](#features)
-5. [Supported Hardware](#supported-hardware)
-6. [Quick Start](#quick-start)
-7. [Ergonomic Helpers (esp-hal)](#ergonomic-helpers-esp-hal)
-8. [Examples](#examples)
-9. [Feature Flags](#feature-flags)
-10. [MSRV](#msrv)
-11. [Documentation](#documentation)
-12. [License](#license)
+2. [Status & Scope](#status--scope)
+3. [Motivation](#motivation)
+4. [Goal](#goal)
+5. [Features](#features)
+6. [Supported Hardware](#supported-hardware)
+7. [Quick Start (Happy Path)](#quick-start-happy-path)
+8. [Recommended Workflow](#recommended-workflow)
+9. [Examples](#examples)
+10. [Memory & DMA Sizing](#memory--dma-sizing)
+11. [Feature Flags](#feature-flags)
+12. [MSRV](#msrv)
+13. [Documentation](#documentation)
+14. [License](#license)
 
 ---
 
 ## Overview
 
 This crate implements the ESP32 EMAC peripheral using static DMA descriptors and buffers. It is designed for embedded use with explicit initialization, no heap allocation, and predictable memory usage. The public API is optimized for esp-hal consumers while keeping low-level control available.
+
+---
+
+## Status & Scope
+
+- **Current target**: ESP32 (this release only)
+- **ESP32-P4**: Experimental placeholder (not implemented, hidden from docs)
+- **Happy path**: esp-hal synchronous and async bring-up on WT32-ETH01
 
 ---
 
@@ -57,46 +67,18 @@ Provide an efficient bare-metal, `no_std`, `no_alloc` implementation of the ESP3
 
 ---
 
-## Quick Start
+## Quick Start (Happy Path)
 
-```rust
-use ph_esp32_mac::{Emac, EmacConfig, Lan8720a, MdioController, PhyDriver, PhyInterface, RmiiClockMode};
-use embedded_hal::delay::DelayNs;
+These are the recommended esp-hal bring-up paths and match the examples in
+`apps/examples/`.
 
-// Static allocation is required for DMA descriptors.
-static mut EMAC: Emac<10, 10, 1600> = Emac::new();
-
-// Your delay implementation (from esp-hal or custom).
-let mut delay = /* DelayNs impl */;
-
-let emac = unsafe { &mut EMAC };
-let config = EmacConfig::rmii_esp32_default()
-    .with_mac_address([0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
-    .with_phy_interface(PhyInterface::Rmii)
-    .with_rmii_clock(RmiiClockMode::ExternalInput { gpio: 0 });
-
-emac.init(config, &mut delay)?;
-
-let mut mdio = MdioController::new(delay);
-let mut phy = Lan8720a::new(1);
-phy.init(&mut mdio)?;
-
-emac.start()?;
-# Ok::<(), ph_esp32_mac::Error>(())
-```
-
----
-
-## Ergonomic Helpers (esp-hal)
-
-For esp-hal users, the crate provides opinionated helpers and macros for the
-WT32-ETH01 “happy path” to reduce boilerplate:
+### esp-hal (sync)
 
 ```rust
 use esp_hal::delay::Delay;
 use ph_esp32_mac::esp_hal::{EmacBuilder, EmacPhyBundle, Wt32Eth01};
 
-ph_esp32_mac::emac_static_sync!(EMAC);
+ph_esp32_mac::emac_static_sync!(EMAC, 10, 10, 1600);
 
 let mut delay = Delay::new();
 EMAC.with(|emac| {
@@ -104,10 +86,49 @@ EMAC.with(|emac| {
         .init(&mut delay)
         .unwrap();
     let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(emac, Delay::new());
-    let _status = emac_phy.init_and_wait_link_up(&mut delay, 10_000, 200).unwrap();
+    let _status = emac_phy
+        .init_and_wait_link_up(&mut delay, 10_000, 200)
+        .unwrap();
     emac.start().unwrap();
 });
 ```
+
+### esp-hal (async)
+
+```rust
+use esp_hal::delay::Delay;
+use ph_esp32_mac::esp_hal::{EmacBuilder, EmacPhyBundle, Wt32Eth01};
+use ph_esp32_mac::{emac_async_isr, emac_static_async};
+
+emac_static_async!(EMAC, EMAC_STATE, 10, 10, 1600);
+emac_async_isr!(EMAC_IRQ, esp_hal::interrupt::Priority::Priority1, &EMAC_STATE);
+
+let mut delay = Delay::new();
+let emac_ptr = EMAC.init(ph_esp32_mac::Emac::new()) as *mut _;
+unsafe {
+    EmacBuilder::wt32_eth01_with_mac(&mut *emac_ptr, [0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+        .init(&mut delay)
+        .unwrap();
+    let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(&mut *emac_ptr, Delay::new());
+    let _status = emac_phy
+        .init_and_wait_link_up(&mut delay, 10_000, 200)
+        .unwrap();
+    (*emac_ptr).start().unwrap();
+}
+```
+
+---
+
+## Recommended Workflow
+
+From the repo root, use `cargo xtask` to build and flash apps:
+
+```bash
+cargo xtask run ex-esp-hal
+cargo xtask run ex-esp-hal-async
+```
+
+See [xtask/README.md](xtask/README.md) for details.
 
 ---
 
@@ -116,12 +137,12 @@ EMAC.with(|emac| {
 Examples are provided as a **separate crate** in this repository and are not
 packaged with the published library crate.
 
-See the examples for build and run instructions:
-https://github.com/photon-circus/ph-esp32-mac/tree/main/apps/examples
+See [apps/examples/README.md](apps/examples/README.md) for build and run
+instructions.
 
 Recommended runner (from repo root):
 ```bash
-cargo xtask run ex-embassy
+cargo xtask run ex-embassy-net
 ```
 
 Included examples:
@@ -132,8 +153,28 @@ Included examples:
 - `embassy_net`
 
 Hardware QA runner (separate crate):
-- https://github.com/photon-circus/ph-esp32-mac/tree/main/apps/qa-runner
+- [apps/qa-runner/README.md](apps/qa-runner/README.md)
 - `cargo xtask run qa-runner`
+
+---
+
+## Memory & DMA Sizing
+
+Default configuration (10 RX/TX buffers, 1600 bytes each):
+
+| Component | Size |
+|-----------|------|
+| RX descriptors | 320 bytes |
+| TX descriptors | 320 bytes |
+| RX buffers | 16,000 bytes |
+| TX buffers | 16,000 bytes |
+| **Total** | **~32 KB** |
+
+Adjust via the static macros if memory is constrained:
+
+```rust
+ph_esp32_mac::emac_static_sync!(EMAC, 4, 4, 1600);
+```
 
 ---
 
@@ -161,9 +202,11 @@ Hardware QA runner (separate crate):
 
 ## Documentation
 
-- [DESIGN.md](docs/DESIGN.md)
-- [TESTING.md](docs/TESTING.md)
-- [DOCUMENTATION_STANDARDS.md](docs/DOCUMENTATION_STANDARDS.md)
+- [docs/README.md](docs/README.md) (documentation index and TOC)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [CHANGELOG.md](CHANGELOG.md)
 
 ---
 

@@ -1,4 +1,4 @@
-//! LAN8720A PHY Driver
+//! LAN8720A PHY driver.
 //!
 //! Driver for the Microchip/SMSC LAN8720A 10/100 Ethernet PHY.
 //!
@@ -32,7 +32,7 @@
 //! The driver supports an optional reset pin using `embedded_hal::digital::OutputPin`:
 //!
 //! ```ignore
-//! use esp32_emac::phy::{Lan8720aWithReset, PhyDriver};
+//! use ph_esp32_mac::phy::{Lan8720aWithReset, PhyDriver};
 //!
 //! // With esp-hal GPIO
 //! let reset_pin = io.pins.gpio5.into_push_pull_output();
@@ -61,7 +61,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use esp32_emac::phy::{Lan8720a, PhyDriver};
+//! use ph_esp32_mac::phy::{Lan8720a, PhyDriver};
 //!
 //! let mut phy = Lan8720a::new(0);  // Address 0
 //! phy.init(&mut mdio)?;
@@ -493,7 +493,7 @@ impl PhyDriver for Lan8720a {
 /// # Example
 ///
 /// ```ignore
-/// use esp32_emac::phy::{Lan8720aWithReset, PhyDriver};
+/// use ph_esp32_mac::phy::{Lan8720aWithReset, PhyDriver};
 /// use embedded_hal::delay::DelayNs;
 ///
 /// // Create PHY driver with reset pin
