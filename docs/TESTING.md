@@ -48,6 +48,22 @@ notes.
 
 ---
 
+## CI Coverage
+
+CI validates the host toolchain and documentation, and includes an ESP32 target
+check. Current CI jobs cover:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --all-targets -- -D warnings`
+- `cargo test --lib`
+- `cargo doc --no-deps`
+- `cargo +esp check --target xtensa-esp32-none-elf -Zbuild-std=core`
+
+Clippy also runs a feature matrix (default + `smoltcp` + `async` +
+`critical-section` + `embassy-net`) to catch feature-gated issues.
+
+---
+
 ## Coverage and Gaps
 
 Covered well:

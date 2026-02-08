@@ -1,5 +1,9 @@
 # ph-esp32-mac
 
+[![Crates.io](https://img.shields.io/crates/v/ph-esp32-mac.svg)](https://crates.io/crates/ph-esp32-mac)
+[![Docs.rs](https://docs.rs/ph-esp32-mac/badge.svg)](https://docs.rs/ph-esp32-mac)
+[![CI](https://github.com/photon-circus/ph-esp32-mac/actions/workflows/ci.yml/badge.svg)](https://github.com/photon-circus/ph-esp32-mac/actions/workflows/ci.yml)
+
 `ph-esp32-mac` is a `no_std`, `no_alloc` Rust driver for the ESP32 Ethernet MAC (EMAC). It targets ESP32 hardware, provides LAN8720A PHY support, and integrates with smoltcp, embassy-net, and esp-hal.
 
 ---

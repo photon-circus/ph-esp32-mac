@@ -24,7 +24,7 @@ driver. Use this index as the entry point and follow the links below.
 
 ## Planning Documents
 
-- [API.md](API.md) - Public API inventory and stability notes (transitional).
+- None.
 
 ---
 

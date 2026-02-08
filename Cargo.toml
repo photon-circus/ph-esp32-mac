@@ -20,8 +20,8 @@ exclude = [
     "target/",
     "apps/",
     "xtask/",
+    "AGENTS.md",
     "CLAUDE.md",
-    "PUBLISHABILITY_ROADMAP.md",
     "Cargo.toml.orig",
 ]
 
