@@ -40,7 +40,7 @@ jobs:
           toolchain: stable
           components: rustfmt
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: cargo fmt --all --manifest-path Cargo.toml -- --check
 
   clippy:
     runs-on: ubuntu-latest
@@ -106,6 +106,6 @@ jobs:
         with:
           toolchain: stable
       - name: Build docs
-        run: cargo doc --no-deps
+        run: cargo doc --manifest-path Cargo.toml --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
