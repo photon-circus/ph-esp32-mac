@@ -95,7 +95,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
 fn print_usage() {
     eprintln!(
-        "Usage:\n  cargo xtask run <target> [--debug|--release] [--] [args...]\n  cargo xtask build <target> [--debug|--release]\n\nTargets:\n  qa-runner | qa\n  ex-esp-hal | ex-esp-hal-async | ex-smoltcp | ex-embassy\n  (or a path to a .rs entry file)\n\nNotes:\n  - If no command is supplied, `build` is assumed (no flashing).\n  - Use `--` to pass args to the target binary.\n",
+        "Usage:\n  cargo xtask run <target> [--debug|--release] [--] [args...]\n  cargo xtask build <target> [--debug|--release]\n\nTargets:\n  qa-runner | qa\n  ex-esp-hal | ex-esp-hal-async | ex-smoltcp | ex-embassy | ex-embassy-net\n  (or a path to a .rs entry file)\n\nNotes:\n  - If no command is supplied, `build` is assumed (no flashing).\n  - Use `--` to pass args to the target binary.\n",
     );
 }
 
@@ -116,7 +116,9 @@ fn resolve_target_arg(arg: &str) -> Result<PathBuf, Box<dyn Error>> {
             "apps/examples/esp_hal_async.rs"
         }
         "ex-smoltcp" | "smoltcp" | "ex-smoltcp-echo" => "apps/examples/smoltcp_echo.rs",
-        "ex-embassy" | "embassy" | "ex-embassy-net" => "apps/examples/embassy_net.rs",
+        "ex-embassy" | "embassy" | "ex-embassy-net" | "embassy-net" => {
+            "apps/examples/embassy_net.rs"
+        }
         "apps/examples" | "examples" => "apps/examples/esp_hal_integration.rs",
         "apps/qa-runner" => "apps/qa-runner/qa_runner.rs",
         _ => {
@@ -320,7 +322,11 @@ fn run_cargo(
         cargo_args.push("target.xtensa-esp32-none-elf.runner='espflash flash --monitor'".to_string());
     }
 
-    if needs_linkall(resolved.package_name.as_deref()) {
+    if needs_linkall(
+        resolved.package_name.as_deref(),
+        resolved.bin_name.as_deref(),
+        &resolved.required_features,
+    ) {
         cargo_args.push("--config".to_string());
         cargo_args.push(
             "target.xtensa-esp32-none-elf.rustflags=[\"-C\",\"link-arg=-nostartfiles\",\"-C\",\"link-arg=-Wl,-Tlinkall.x\"]"
@@ -360,6 +366,35 @@ fn run_cargo(
     }
 }
 
-fn needs_linkall(package_name: Option<&str>) -> bool {
-    matches!(package_name, Some("ph-esp32-mac-qa-runner"))
+fn needs_linkall(
+    package_name: Option<&str>,
+    bin_name: Option<&str>,
+    required_features: &[String],
+) -> bool {
+    if matches!(package_name, Some("ph-esp32-mac-qa-runner")) {
+        return true;
+    }
+
+    if matches!(package_name, Some("ph-esp32-mac-examples")) {
+        if required_features.iter().any(|feat| {
+            matches!(
+                feat.as_str(),
+                "embassy-net-example"
+                    | "esp-hal-async-example"
+                    | "esp-hal-example"
+                    | "smoltcp-example"
+            )
+        }) {
+            return true;
+        }
+
+        if matches!(
+            bin_name,
+            Some("embassy_net" | "esp_hal_async" | "esp_hal_integration" | "smoltcp_echo")
+        ) {
+            return true;
+        }
+    }
+
+    false
 }

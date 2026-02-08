@@ -1,8 +1,14 @@
 //! esp-hal Async EMAC Example
 //!
 //! This example demonstrates async receive using `AsyncEmacState` with esp-hal.
-//! It uses the embassy executor via `esp-rtos` and the per-instance async
-//! waker state for efficient RX wakeups.
+//! It uses the embassy executor via `esp-rtos` and per-instance wakers for
+//! efficient RX wakeups.
+//!
+//! # Features Demonstrated
+//!
+//! - Async RX via `AsyncEmacState`
+//! - esp-rtos executor integration
+//! - WT32-ETH01 bring-up helpers
 //!
 //! # Hardware
 //!
@@ -14,8 +20,7 @@
 //! # Building
 //!
 //! ```bash
-//! cargo build --bin esp_hal_async --target xtensa-esp32-none-elf --release \
-//!     --features esp-hal-async-example
+//! cargo xtask run ex-esp-hal-async
 //! ```
 
 #![no_std]
@@ -36,6 +41,19 @@ use ph_esp32_mac::esp_hal::{
     emac_async_isr, EmacBuilder, EmacExt, EmacPhyBundle, Wt32Eth01,
 };
 use ph_esp32_mac::{AsyncEmacExt, Emac};
+
+// =============================================================================
+// Configuration
+// =============================================================================
+
+/// MAC address for this device (locally administered).
+const MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+
+/// Link-up timeout (milliseconds).
+const LINK_TIMEOUT_MS: u32 = 10_000;
+
+/// Link poll interval (milliseconds).
+const LINK_POLL_MS: u32 = 200;
 
 // =============================================================================
 // Static EMAC + Async State
@@ -95,7 +113,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut clk_en = Output::new(peripherals.GPIO16, Level::Low, OutputConfig::default());
     clk_en.set_high();
     let mut delay = Delay::new();
-    delay.delay_millis(10);
+    delay.delay_millis(Wt32Eth01::OSC_STARTUP_MS);
     info!(
         "External oscillator enabled (GPIO{} = HIGH)",
         Wt32Eth01::CLK_EN_GPIO
@@ -105,14 +123,14 @@ async fn main(spawner: Spawner) -> ! {
     let emac_ptr = EMAC.init(Emac::new()) as *mut Emac<10, 10, 1600>;
     // SAFETY: EMAC is in static storage for the duration of the program.
     let emac = unsafe { &mut *emac_ptr };
-    EmacBuilder::wt32_eth01_with_mac(emac, [0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+    EmacBuilder::wt32_eth01_with_mac(emac, MAC_ADDRESS)
         .init(&mut delay)
         .unwrap();
 
     // Initialize PHY and wait for link.
     {
         let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(emac, Delay::new());
-        match emac_phy.init_and_wait_link_up(&mut delay, 10_000, 200) {
+        match emac_phy.init_and_wait_link_up(&mut delay, LINK_TIMEOUT_MS, LINK_POLL_MS) {
             Ok(status) => info!("Link up: {:?}", status),
             Err(err) => warn!("Link wait failed: {:?}", err),
         }
@@ -120,7 +138,10 @@ async fn main(spawner: Spawner) -> ! {
         emac_phy.emac_mut().start().unwrap();
         emac_phy.emac_mut().bind_interrupt(EMAC_IRQ);
     }
-    info!("EMAC started; awaiting frames...");
+    info!(
+        "EMAC started; awaiting frames... (memory: {} bytes)",
+        Emac::<10, 10, 1600>::memory_usage()
+    );
 
     spawner.spawn(rx_task(emac_ptr)).unwrap();
 

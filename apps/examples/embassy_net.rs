@@ -22,8 +22,7 @@
 //! # Building
 //!
 //! ```bash
-//! cd examples
-//! cargo run --bin embassy_net --features embassy-net-example --release
+//! cargo xtask run ex-embassy-net
 //! ```
 //!
 //! # Testing
@@ -291,7 +290,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut clk_en = Output::new(peripherals.GPIO16, Level::High, OutputConfig::default());
     clk_en.set_high();
     let mut delay = Delay::new();
-    delay.delay_millis(10);
+    delay.delay_millis(Wt32Eth01::OSC_STARTUP_MS);
     info!("External oscillator enabled (GPIO{})", Wt32Eth01::CLK_EN_GPIO);
 
     // -------------------------------------------------------------------------

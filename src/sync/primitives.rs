@@ -53,7 +53,7 @@ impl<T> CriticalSectionCell<T> {
     }
 
     /// Execute a closure with immutable access.
-    #[cfg(any(feature = "async", feature = "embassy-net"))]
+    #[cfg(any(feature = "embassy-net", test))]
     #[inline]
     pub fn with_ref<R, F>(&self, f: F) -> R
     where
@@ -109,6 +109,7 @@ impl AtomicWaker {
         }
     }
 
+    #[cfg(test)]
     /// Check if a waker is currently registered.
     pub fn is_registered(&self) -> bool {
         self.waker.with_ref(|slot| slot.is_some())

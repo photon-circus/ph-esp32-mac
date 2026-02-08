@@ -1,8 +1,13 @@
 //! esp-hal Integration Example
 //!
 //! This example demonstrates using ph-esp32-mac with the esp-hal ecosystem.
-//! It provides a more ergonomic experience with proper peripheral ownership,
-//! interrupt handling, and delay types from esp-hal.
+//! It emphasizes a low-boilerplate bring-up path with esp-hal types.
+//!
+//! # Features Demonstrated
+//!
+//! - WT32-ETH01 board helpers (`EmacBuilder`, `EmacPhyBundle`)
+//! - Interrupt-safe shared EMAC access
+//! - Link polling and packet sniffing
 //!
 //! # Hardware
 //!
@@ -14,8 +19,7 @@
 //! # Building
 //!
 //! ```bash
-//! cargo build --bin esp_hal_integration --target xtensa-esp32-none-elf --release \
-//!     --features esp-hal-example
+//! cargo xtask run ex-esp-hal
 //! ```
 //!
 //! # Features Required
@@ -41,10 +45,23 @@ use ph_esp32_mac::esp_hal::{EmacBuilder, EmacPhyBundle, Wt32Eth01};
 use ph_esp32_mac::{Duplex, Emac, Speed};
 
 // =============================================================================
+// Configuration
+// =============================================================================
+
+/// MAC address for this device (locally administered).
+const MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+
+/// Link-up timeout (milliseconds).
+const LINK_TIMEOUT_MS: u32 = 10_000;
+
+/// Link poll interval (milliseconds).
+const LINK_POLL_MS: u32 = 200;
+
+// =============================================================================
 // Static EMAC Instance
 // =============================================================================
 
-/// Thread-safe EMAC instance wrapped for interrupt-safe access
+// Thread-safe EMAC instance wrapped for interrupt-safe access
 ph_esp32_mac::emac_static_sync!(EMAC, 10, 10, 1600);
 
 // =============================================================================
@@ -65,8 +82,8 @@ fn main() -> ! {
     // Create delay provider from esp-hal
     let mut delay = Delay::new();
 
-    // Enable external 50 MHz oscillator (WT32-ETH01 specific)
-    // GPIO16 controls the oscillator enable on this board
+    // Enable external 50 MHz oscillator (WT32-ETH01 specific).
+    // GPIO16 controls the oscillator enable on this board.
     let mut clk_en = Output::new(peripherals.GPIO16, Level::Low, OutputConfig::default());
     clk_en.set_high();
     info!(
@@ -75,11 +92,11 @@ fn main() -> ! {
     );
 
     // Small delay for oscillator startup
-    delay.delay_millis(10);
+    delay.delay_millis(Wt32Eth01::OSC_STARTUP_MS);
 
     info!("Initializing EMAC...");
     EMAC.with(|emac| {
-        match EmacBuilder::wt32_eth01_with_mac(emac, [0x02, 0x00, 0x00, 0x12, 0x34, 0x56])
+        match EmacBuilder::wt32_eth01_with_mac(emac, MAC_ADDRESS)
             .init(&mut delay)
         {
             Ok(_) => info!("EMAC initialized successfully"),
@@ -95,7 +112,7 @@ fn main() -> ! {
     info!("Waiting for Ethernet link...");
     let link_status = match EMAC.with(|emac| {
         let mut emac_phy = EmacPhyBundle::wt32_eth01_lan8720a(emac, Delay::new());
-        emac_phy.init_and_wait_link_up(&mut delay, 10_000, 200)
+        emac_phy.init_and_wait_link_up(&mut delay, LINK_TIMEOUT_MS, LINK_POLL_MS)
     }) {
         Ok(status) => status,
         Err(err) => {
@@ -181,7 +198,6 @@ fn main() -> ! {
         if (now - last_stats_time).as_secs() >= 10 {
             info!("Stats: RX={}, Errors={}", frames_rx, errors);
             last_stats_time = now;
-
         }
 
         // Small delay to prevent tight polling

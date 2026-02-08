@@ -331,7 +331,7 @@ macro_rules! emac_static_sync {
         $crate::emac_static_sync!($name, 10, 10, 1600);
     };
     ($name:ident, $rx:expr, $tx:expr, $buf:expr) => {
-        #[cfg_attr(feature = "esp32", unsafe(link_section = ".dram1"))]
+        #[cfg_attr(target_arch = "xtensa", unsafe(link_section = ".dram1"))]
         static $name: $crate::sync::SharedEmac<$rx, $tx, $buf> = $crate::sync::SharedEmac::new();
     };
 }
@@ -357,7 +357,7 @@ macro_rules! emac_static_async {
         $crate::emac_static_async!($emac, $state, 10, 10, 1600);
     };
     ($emac:ident, $state:ident, $rx:expr, $tx:expr, $buf:expr) => {
-        #[cfg_attr(feature = "esp32", unsafe(link_section = ".dram1"))]
+        #[cfg_attr(target_arch = "xtensa", unsafe(link_section = ".dram1"))]
         static $emac: static_cell::StaticCell<$crate::Emac<$rx, $tx, $buf>> =
             static_cell::StaticCell::new();
         static $state: $crate::AsyncEmacState = $crate::AsyncEmacState::new();
@@ -378,7 +378,7 @@ macro_rules! emac_static_async {
 #[macro_export]
 macro_rules! embassy_net_statics {
     ($emac:ident, $state:ident, $resources:ident, $rx:expr, $tx:expr, $buf:expr, $res:expr) => {
-        #[cfg_attr(feature = "esp32", unsafe(link_section = ".dram1"))]
+        #[cfg_attr(target_arch = "xtensa", unsafe(link_section = ".dram1"))]
         static $emac: static_cell::StaticCell<$crate::Emac<$rx, $tx, $buf>> =
             static_cell::StaticCell::new();
         static $state: $crate::EmbassyEmacState =
