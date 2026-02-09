@@ -25,6 +25,9 @@ exclude = [
     "Cargo.toml.orig",
 ]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [features]
 default = ["esp32"]
 
