@@ -107,5 +107,28 @@ jobs:
           toolchain: stable
       - name: Build docs
         run: cargo doc --manifest-path Cargo.toml --no-deps
+
+  docsrs:
+    name: Docs (simulate docs.rs on nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (nightly)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build docs like docs.rs
+        env:
+          DOCS_RS: "1"
+          RUSTDOCFLAGS: "--cfg docsrs --cap-lints warn"
+        run: |
+          cargo +nightly doc --lib --no-deps \
+            --features "smoltcp,critical-section,async,embassy-net,log,defmt"
+        
         env:
           RUSTDOCFLAGS: -D warnings
