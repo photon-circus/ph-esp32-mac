@@ -365,6 +365,28 @@ impl EmacConfig {
         self
     }
 
+    /// Set the RMII clock to an external 50 MHz input on the given GPIO.
+    ///
+    /// # Arguments
+    ///
+    /// * `gpio` - GPIO number for the RMII clock input (typically GPIO0)
+    #[must_use]
+    pub const fn with_rmii_external_clock(mut self, gpio: u8) -> Self {
+        self.rmii_clock = RmiiClockMode::ExternalInput { gpio };
+        self
+    }
+
+    /// Set the RMII clock to an internal 50 MHz output on the given GPIO.
+    ///
+    /// # Arguments
+    ///
+    /// * `gpio` - GPIO number for the RMII clock output (GPIO16 or GPIO17)
+    #[must_use]
+    pub const fn with_rmii_internal_clock(mut self, gpio: u8) -> Self {
+        self.rmii_clock = RmiiClockMode::InternalOutput { gpio };
+        self
+    }
+
     /// Set the MAC address
     ///
     /// The MAC address should be 6 bytes. If not set, a default locally-administered
@@ -576,6 +598,26 @@ mod tests {
 
         match config.rmii_clock {
             RmiiClockMode::InternalOutput { gpio } => assert_eq!(gpio, 17),
+            _ => panic!("Expected InternalOutput"),
+        }
+    }
+
+    #[test]
+    fn config_builder_rmii_external_clock() {
+        let config = EmacConfig::new().with_rmii_external_clock(0);
+
+        match config.rmii_clock {
+            RmiiClockMode::ExternalInput { gpio } => assert_eq!(gpio, 0),
+            _ => panic!("Expected ExternalInput"),
+        }
+    }
+
+    #[test]
+    fn config_builder_rmii_internal_clock() {
+        let config = EmacConfig::new().with_rmii_internal_clock(16);
+
+        match config.rmii_clock {
+            RmiiClockMode::InternalOutput { gpio } => assert_eq!(gpio, 16),
             _ => panic!("Expected InternalOutput"),
         }
     }

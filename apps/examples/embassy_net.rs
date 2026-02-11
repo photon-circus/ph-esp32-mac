@@ -98,6 +98,11 @@ use ph_esp32_mac::{emac_isr, Emac, EmbassyEmac};
 /// MAC address for this device (locally administered).
 const MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
 
+/// Enable promiscuous mode while using DHCP.
+///
+/// Set to `false` to keep normal MAC filtering.
+const PROMISCUOUS_FOR_DHCP: bool = true;
+
 /// UDP echo server port (standard echo protocol).
 const UDP_ECHO_PORT: u16 = 7;
 
@@ -149,7 +154,8 @@ async fn net_task(mut runner: embassy_net::Runner<'static, EmbassyEmac<'static, 
 /// Waits for link-up, starts DHCP, and logs the acquired address.
 /// Restarts DHCP if the configuration is lost.
 #[embassy_executor::task]
-async fn dhcp_task(stack: Stack<'static>) -> ! {
+async fn dhcp_task(stack: Stack<'static>, emac_ptr: *mut Emac<10, 10, 1600>) -> ! {
+    let mut promisc_enabled = false;
     loop {
         // Wait for physical link
         stack.wait_link_up().await;
@@ -157,6 +163,16 @@ async fn dhcp_task(stack: Stack<'static>) -> ! {
 
         // Give the link a moment to stabilize
         Timer::after(Duration::from_secs(1)).await;
+
+        if PROMISCUOUS_FOR_DHCP && !promisc_enabled {
+            // SAFETY: EMAC is static and we only toggle promiscuous mode in this task.
+            unsafe {
+                let emac = &mut *emac_ptr;
+                emac.set_promiscuous(true);
+            }
+            promisc_enabled = true;
+            info!("Promiscuous mode enabled for DHCP");
+        }
 
         // Start DHCP
         stack.set_config_v4(ConfigV4::Dhcp(DhcpConfig::default()));
@@ -167,6 +183,15 @@ async fn dhcp_task(stack: Stack<'static>) -> ! {
                 info!("DHCP acquired: {}", config.address);
                 if let Some(gw) = config.gateway {
                     info!("Gateway: {}", gw);
+                }
+                if PROMISCUOUS_FOR_DHCP && promisc_enabled {
+                    // SAFETY: EMAC is static and we only toggle promiscuous mode in this task.
+                    unsafe {
+                        let emac = &mut *emac_ptr;
+                        emac.set_promiscuous(false);
+                    }
+                    promisc_enabled = false;
+                    info!("Promiscuous mode disabled after DHCP");
                 }
                 break;
             }
@@ -353,7 +378,7 @@ async fn main(spawner: Spawner) -> ! {
     // -------------------------------------------------------------------------
 
     spawner.spawn(net_task(runner)).unwrap();
-    spawner.spawn(dhcp_task(stack)).unwrap();
+    spawner.spawn(dhcp_task(stack, emac_ptr)).unwrap();
     spawner.spawn(udp_echo_task(stack)).unwrap();
     spawner.spawn(link_task(emac_ptr)).unwrap();
 

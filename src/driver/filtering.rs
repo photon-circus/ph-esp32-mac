@@ -28,7 +28,7 @@
 //! These filtering features are advanced and have limited hardware validation
 //! so far. Treat them as best-effort until broader testing confirms behavior.
 
-use super::config::{MacAddressFilter, MacFilterType};
+use super::config::{MAC_FILTER_SLOTS, MacAddressFilter, MacFilterType};
 use super::emac::Emac;
 use super::error::{ConfigError, DmaError, Result};
 use crate::internal::register::mac::MacRegs;
@@ -122,7 +122,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// Get the number of active MAC address filters
     pub fn mac_filter_count(&self) -> usize {
         let mut count = 0;
-        for slot in 1..=4 {
+        for slot in 1..=MAC_FILTER_SLOTS {
             if MacRegs::is_mac_filter_enabled(slot) == Some(true) {
                 count += 1;
             }

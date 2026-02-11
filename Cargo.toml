@@ -3,7 +3,7 @@ name = "ph-esp32-mac"
 description = "no_std, no_alloc Rust implementation of the ESP32 Ethernet MAC (EMAC) driver"
 authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
 rust-version = "1.92.0"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
 keywords = ["esp32", "ethernet", "emac", "embedded", "no_std"]
@@ -24,9 +24,6 @@ exclude = [
     "CLAUDE.md",
     "Cargo.toml.orig",
 ]
-
-[package.metadata.docs.rs]
-rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["esp32"]
