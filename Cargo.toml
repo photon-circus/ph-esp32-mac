@@ -13,16 +13,13 @@ readme = "README.md"
 repository = "https://github.com/photon-circus/ph-esp32-mac"
 homepage = "https://github.com/photon-circus/ph-esp32-mac"
 documentation = "https://docs.rs/ph-esp32-mac"
-exclude = [
-    ".idea/",
-    ".cargo/",
-    ".github/",
-    "target/",
-    "apps/",
-    "xtask/",
-    "AGENTS.md",
-    "CLAUDE.md",
-    "Cargo.toml.orig",
+include = [
+    "/Cargo.toml",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/docs/**",
+    "/src/**",
 ]
 
 [features]
