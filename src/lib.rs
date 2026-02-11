@@ -83,9 +83,9 @@
 //! With default configuration (10 RX buffers, 10 TX buffers, 1600 bytes each):
 //! - Total: ~32 KB of DMA-capable SRAM
 
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(docsrs, doc(cfg_hide(feature = "esp32p4")))]
-#![no_std]
 #![deny(missing_docs)]
 #![allow(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
