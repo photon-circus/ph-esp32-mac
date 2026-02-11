@@ -41,6 +41,22 @@ use crate::internal::register::mac::MacRegs;
 impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     Emac<RX_BUFS, TX_BUFS, BUF_SIZE>
 {
+    fn apply_flow_control(&mut self, enable: bool) {
+        if enable {
+            let fc = &self.config.flow_control;
+            MacRegs::configure_flow_control(
+                fc.pause_time,
+                fc.pause_low_threshold as u8,
+                fc.unicast_pause_detect,
+                true, // TX flow control
+                true, // RX flow control
+            );
+        } else {
+            MacRegs::configure_flow_control(0, 0, false, false, false);
+            self.flow_control_active = false;
+        }
+    }
+
     /// Enable or disable flow control
     ///
     /// This configures the MAC for IEEE 802.3 PAUSE frame-based flow control.
@@ -52,18 +68,8 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     ///
     /// [`set_peer_pause_ability`]: Self::set_peer_pause_ability
     pub fn enable_flow_control(&mut self, enable: bool) {
-        if enable && self.peer_pause_ability {
-            let fc = &self.config.flow_control;
-            MacRegs::configure_flow_control(
-                fc.pause_time,
-                fc.pause_low_threshold as u8,
-                fc.unicast_pause_detect,
-                true, // TX flow control
-                true, // RX flow control
-            );
-        } else {
-            MacRegs::configure_flow_control(0, 0, false, false, false);
-        }
+        self.config.flow_control.enabled = enable;
+        self.apply_flow_control(enable && self.peer_pause_ability);
     }
 
     /// Set peer PAUSE frame ability
@@ -86,9 +92,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.peer_pause_ability = ability;
 
         // Re-configure flow control based on new peer ability
-        if self.config.flow_control.enabled {
-            self.enable_flow_control(ability);
-        }
+        self.apply_flow_control(self.config.flow_control.enabled && ability);
     }
 
     /// Check if flow control action is needed and send PAUSE frame if necessary

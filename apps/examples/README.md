@@ -61,6 +61,9 @@ If you use different hardware, adjust the constants at the top of the example.
 - **DHCP takes too long or never assigns**: confirm link is up, give it 10–30s,
   and ensure your network allows broadcast/multicast. If still stuck, power-cycle
   the board and retry.
+- **embassy-net DHCP behavior**: the `apps/examples/embassy_net.rs` example
+  toggles promiscuous mode with `PROMISCUOUS_FOR_DHCP`. Set it to `false` if you
+  want standard MAC filtering only.
 
 ## Related
 

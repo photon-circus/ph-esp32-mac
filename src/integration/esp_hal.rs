@@ -241,6 +241,28 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmacBuilder<'a, RX,
         self
     }
 
+    /// Set the RMII clock to an external 50 MHz input on the given GPIO.
+    ///
+    /// # Arguments
+    ///
+    /// * `gpio` - GPIO number for the RMII clock input (typically GPIO0)
+    #[must_use]
+    pub const fn with_rmii_external_clock(mut self, gpio: u8) -> Self {
+        self.config = self.config.with_rmii_external_clock(gpio);
+        self
+    }
+
+    /// Set the RMII clock to an internal 50 MHz output on the given GPIO.
+    ///
+    /// # Arguments
+    ///
+    /// * `gpio` - GPIO number for the RMII clock output (GPIO16 or GPIO17)
+    #[must_use]
+    pub const fn with_rmii_internal_clock(mut self, gpio: u8) -> Self {
+        self.config = self.config.with_rmii_internal_clock(gpio);
+        self
+    }
+
     /// Initialize the EMAC using an esp-hal delay provider.
     ///
     /// # Arguments

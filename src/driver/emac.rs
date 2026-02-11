@@ -537,6 +537,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     /// Set the MAC address
     pub fn set_mac_address(&mut self, addr: &[u8; 6]) {
         self.mac_addr = *addr;
+        self.config.mac_address = *addr;
         MacRegs::set_mac_address(addr);
     }
 
@@ -564,6 +565,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
 
     /// Enable/disable promiscuous mode
     pub fn set_promiscuous(&mut self, enable: bool) {
+        self.config.promiscuous = enable;
         MacRegs::set_promiscuous(enable);
     }
 
