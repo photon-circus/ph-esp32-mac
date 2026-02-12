@@ -1,0 +1,22 @@
+//! Board-specific helpers and pin mappings.
+//!
+//! This module provides opinionated board configurations to reduce boilerplate
+//! for common ESP32 Ethernet boards.
+//!
+//! # Overview
+//!
+//! The board helpers encapsulate MAC/PHY defaults and wiring assumptions for a
+//! specific board. They are intended to define a canonical "happy path" for
+//! esp-hal users.
+//!
+//! # Supported Boards
+//!
+//! - WT32-ETH01 (LAN8720A, external 50 MHz oscillator)
+//!
+//! # See Also
+//!
+//! - esp-hal facade helpers (feature-gated `esp-hal` module at crate root)
+
+#[cfg(feature = "esp32")]
+#[cfg_attr(docsrs, doc(cfg(feature = "esp32")))]
+pub mod wt32_eth01;

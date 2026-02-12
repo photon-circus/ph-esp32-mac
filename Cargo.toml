@@ -1,0 +1,89 @@
+[package]
+name = "ph-esp32-mac"
+description = "no_std, no_alloc Rust implementation of the ESP32 Ethernet MAC (EMAC) driver"
+authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
+rust-version = "1.92.0"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+keywords = ["esp32", "ethernet", "emac", "embedded", "no_std"]
+categories = ["embedded", "hardware-support", "no-std"]
+autoexamples = false
+readme = "README.md"
+repository = "https://github.com/photon-circus/ph-esp32-mac"
+homepage = "https://github.com/photon-circus/ph-esp32-mac"
+documentation = "https://docs.rs/ph-esp32-mac"
+exclude = [
+    ".idea/",
+    ".cargo/",
+    ".github/",
+    "target/",
+    "apps/",
+    "xtask/",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "Cargo.toml.orig",
+]
+
+[features]
+default = ["esp32"]
+
+# Target chip selection (mutually exclusive)
+esp32 = []
+# Experimental placeholder for future ESP32-P4 support (hidden from docs; not supported in 0.1)
+esp32p4 = []
+
+# Optional integrations
+defmt = ["dep:defmt"]
+log = ["dep:log"]
+smoltcp = ["dep:smoltcp"]
+critical-section = ["dep:critical-section"]
+esp-hal = ["dep:esp-hal", "critical-section"]  # esp-hal ergonomic integration
+async = ["critical-section"]  # Async/await support with wakers
+embassy-net = ["dep:embassy-net-driver", "critical-section"]
+
+[dependencies]
+# Optional: defmt for embedded-friendly debug output
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
+
+# Optional: smoltcp network stack integration
+# We enable proto-ipv4 and socket-tcp for basic IP/TCP support
+# Users can enable additional protocols/sockets as needed
+smoltcp = { version = "0.12", optional = true, default-features = false, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "socket-tcp",
+] }
+
+# embedded-hal traits for ecosystem compatibility
+embedded-hal = { version = "1.0" }
+
+# Optional: critical-section for interrupt-safe shared access
+# When enabled, provides SharedEmac wrapper for ISR-safe EMAC access
+# The implementation is provided by the HAL crate (e.g., esp-hal)
+critical-section = { version = "1.2", optional = true }
+
+# Optional: esp-hal for ergonomic integration with esp-rs ecosystem
+# Provides InterruptConfigurable, handler macro support, and delay types
+esp-hal = { version = "1.0", optional = true, default-features = false }
+
+# Optional: Embassy network driver traits (driver-only, per embassy guidance)
+embassy-net-driver = { version = "0.2", optional = true }
+
+[dev-dependencies]
+# For testing on host - critical-section with std implementation
+critical-section = { version = "1.2", features = ["std"] }
+
+[package.metadata.docs.rs]
+features = ["smoltcp", "critical-section", "async", "embassy-net", "log", "defmt"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+# =============================================================================
+# Integration Test Dependencies (only needed when building for target hardware)
+# =============================================================================
+# The QA runner in `apps/qa-runner/` requires the xtensa target.
+# They are NOT examples (to avoid host compilation issues) - they're standalone.
+#
+# To build and flash:
+#   cargo xtask run qa-runner

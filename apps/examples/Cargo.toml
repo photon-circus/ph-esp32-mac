@@ -1,0 +1,129 @@
+[package]
+name = "ph-esp32-mac-examples"
+version = "0.1.0"
+edition = "2024"
+authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
+description = "Example binaries for ph-esp32-mac on ESP32"
+publish = false
+rust-version = "1.92.0"
+
+[[bin]]
+name = "esp_hal_integration"
+path = "esp_hal_integration.rs"
+required-features = ["esp-hal-example"]
+
+[[bin]]
+name = "esp_hal_async"
+path = "esp_hal_async.rs"
+required-features = ["esp-hal-async-example"]
+
+[[bin]]
+name = "smoltcp_echo"
+path = "smoltcp_echo.rs"
+required-features = ["smoltcp-example"]
+
+[[bin]]
+name = "embassy_net"
+path = "embassy_net.rs"
+required-features = ["embassy-net-example"]
+
+[features]
+default = []
+esp-hal-example = [
+  "dep:critical-section",
+  "dep:esp-backtrace",
+  "dep:esp-bootloader-esp-idf",
+  "dep:esp-hal",
+  "dep:esp-println",
+  "dep:log",
+  "ph-esp32-mac/critical-section",
+  "ph-esp32-mac/esp-hal",
+]
+esp-hal-async-example = [
+  "dep:critical-section",
+  "dep:embassy-executor",
+  "dep:esp-backtrace",
+  "dep:esp-bootloader-esp-idf",
+  "dep:esp-hal",
+  "dep:esp-println",
+  "dep:esp-rtos",
+  "dep:log",
+  "dep:static_cell",
+  "ph-esp32-mac/async",
+  "ph-esp32-mac/critical-section",
+  "ph-esp32-mac/esp-hal",
+]
+smoltcp-example = [
+  "dep:critical-section",
+  "dep:esp-bootloader-esp-idf",
+  "dep:esp-backtrace",
+  "dep:esp-hal",
+  "dep:esp-println",
+  "dep:log",
+  "dep:smoltcp",
+  "ph-esp32-mac/critical-section",
+  "ph-esp32-mac/smoltcp",
+]
+embassy-net-example = [
+  "dep:embassy-executor",
+  "dep:embassy-net",
+  "dep:embassy-net-driver",
+  "dep:embassy-time",
+  "dep:esp-backtrace",
+  "dep:esp-bootloader-esp-idf",
+  "dep:esp-hal",
+  "dep:esp-println",
+  "dep:log",
+  "dep:esp-rtos",
+  "dep:static_cell",
+  "ph-esp32-mac/async",
+  "ph-esp32-mac/critical-section",
+  "ph-esp32-mac/embassy-net",
+  "ph-esp32-mac/log",
+  "ph-esp32-mac/esp-hal",
+]
+
+[dependencies]
+ph-esp32-mac = { path = "../.." }
+embedded-hal = "1.0"
+
+# Optional example dependencies
+critical-section = { version = "1.2", optional = true }
+esp-hal = { version = "1.0.0", features = ["esp32", "unstable"], optional = true }
+esp-backtrace = { version = "0.18", features = ["esp32", "panic-handler", "println", "colors"], optional = true }
+esp-bootloader-esp-idf = { version = "0.4", features = ["esp32"], optional = true }
+esp-println = { version = "0.16", default-features = false, features = ["esp32", "log-04", "uart"], optional = true }
+log = { version = "0.4", optional = true }
+esp-rom-sys = "=0.1.2"
+smoltcp = { version = "0.12", default-features = false, optional = true, features = [
+  "log",
+  "medium-ethernet",
+  "proto-ipv4",
+  "socket-dhcpv4",
+  "socket-tcp",
+] }
+
+# Embassy dependencies (async example)
+embassy-executor = { version = "0.9.1", optional = true }
+embassy-net = { version = "0.7.0", default-features = false, optional = true, features = [
+  "medium-ethernet",
+  "proto-ipv4",
+  "dhcpv4",
+  "udp",
+] }
+embassy-net-driver = { version = "0.2", optional = true }
+embassy-time = { version = "0.5.0", optional = true }
+esp-rtos = { version = "0.2.0", features = ["embassy", "esp32"], optional = true }
+static_cell = { version = "2", optional = true }
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = "fat"
+opt-level = "s"
+overflow-checks = false

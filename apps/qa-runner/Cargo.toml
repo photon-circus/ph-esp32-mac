@@ -1,0 +1,44 @@
+[package]
+name = "ph-esp32-mac-qa-runner"
+version = "0.1.0"
+edition = "2024"
+authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
+description = "QA runner for ph-esp32-mac on real ESP32 hardware"
+publish = false
+rust-version = "1.92.0"
+
+[[bin]]
+name = "qa-runner"
+path = "qa_runner.rs"
+test = false
+
+[dependencies]
+# The EMAC driver we're testing
+ph-esp32-mac = { path = "../..", features = ["esp32", "critical-section", "smoltcp"] }
+
+# ESP32 HAL and support crates
+esp-hal = { version = "1.0", features = ["esp32", "unstable"] }
+esp-bootloader-esp-idf = { version = "0.4", features = ["esp32"] }
+esp-backtrace = { version = "0.18", features = ["esp32", "panic-handler", "println", "colors"] }
+esp-println = { version = "0.16", features = ["esp32", "log-04"] }
+
+# Network stack
+smoltcp = { version = "0.12", default-features = false, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "socket-icmp",
+    "socket-udp",
+    "socket-tcp",
+] }
+
+# Logging
+log = "0.4"
+
+# Interrupt-safe access
+critical-section = "1.2"
+
+[profile.release]
+debug            = 2
+debug-assertions = true
+lto              = "fat"
+codegen-units    = 1

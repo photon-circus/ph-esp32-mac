@@ -1,0 +1,36 @@
+# Cargo configuration for ph-esp32-mac
+#
+# Provides convenient aliases for common development tasks.
+# Embedded apps are run via xtask (see xtask/).
+
+[alias]
+# =============================================================================
+# Main Crate Operations
+# =============================================================================
+
+# Run all host tests
+t = "test --lib"
+
+# Run tests with coverage (requires cargo-llvm-cov)
+cov = "llvm-cov --lib"
+
+# Run clippy with warnings as errors
+c = "clippy -- -D warnings"
+
+# Build documentation and open in browser
+d = "doc --no-deps --open"
+
+# Check without building (fast feedback)
+ch = "check"
+
+# =============================================================================
+# Full Names (for discoverability)
+# =============================================================================
+
+test-lib = "test --lib"
+clippy-strict = "clippy -- -D warnings"
+docs = "doc --no-deps"
+xtask = "run --manifest-path xtask/Cargo.toml --"
+
+[build]
+target-dir = "target"

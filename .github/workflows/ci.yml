@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - stable
+          - 1.92.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --lib --verbose
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (fmt)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all --manifest-path Cargo.toml -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          components: clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Clippy (default features)
+        run: cargo clippy --lib --tests -- -D warnings
+      - name: Clippy (all testable features)
+        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section,embassy-net" -- -D warnings
+      - name: Clippy (defmt)
+        run: cargo clippy --lib --features "defmt" -- -D warnings
+      - name: Clippy (smoltcp + async + embassy)
+        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section,embassy-net" -- -D warnings
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (coverage)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate coverage
+        run: cargo llvm-cov --features "smoltcp,async,critical-section,embassy-net" --lcov --output-path lcov.info
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: photon-circus/ph-esp32-mac
+
+  embedded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Xtensa toolchain (esp32)
+        uses: esp-rs/xtensa-toolchain@v1.5
+        with:
+          default: true
+          buildtargets: esp32
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Check esp32 target
+        run: cargo +esp check --target xtensa-esp32-none-elf -Zbuild-std=core
+
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (docs)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: Build docs
+        run: cargo doc --manifest-path Cargo.toml --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
