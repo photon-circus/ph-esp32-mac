@@ -96,16 +96,16 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         Ok(slot)
     }
 
-    /// Remove a MAC address from the filter
+    /// Remove a MAC address from the filter.
     ///
     /// # Arguments
     /// * `addr` - MAC address to remove
     ///
     /// # Returns
     /// * `Ok(())` - Address was found and removed
-    /// * `Err(InvalidLength)` - Address was not in the filter
+    /// * `Err(InvalidConfig)` - Address was not found in the filter
     pub fn remove_mac_filter(&mut self, addr: &[u8; 6]) -> Result<()> {
-        let slot = MacRegs::find_mac_filter(addr).ok_or(DmaError::InvalidLength)?;
+        let slot = MacRegs::find_mac_filter(addr).ok_or(ConfigError::InvalidConfig)?;
 
         MacRegs::clear_mac_filter(slot);
         Ok(())
@@ -119,7 +119,10 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         MacRegs::clear_all_mac_filters();
     }
 
-    /// Get the number of active MAC address filters
+    /// Get the number of active MAC address filters.
+    ///
+    /// Returns the count of additional filter slots (1-4) that are currently
+    /// enabled. This does not include the primary MAC address.
     pub fn mac_filter_count(&self) -> usize {
         let mut count = 0;
         for slot in 1..=MAC_FILTER_SLOTS {
@@ -130,7 +133,9 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         count
     }
 
-    /// Check if there are free MAC filter slots available
+    /// Check if there are free MAC filter slots available.
+    ///
+    /// Returns `true` if at least one of the 4 additional filter slots is free.
     pub fn has_free_mac_filter_slot(&self) -> bool {
         MacRegs::find_free_mac_filter_slot().is_some()
     }
@@ -207,7 +212,9 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         MacRegs::clear_hash_table();
     }
 
-    /// Get the current hash table value
+    /// Get the current hash table value.
+    ///
+    /// Returns the full 64-bit hash table register contents.
     pub fn hash_table(&self) -> u64 {
         MacRegs::hash_table()
     }
@@ -300,7 +307,9 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         MacRegs::clear_vlan_filter();
     }
 
-    /// Check if VLAN filtering is currently enabled
+    /// Check if VLAN filtering is currently enabled.
+    ///
+    /// Returns `true` when VLAN tag filtering is active.
     pub fn is_vlan_filter_enabled(&self) -> bool {
         MacRegs::is_vlan_filter_enabled()
     }

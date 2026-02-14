@@ -141,25 +141,25 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     // State Accessors
     // =========================================================================
 
-    /// Get the current state
+    /// Get the current driver state.
     #[inline(always)]
     pub fn state(&self) -> State {
         self.state
     }
 
-    /// Get the current MAC address
+    /// Get the current MAC address.
     #[inline(always)]
     pub fn mac_address(&self) -> &[u8; 6] {
         &self.mac_addr
     }
 
-    /// Get the current link speed
+    /// Get the current link speed.
     #[inline(always)]
     pub fn speed(&self) -> Speed {
         self.speed
     }
 
-    /// Get the current duplex mode
+    /// Get the current duplex mode.
     #[inline(always)]
     pub fn duplex(&self) -> Duplex {
         self.duplex
@@ -492,13 +492,13 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.dma.transmit(data)
     }
 
-    /// Check if a frame is available for receiving
+    /// Check if a frame is available for receiving.
     #[inline(always)]
     pub fn rx_available(&self) -> bool {
         self.dma.rx_available()
     }
 
-    /// Get the length of the next available frame
+    /// Get the length of the next available frame.
     pub fn peek_rx_length(&self) -> Option<usize> {
         self.dma.peek_frame_length()
     }
@@ -520,12 +520,12 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.dma.receive(buffer)
     }
 
-    /// Check if TX is ready (descriptors available)
+    /// Check if TX is ready (descriptors available).
     pub fn tx_ready(&self) -> bool {
         self.dma.tx_available() > 0
     }
 
-    /// Check if TX can accept a frame of given size
+    /// Check if TX can accept a frame of given size.
     pub fn can_transmit(&self, len: usize) -> bool {
         self.dma.can_transmit(len)
     }
@@ -707,17 +707,17 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
     // Debug / Statistics
     // =========================================================================
 
-    /// Get the number of available TX descriptors
+    /// Get the number of available TX descriptors.
     pub fn tx_descriptors_available(&self) -> usize {
         self.dma.tx_available()
     }
 
-    /// Get the number of complete RX frames waiting
+    /// Get the number of complete RX frames waiting.
     pub fn rx_frames_waiting(&self) -> usize {
         self.dma.rx_frame_count()
     }
 
-    /// Get total memory usage of this EMAC instance
+    /// Get total memory usage of this EMAC instance.
     pub const fn memory_usage() -> usize {
         DmaEngine::<RX_BUFS, TX_BUFS, BUF_SIZE>::memory_usage()
             + core::mem::size_of::<EmacConfig>()
