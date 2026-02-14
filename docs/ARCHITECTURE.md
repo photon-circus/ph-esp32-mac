@@ -147,3 +147,4 @@ The core driver remains runtime-agnostic; these facades are optional.
 
 - [DESIGN.md](DESIGN.md) - design decisions and constraints
 - [TESTING.md](TESTING.md) - test strategy and known gaps
+- [ROADMAP.md](ROADMAP.md) - feature roadmap and planned improvements

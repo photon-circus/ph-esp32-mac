@@ -541,7 +541,9 @@ impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt for crate::Emac
         }
 
         // Bind and enable
-        // SAFETY: We're the only EMAC driver, so we own this interrupt binding
+        // SAFETY: We're the only EMAC driver, so we own this interrupt
+        // binding. The handler function pointer is valid for the static
+        // lifetime because esp-hal handlers are generated as static functions.
         unsafe {
             esp_hal::interrupt::bind_interrupt(EMAC_INTERRUPT, handler.handler());
         }

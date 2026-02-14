@@ -347,3 +347,279 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Driver for EmbassyEmac<
         HardwareAddress::Ethernet(*emac.mac_address())
     }
 }
+
+// =============================================================================
+// Unit Tests
+// =============================================================================
+
+#[cfg(test)]
+#[allow(clippy::std_instead_of_core, clippy::std_instead_of_alloc)]
+mod tests {
+    extern crate std;
+
+    use super::*;
+    use core::task::{RawWaker, RawWakerVTable, Waker};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // =========================================================================
+    // Test Waker Helper
+    // =========================================================================
+
+    struct WakeCounter {
+        count: AtomicUsize,
+    }
+
+    impl WakeCounter {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                count: AtomicUsize::new(0),
+            })
+        }
+
+        fn count(&self) -> usize {
+            self.count.load(Ordering::SeqCst)
+        }
+    }
+
+    fn test_waker(counter: Arc<WakeCounter>) -> Waker {
+        fn clone_fn(ptr: *const ()) -> RawWaker {
+            // SAFETY: ptr was created from Arc::into_raw and is valid.
+            let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
+            let cloned = arc.clone();
+            core::mem::forget(arc);
+            RawWaker::new(Arc::into_raw(cloned) as *const (), &VTABLE)
+        }
+
+        fn wake_fn(ptr: *const ()) {
+            // SAFETY: ptr was created from Arc::into_raw and is valid.
+            let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
+            arc.count.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn wake_by_ref_fn(ptr: *const ()) {
+            // SAFETY: ptr was created from Arc::into_raw and is valid.
+            let arc = unsafe { Arc::from_raw(ptr as *const WakeCounter) };
+            arc.count.fetch_add(1, Ordering::SeqCst);
+            core::mem::forget(arc);
+        }
+
+        fn drop_fn(ptr: *const ()) {
+            // SAFETY: ptr was created from Arc::into_raw and is valid.
+            unsafe {
+                Arc::from_raw(ptr as *const WakeCounter);
+            }
+        }
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(clone_fn, wake_fn, wake_by_ref_fn, drop_fn);
+
+        let raw = RawWaker::new(Arc::into_raw(counter) as *const (), &VTABLE);
+        // SAFETY: raw waker was correctly constructed with a valid vtable.
+        unsafe { Waker::from_raw(raw) }
+    }
+
+    // =========================================================================
+    // EmbassyEmacState Tests
+    // =========================================================================
+
+    #[test]
+    fn state_initial_link_down() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        assert!(matches!(state.link_state(), LinkState::Down));
+    }
+
+    #[test]
+    fn state_initial_link_up() {
+        let state = EmbassyEmacState::new(LinkState::Up);
+        assert!(matches!(state.link_state(), LinkState::Up));
+    }
+
+    #[test]
+    fn state_set_link_state_updates() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        state.set_link_state(LinkState::Up);
+        assert!(matches!(state.link_state(), LinkState::Up));
+    }
+
+    #[test]
+    fn state_set_link_state_wakes_link_waker() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let counter = WakeCounter::new();
+        state.link_waker.register(&test_waker(counter.clone()));
+
+        state.set_link_state(LinkState::Up);
+
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn on_interrupt_rx_complete_wakes_rx() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+
+        state.rx_waker.register(&test_waker(rx_counter.clone()));
+        state.tx_waker.register(&test_waker(tx_counter.clone()));
+
+        let status = InterruptStatus {
+            rx_complete: true,
+            ..InterruptStatus::default()
+        };
+        state.on_interrupt(status);
+
+        assert_eq!(rx_counter.count(), 1);
+        assert_eq!(tx_counter.count(), 0);
+    }
+
+    #[test]
+    fn on_interrupt_tx_complete_wakes_tx() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+
+        state.rx_waker.register(&test_waker(rx_counter.clone()));
+        state.tx_waker.register(&test_waker(tx_counter.clone()));
+
+        let status = InterruptStatus {
+            tx_complete: true,
+            ..InterruptStatus::default()
+        };
+        state.on_interrupt(status);
+
+        assert_eq!(rx_counter.count(), 0);
+        assert_eq!(tx_counter.count(), 1);
+    }
+
+    #[test]
+    fn on_interrupt_rx_buf_unavailable_wakes_rx() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let rx_counter = WakeCounter::new();
+
+        state.rx_waker.register(&test_waker(rx_counter.clone()));
+
+        let status = InterruptStatus {
+            rx_buf_unavailable: true,
+            ..InterruptStatus::default()
+        };
+        state.on_interrupt(status);
+
+        assert_eq!(rx_counter.count(), 1);
+    }
+
+    #[test]
+    fn on_interrupt_tx_buf_unavailable_wakes_tx() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let tx_counter = WakeCounter::new();
+
+        state.tx_waker.register(&test_waker(tx_counter.clone()));
+
+        let status = InterruptStatus {
+            tx_buf_unavailable: true,
+            ..InterruptStatus::default()
+        };
+        state.on_interrupt(status);
+
+        assert_eq!(tx_counter.count(), 1);
+    }
+
+    #[test]
+    fn on_interrupt_error_wakes_both_rx_and_tx() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+
+        state.rx_waker.register(&test_waker(rx_counter.clone()));
+        state.tx_waker.register(&test_waker(tx_counter.clone()));
+
+        let status = InterruptStatus {
+            fatal_bus_error: true,
+            ..InterruptStatus::default()
+        };
+        state.on_interrupt(status);
+
+        assert_eq!(rx_counter.count(), 1);
+        assert_eq!(tx_counter.count(), 1);
+    }
+
+    #[test]
+    fn on_interrupt_no_flags_wakes_nothing() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+
+        state.rx_waker.register(&test_waker(rx_counter.clone()));
+        state.tx_waker.register(&test_waker(tx_counter.clone()));
+
+        let status = InterruptStatus::default();
+        state.on_interrupt(status);
+
+        assert_eq!(rx_counter.count(), 0);
+        assert_eq!(tx_counter.count(), 0);
+    }
+
+    #[test]
+    fn on_interrupt_combined_flags_wake_correctly() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+
+        state.rx_waker.register(&test_waker(rx_counter.clone()));
+        state.tx_waker.register(&test_waker(tx_counter.clone()));
+
+        let status = InterruptStatus {
+            rx_complete: true,
+            tx_complete: true,
+            ..InterruptStatus::default()
+        };
+        state.on_interrupt(status);
+
+        assert_eq!(rx_counter.count(), 1);
+        assert_eq!(tx_counter.count(), 1);
+    }
+
+    #[test]
+    fn capabilities_defaults() {
+        let mut caps = Capabilities::default();
+        caps.max_transmission_unit = MTU;
+        caps.max_burst_size = Some(1);
+        caps.checksum = ChecksumCapabilities::default();
+
+        assert_eq!(caps.max_transmission_unit, 1500);
+        assert_eq!(caps.max_burst_size, Some(1));
+    }
+
+    #[test]
+    fn update_link_from_phy_reports_up() {
+        use crate::testing::MockMdioBus;
+
+        let mut mdio = MockMdioBus::new();
+        mdio.setup_lan8720a(1);
+        mdio.simulate_link_up_100_fd(1);
+        // Set LAN8720A vendor-specific PSCSR (reg 31) with AUTODONE and 100FD speed
+        mdio.set_register(1, 31, (1 << 12) | (0x6 << 2));
+
+        let mut phy = crate::phy::Lan8720a::new(1);
+        let state = EmbassyEmacState::new(LinkState::Down);
+
+        let result = state.update_link_from_phy(&mut phy, &mut mdio).unwrap();
+        assert!(result.is_some());
+        assert!(matches!(state.link_state(), LinkState::Up));
+    }
+
+    #[test]
+    fn update_link_from_phy_reports_down() {
+        use crate::testing::MockMdioBus;
+
+        let mut mdio = MockMdioBus::new();
+        mdio.setup_lan8720a(1);
+        // Link stays down (no simulate_link_up call)
+
+        let mut phy = crate::phy::Lan8720a::new(1);
+        let state = EmbassyEmacState::new(LinkState::Up);
+
+        let result = state.update_link_from_phy(&mut phy, &mut mdio).unwrap();
+        assert!(result.is_none());
+        assert!(matches!(state.link_state(), LinkState::Down));
+    }
+}
