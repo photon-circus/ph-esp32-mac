@@ -30,10 +30,10 @@ independently mergeable and testable.
 
 ## Background
 
-The ESP32-P4 is a RISC-V based SoC (`riscv32imafc-esp-espidf`) with an
-Ethernet MAC peripheral that shares architectural lineage with the ESP32 EMAC
-but differs in register addresses, GPIO routing, DMA cache-line alignment, and
-clock/reset paths. The `ph-esp32-mac` crate already contains experimental
+The ESP32-P4 is a RISC-V based SoC (provisionally `riscv32imafc-esp-espidf`;
+see [Open Questions](#open-questions) item 6) with an Ethernet MAC peripheral
+that shares architectural lineage with the ESP32 EMAC but differs in register
+addresses, GPIO routing, DMA cache-line alignment, and clock/reset paths. The `ph-esp32-mac` crate already contains experimental
 feature-gated placeholders for ESP32-P4 (`feature = "esp32p4"`), but no
 functional implementation exists.
 
@@ -79,7 +79,7 @@ The following table summarises what exists today under `feature = "esp32p4"`:
 | Aspect | ESP32 | ESP32-P4 |
 |--------|-------|----------|
 | CPU architecture | Xtensa LX6 | RISC-V (RV32IMAFC) |
-| Rust target | `xtensa-esp32-none-elf` | `riscv32imafc-esp-espidf` |
+| Rust target | `xtensa-esp32-none-elf` | TBD (see [Open Questions](#open-questions) item 6) |
 | DMA register base | `0x3FF6_9000` | `0x5008_4000` |
 | MAC register base | `0x3FF6_A000` | `0x5008_5000` |
 | EXT register base | `0x3FF6_9800` | `0x5008_4800` |
