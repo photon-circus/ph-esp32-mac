@@ -29,7 +29,8 @@ Scope:
 Non-goals:
 - WiFi support (out of scope)
 - Dynamic allocation or runtime buffer growth
-- Stable support for non-ESP32 targets (ESP32-P4 is a placeholder only)
+- Stable support for non-ESP32 targets (ESP32-P4 is a placeholder only;
+  see [ESP32_P4_ROADMAP.md](ESP32_P4_ROADMAP.md) for the implementation plan)
 
 ---
 

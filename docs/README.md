@@ -24,7 +24,7 @@ driver. Use this index as the entry point and follow the links below.
 
 ## Planning Documents
 
-- None.
+- [ESP32_P4_ROADMAP.md](ESP32_P4_ROADMAP.md) - Sprint plan for ESP32-P4 support.
 
 ---
 
