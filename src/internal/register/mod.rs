@@ -33,6 +33,16 @@ pub const DPORT_WIFI_CLK_EN_REG: usize = 0x3FF0_00CC;
 #[cfg(feature = "esp32")]
 pub const DPORT_WIFI_CLK_EMAC_EN: u32 = 1 << 14;
 
+/// DPORT core reset enable register (contains the EMAC peripheral reset bit).
+/// DPORT base 0x3FF00000, CORE_RST_EN offset 0x0D0.
+#[cfg(feature = "esp32")]
+pub const DPORT_CORE_RST_EN_REG: usize = 0x3FF0_00D0;
+
+/// EMAC peripheral reset bit in DPORT_CORE_RST_EN_REG (mirrors esp-idf
+/// `DPORT_EMAC_RST` / `emac_ll_reset_register`).
+#[cfg(feature = "esp32")]
+pub const DPORT_EMAC_RST: u32 = 1 << 7;
+
 // =============================================================================
 // IO_MUX Register Definitions (ESP32)
 // =============================================================================

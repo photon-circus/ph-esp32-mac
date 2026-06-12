@@ -217,11 +217,14 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         #[cfg(feature = "defmt")]
         defmt::info!("RMII data pins configured via IO_MUX");
 
-        // === STEP 2: Enable DPORT peripheral clock ===
+        // === STEP 2: Enable DPORT peripheral clock, then reset the EMAC ===
         ExtRegs::enable_peripheral_clock();
+        // Mirror esp-idf: pulse the EMAC peripheral reset after enabling the bus
+        // clock and before HAL init, to clear the undefined post-power-on state.
+        ExtRegs::reset_peripheral();
 
         #[cfg(feature = "defmt")]
-        defmt::info!("EMAC peripheral clock enabled via DPORT");
+        defmt::info!("EMAC peripheral clock enabled + peripheral reset via DPORT");
 
         // === STEP 3: Configure PHY interface in extension registers ===
         self.configure_phy_interface_regs();
