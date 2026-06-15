@@ -720,6 +720,20 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         self.dma.rx_frame_count()
     }
 
+    /// Diagnostic snapshot of the RX path: raw DMA status register, count of
+    /// descriptors currently owned by the DMA (available to receive into), and
+    /// count of complete frames waiting for the CPU to consume.
+    ///
+    /// Returns `(dmasr, rx_dma_owned, rx_frames_waiting)`. Decode `dmasr`:
+    /// RS (receive process state) = bits 19:17, RU (rx buffer unavailable) = bit 7.
+    pub fn rx_debug(&self) -> (u32, usize, usize) {
+        (
+            DmaRegs::status(),
+            self.dma.rx_free_count(),
+            self.dma.rx_frame_count(),
+        )
+    }
+
     /// Get total memory usage of this EMAC instance
     pub const fn memory_usage() -> usize {
         DmaEngine::<RX_BUFS, TX_BUFS, BUF_SIZE>::memory_usage()
