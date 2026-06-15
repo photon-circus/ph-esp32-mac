@@ -734,6 +734,19 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         )
     }
 
+    /// Diagnostic: `(hardware MACADDR0 perfect-match value, configured mac_addr,
+    /// frame-filter register)`. A mismatch between the first two means the
+    /// hardware unicast filter rejects frames addressed to the MAC the stack
+    /// advertises (ARP), silently dropping unicast while broadcast still passes.
+    pub fn mac_debug(&self) -> ([u8; 6], [u8; 6], u32, u32) {
+        (
+            MacRegs::get_mac_address(),
+            self.mac_addr,
+            MacRegs::frame_filter(),
+            MacRegs::config(),
+        )
+    }
+
     /// Get total memory usage of this EMAC instance
     pub const fn memory_usage() -> usize {
         DmaEngine::<RX_BUFS, TX_BUFS, BUF_SIZE>::memory_usage()
