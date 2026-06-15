@@ -507,9 +507,11 @@ pub trait EmacExt {
     ///
     /// This is equivalent to calling:
     /// ```ignore
-    /// unsafe { esp_hal::interrupt::bind_interrupt(Interrupt::ETH_MAC, handler.handler()) };
-    /// esp_hal::interrupt::enable(Interrupt::ETH_MAC, handler.priority()).unwrap();
+    /// esp_hal::interrupt::bind_handler(Interrupt::ETH_MAC, handler);
     /// ```
+    /// (`bind_handler` binds the vector entry *and* enables the interrupt at the
+    /// handler's priority on the current core, replacing the esp-hal 1.0
+    /// `bind_interrupt` + `enable` pair.)
     ///
     /// # Example
     ///
@@ -540,13 +542,13 @@ impl<const RX: usize, const TX: usize, const BUF: usize> EmacExt for crate::Emac
             esp_hal::interrupt::disable(core, EMAC_INTERRUPT);
         }
 
-        // Bind and enable
-        // SAFETY: We're the only EMAC driver, so we own this interrupt binding
-        unsafe {
-            esp_hal::interrupt::bind_interrupt(EMAC_INTERRUPT, handler.handler());
-        }
-        esp_hal::interrupt::enable(EMAC_INTERRUPT, handler.priority())
-            .expect("Failed to enable EMAC interrupt");
+        // Bind + enable on the current core. esp-hal 1.1 replaced the
+        // `unsafe bind_interrupt(Interrupt, fn)` + `enable(Interrupt, Priority)
+        // -> Result` pair with a single safe `bind_handler(Interrupt,
+        // InterruptHandler)` that writes the vector entry and enables the
+        // interrupt at the handler's own priority. We're the only EMAC driver,
+        // so we own this binding.
+        esp_hal::interrupt::bind_handler(EMAC_INTERRUPT, handler);
     }
 
     fn disable_interrupt(&mut self) {
