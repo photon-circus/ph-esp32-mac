@@ -149,8 +149,8 @@ mod hardware {
         },
         orchestrator::{
             ActionRunner, CargoFirmwareBuilder, FirmwareBootMode, FirmwareBuilder, Flasher,
-            PacketIo, PacketStats, RepositoryState, SerialIo, collect_tool_versions, drive_session,
-            qa_action_code,
+            PacketIo, PacketStats, RepositoryState, SerialIo, collect_tool_versions,
+            destination_for_action, drive_session, qa_action_code,
         },
         session::SessionReport,
         suite::Suite,
@@ -347,7 +347,7 @@ mod hardware {
         if captured.total_frames == 0 {
             bail!("Npcap captured no traffic");
         }
-        validate_packet_evidence(&captured, actions)?;
+        validate_packet_evidence(&captured, actions, sessions, lab.packet.parsed_dut_mac()?)?;
         session_result?;
         Ok(())
     }
@@ -453,14 +453,12 @@ mod hardware {
         Ok(())
     }
 
-    fn validate_packet_evidence(stats: &PacketStats, actions: &[ActionRecord]) -> Result<()> {
-        if actions
-            .iter()
-            .any(|action| action.executable == "external-dhcp-fixture")
-            && stats.dhcp_frames == 0
-        {
-            bail!("captured no DHCP traffic after firmware requested the DHCP fixture");
-        }
+    fn validate_packet_evidence(
+        stats: &PacketStats,
+        actions: &[ActionRecord],
+        sessions: &[SessionReport],
+        dut_mac: [u8; 6],
+    ) -> Result<()> {
         for action in actions.iter().filter(|action| {
             matches!(
                 action.executable.as_str(),
@@ -480,9 +478,17 @@ mod hardware {
             .context("parse packet action run ID")?;
             let step = action.step.context("packet action omitted READY step")?;
             let requested = action.count.context("packet action omitted frame count")?;
+            if action.action == "flood_rx" && !(1_900..=2_250).contains(&action.duration_ms) {
+                bail!(
+                    "flood pacing duration {} ms fell outside 1900..=2250 ms",
+                    action.duration_ms
+                );
+            }
             let code = qa_action_code(&action.action)
                 .with_context(|| format!("unknown packet action `{}`", action.action))?;
-            let captured = if action.executable == "udp-packet-adapter" {
+            let destination = destination_for_action(&action.action, dut_mac)?;
+            let udp_echo = action.executable == "udp-packet-adapter";
+            let captured = if udp_echo {
                 if stats.arp_replies == 0 {
                     bail!("captured no fixed-IP DUT ARP reply before UDP echo validation");
                 }
@@ -490,10 +496,63 @@ mod hardware {
             } else {
                 stats.unique_sequences(suite, code, run_id, step)
             };
-            if captured < requested {
+            if !stats.has_exact_sequences(
+                udp_echo,
+                suite,
+                code,
+                run_id,
+                step,
+                destination,
+                requested,
+            ) {
                 bail!(
-                    "captured {captured}/{requested} matching frames for {} run={run_id:x} step={step}",
+                    "captured {captured}/{requested} exact sequences for {} run={run_id:x} step={step}",
                     action.action
+                );
+            }
+        }
+
+        for report in sessions
+            .iter()
+            .filter(|report| report.suite == Suite::RxEmbassy)
+        {
+            let mut ready_events = report.ready.iter().filter(|ready| ready.action == "dhcp");
+            let ready = ready_events
+                .next()
+                .context("rx-embassy session omitted its DHCP READY record")?;
+            if ready_events.next().is_some() {
+                bail!("rx-embassy session emitted duplicate DHCP READY records");
+            }
+            let mut transactions = actions.iter().filter(|action| {
+                action.executable == "npcap-dhcp-transaction"
+                    && action.suite == Some(report.suite)
+                    && action.run_id.as_deref() == Some(report.run_id.as_str())
+                    && action.step == Some(ready.step)
+            });
+            let transaction = transactions
+                .next()
+                .context("DHCP READY had no scoped Request/ACK capture evidence")?;
+            if transactions.next().is_some() {
+                bail!("DHCP READY had duplicate scoped transaction evidence");
+            }
+
+            let mut addresses = report
+                .observations
+                .iter()
+                .filter(|observation| observation.name == "rx-embassy.dhcp-address");
+            let firmware_address = addresses
+                .next()
+                .context("firmware omitted rx-embassy.dhcp-address")?
+                .value
+                .parse::<u64>()
+                .context("parse firmware DHCP address observation")?;
+            if addresses.next().is_some() {
+                bail!("firmware emitted duplicate rx-embassy.dhcp-address observations");
+            }
+            if firmware_address == 0 || transaction.count != Some(firmware_address) {
+                bail!(
+                    "captured DHCP ACK address {:?} did not match firmware address {firmware_address}",
+                    transaction.count
                 );
             }
         }

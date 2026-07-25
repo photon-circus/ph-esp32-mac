@@ -21,7 +21,17 @@ a standalone crate used for verification and is not published to crates.io.
 ## Overview
 
 The QA runner validates the EMAC driver against real hardware. Tests are grouped
-into a fixed sequence; later groups are skipped if earlier prerequisites fail.
+into two modes:
+
+- `qa-smoke` preserves the exploratory, continuously monitoring firmware;
+- `mdio`, `reset`, `mac-filter`, `rx-sync`, `rx-async`, and `rx-embassy` are
+  finite release suites controlled by the Rust host harness.
+
+Release suites emit the strict allocation-free `PHQA|1|...` protocol and stop
+after `RUN_END`. The RX suites also consume exact run/step-bound host
+acknowledgements on the serial RX line after flood completion and before DHCP.
+A required skip, block, timeout, missing frame, missing interrupt, stale run
+identity, or incomplete terminal record fails the run.
 
 ---
 
@@ -44,27 +54,20 @@ Run from the repo root. `xtask` selects the right crate, target, and features,
 injects the required linker flags, and invokes the ESP toolchain.
 
 ```bash
-cargo xtask run qa-runner
+cargo xtask qa build --suite rx-sync
+cargo xtask qa run --suite rx-async --lab qa/lab.toml
+cargo xtask qa matrix --lab qa/lab.toml --cold 20 --warm 20
 ```
 
-Build only:
+The exploratory runner remains available separately:
 
 ```bash
 cargo xtask build qa-runner
-```
-
-Debug build:
-
-```bash
 cargo xtask run qa-runner --debug
 ```
 
-Environment overrides:
-
-```bash
-$env:ESPFLASH_PORT = "COM7"
-$env:ESPFLASH_BAUD = "921600"
-```
+See [qa/README.md](../../qa/README.md) for the Npcap, serial, relay, and
+evidence-bundle configuration.
 
 ---
 
@@ -99,41 +102,28 @@ Bootloader mode:
 
 ## Test Suite
 
-### Groups
+### Release Suites
 
-| Group | ID Range | Category |
-|-------|----------|----------|
-| 1 | IT-1-xxx | Register Access |
-| 2 | IT-2-xxx | EMAC Initialization |
-| 3 | IT-3-xxx | PHY Communication |
-| 4 | IT-4-xxx | EMAC Operations |
-| 5 | IT-5-xxx | Link Status |
-| 6 | IT-6-xxx | smoltcp Integration |
-| 7 | IT-7-xxx | State & Interrupts |
-| 8 | IT-8-xxx | Advanced Features |
-| 9 | IT-9-xxx | Edge Cases |
+| Suite | Primary evidence |
+|-------|------------------|
+| `mdio` | 100 valid register samples, LAN8720A identity, ANAR restore, link transition |
+| `reset` | lifecycle/retry/readback, warm resets, cold boots, unicast challenge |
+| `mac-filter` | exact MAC/filter registers and tagged unicast/broadcast/multicast rejection |
+| `rx-sync` | four-descriptor exhaustion, bounded ISR growth, synchronous recovery |
+| `rx-async` | the same exhaustion matrix with causally verified future wakes |
+| `rx-embassy` | withheld runner polling, same-driver resume, fixed-IP UDP echo, DHCP |
 
 ### Expected Output
 
 ```text
-╔══════════════════════════════════════════════════════════════╗
-║       WT32-ETH01 Integration Test Suite                      ║
-║       ph-esp32-mac Driver Verification                       ║
-╚══════════════════════════════════════════════════════════════╝
-
-...
-══════════════════════════════════════════════════════════════════
-  TEST SUMMARY
-══════════════════════════════════════════════════════════════════
-
-  Total:   47
-  Passed:  47 ✓
-  Failed:  0 ✗
-  Skipped: 0 ○
+PHQA|1|RUN_START|run=...|suite=rx-sync|commit=...|mode=release|reset_reason=power_on
+PHQA|1|READY|run=...|step=1|action=fill_rx
+PHQA|1|OBS|run=...|name=rx.dma_owned|value=0
+PHQA|1|TEST|run=...|id=rx-sync.exhausted|status=PASS|required=1
+PHQA|1|RUN_END|run=...|result=PASS|passed=5|failed=0|skipped=0|blocked=0
 ```
 
-After tests complete, the runner enters continuous RX monitoring mode and logs
-received frames.
+Only `qa-smoke` enters continuous RX monitoring after its tests.
 
 ---
 

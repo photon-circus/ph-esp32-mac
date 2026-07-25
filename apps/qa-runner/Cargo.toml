@@ -49,7 +49,15 @@ test = false
 
 [dependencies]
 # The EMAC driver we're testing
-ph-esp32-mac = { version = "0.1.1", path = "../..", features = ["esp32", "critical-section", "esp-hal", "smoltcp"] }
+ph-esp32-mac = { version = "0.1.1", path = "../..", features = [
+    "async",
+    "critical-section",
+    "embassy-net",
+    "esp-hal",
+    "esp32",
+    "log",
+    "smoltcp",
+] }
 
 # ESP32 HAL and support crates
 esp-hal = { version = "1.1", features = ["esp32", "unstable"] }
@@ -65,6 +73,19 @@ smoltcp = { version = "0.12", default-features = false, features = [
     "socket-udp",
     "socket-tcp",
 ] }
+embassy-executor = "0.9.1"
+embassy-net = { version = "0.7.0", default-features = false, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "dhcpv4",
+    "udp",
+] }
+embassy-net-driver = "0.2"
+embassy-time = "0.5.0"
+esp-rtos = { version = "0.2.0", features = ["embassy", "esp32"] }
+# esp-rtos 0.2 does not forward its chip selection to esp-sync 0.1.
+esp-sync = { version = "0.1", features = ["esp32"] }
+static_cell = "2"
 
 # Logging
 log = "0.4"

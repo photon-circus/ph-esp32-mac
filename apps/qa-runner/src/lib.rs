@@ -11,6 +11,7 @@ pub mod board;
 pub mod frames;
 pub mod interrupts;
 pub mod protocol;
+pub mod rx_harness;
 pub mod snapshots;
 
 pub use board::{EMAC, TestContext, enable_wt32_oscillator, reset_reason_token};

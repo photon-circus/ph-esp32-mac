@@ -26,7 +26,7 @@ Hardware execution currently targets Windows and requires:
 - `espflash`;
 - Npcap with a capture-capable Ethernet adapter and its SDK import library
   (`wpcap.lib`; set `LIBPCAP_LIBDIR` when it is not on the linker path);
-- a serial connection to the ESP32;
+- a bidirectional serial connection to the ESP32 (GPIO1 TX and GPIO3 RX);
 - executable relay and link-control adapters.
 
 Default host builds and parser tests do not require Npcap. The native packet
@@ -98,8 +98,25 @@ contradictory `RUN_END`.
 Raw Ethernet stimulus uses experimental EtherType `0x88b5` and carries the
 suite, action, sequence, READY step, and compiled run identifier. Firmware
 must reject traffic from another run. Packet capture independently records
-the stimulus so a firmware result cannot pass when the host sent no matching
-traffic.
+the stimulus and requires the exact destination and sequence range, so a
+firmware result cannot pass when the host sent missing, duplicated, mislabeled,
+or misaddressed traffic.
+
+For RX flood tests the host sends exactly 4096 frames over two seconds, waits
+100 ms for the NIC transmit path to drain, and writes an exact run/step-bound
+acknowledgement over serial. Firmware keeps the ring exhausted and counts
+interrupts until that acknowledgement arrives. The host also rejects captures
+whose measured injection pacing is outside 1900–2250 ms.
+
+The embassy stack and EMAC driver are constructed before starvation, while the
+network runner is deliberately not spawned. The same runner is then spawned to
+recycle the exhausted ring and service the fixed-IP UDP challenge—there is no
+synchronous drain or EMAC reinitialization between exhaustion and recovery.
+Both firmware recovery and host-observed challenge-to-echo timing are bounded
+to two seconds. Before DHCP starts, the host arms a fresh capture window and
+acknowledges the matching READY record; acceptance requires a BOOTP-valid
+client request and server ACK with the same transaction ID, DUT MAC, and
+nonzero leased address.
 
 ---
 

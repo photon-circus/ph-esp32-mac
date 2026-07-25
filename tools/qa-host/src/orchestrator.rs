@@ -95,6 +95,9 @@ pub trait SerialIo {
     /// Writes a complete firmware control message.
     fn write_all(&mut self, bytes: &[u8]) -> io::Result<()>;
 
+    /// Flushes all written control bytes to the serial device.
+    fn flush(&mut self) -> io::Result<()>;
+
     /// Discards bytes buffered before a deliberately initiated boot.
     fn discard_input(&mut self) -> io::Result<()>;
 }
@@ -107,8 +110,121 @@ pub trait PacketIo {
     /// Injects one complete Ethernet frame.
     fn inject(&mut self, frame: &[u8]) -> Result<()>;
 
+    /// Discards earlier matches and arms an exact UDP-echo observation.
+    fn arm_udp_echo(&mut self, expected: UdpEchoExpectation) -> Result<()>;
+
+    /// Waits for the armed echo to be observed on wire.
+    fn wait_udp_echo(&mut self, timeout: Duration) -> Result<UdpEchoCapture>;
+
+    /// Discards earlier DHCP observations and arms one DUT transaction.
+    fn arm_dhcp(&mut self, dut_mac: [u8; 6]) -> Result<()>;
+
+    /// Waits for a post-arm client Request and matching server ACK.
+    fn wait_dhcp(&mut self, timeout: Duration) -> Result<DhcpTransaction>;
+
     /// Stops capture and returns independently counted packet totals.
     fn finish_capture(&mut self) -> Result<PacketStats>;
+}
+
+/// Exact on-wire identity required for the fixed-IP UDP echo.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UdpEchoExpectation {
+    /// Firmware suite encoded in the echoed QA payload.
+    pub suite: Suite,
+    /// Firmware action encoded in the echoed QA payload.
+    pub action: u8,
+    /// Exact compiled run identifier.
+    pub run_id: u64,
+    /// READY step that authorized the challenge.
+    pub step: u32,
+    /// DUT Ethernet address expected as the outer source.
+    pub dut_mac: [u8; 6],
+    /// Host Ethernet address expected as the outer destination.
+    pub host_mac: [u8; 6],
+}
+
+/// Timed observation of one exact DUT-to-host UDP echo.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UdpEchoCapture {
+    /// Conservative elapsed time from capture arming to packet observation.
+    pub latency: Duration,
+}
+
+/// DHCP message class used by scoped transaction validation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DhcpMessageKind {
+    /// Client DHCPREQUEST.
+    Request,
+    /// Server DHCPACK.
+    Ack,
+}
+
+/// Strictly decoded DHCP message for the configured DUT.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DhcpMessage {
+    /// DHCP message type.
+    pub kind: DhcpMessageKind,
+    /// BOOTP transaction identifier.
+    pub xid: u32,
+    /// BOOTP offered client address.
+    pub yiaddr: [u8; 4],
+}
+
+/// A post-arm DHCP Request/ACK exchange accepted by active capture.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DhcpTransaction {
+    /// Shared BOOTP transaction identifier.
+    pub xid: u32,
+    /// Nonzero address assigned by the ACK.
+    pub yiaddr: [u8; 4],
+    /// Conservative elapsed time from capture arming to ACK observation.
+    pub latency: Duration,
+}
+
+/// Post-arm DHCP Request/ACK correlator for one DUT.
+pub struct DhcpTransactionTracker {
+    dut_mac: [u8; 6],
+    requests: std::collections::BTreeSet<u32>,
+}
+
+impl DhcpTransactionTracker {
+    /// Creates an empty transaction scope for `dut_mac`.
+    #[must_use]
+    pub const fn new(dut_mac: [u8; 6]) -> Self {
+        Self {
+            dut_mac,
+            requests: std::collections::BTreeSet::new(),
+        }
+    }
+
+    /// Observes one frame and returns an ACK only after its matching Request.
+    pub fn observe(&mut self, frame: &[u8]) -> Option<DhcpMessage> {
+        let message = parse_dhcp_message_for_dut(frame, self.dut_mac)?;
+        match message.kind {
+            DhcpMessageKind::Request => {
+                self.requests.insert(message.xid);
+                None
+            }
+            DhcpMessageKind::Ack if self.requests.remove(&message.xid) => Some(message),
+            DhcpMessageKind::Ack => None,
+        }
+    }
+}
+
+/// Returns whether a frame is the exact expected DUT-to-host UDP echo.
+#[must_use]
+pub fn matches_udp_echo(frame: &[u8], expected: UdpEchoExpectation) -> bool {
+    let Some(tag) = parse_udp_echo(frame) else {
+        return false;
+    };
+    frame.get(..6) == Some(expected.host_mac.as_slice())
+        && frame.get(6..12) == Some(expected.dut_mac.as_slice())
+        && tag.destination == expected.dut_mac
+        && tag.suite == expected.suite
+        && tag.action == expected.action
+        && tag.run_id == expected.run_id
+        && tag.step == expected.step
+        && tag.sequence == 0
 }
 
 /// Packet counters produced by a completed capture.
@@ -118,7 +234,7 @@ pub struct PacketStats {
     pub total_frames: u64,
     /// Frames carrying the QA experimental EtherType `0x88b5`.
     pub qa_frames: u64,
-    /// Unique sequence counts grouped by exact suite, action, and run ID.
+    /// Unique sequences grouped by suite, action, run, step, and destination.
     pub classes: Vec<PacketClassStats>,
     /// Matching UDP echoes returned by the fixed-IP embassy-net scenario.
     pub udp_echoes: Vec<PacketClassStats>,
@@ -139,6 +255,42 @@ impl PacketStats {
     #[must_use]
     pub fn unique_udp_echoes(&self, suite: Suite, action: u8, run_id: u64, step: u32) -> u64 {
         unique_sequences(&self.udp_echoes, suite, action, run_id, step)
+    }
+
+    /// Returns whether capture contains exactly sequences `0..expected`.
+    #[must_use]
+    pub fn has_exact_sequences(
+        &self,
+        udp_echo: bool,
+        suite: Suite,
+        action: u8,
+        run_id: u64,
+        step: u32,
+        destination: [u8; 6],
+        expected: u64,
+    ) -> bool {
+        let classes = if udp_echo {
+            &self.udp_echoes
+        } else {
+            &self.classes
+        };
+        classes
+            .iter()
+            .find(|class| {
+                class.suite == suite
+                    && class.action == action
+                    && class.run_id == run_id
+                    && class.step == step
+                    && class.destination == destination
+            })
+            .is_some_and(|class| {
+                class.unique_sequences == expected
+                    && usize::try_from(expected)
+                        .is_ok_and(|expected| class.sequences.len() == expected)
+                    && class.sequences.iter().enumerate().all(|(index, sequence)| {
+                        u32::try_from(index).is_ok_and(|index| *sequence == index)
+                    })
+            })
     }
 }
 
@@ -171,8 +323,12 @@ pub struct PacketClassStats {
     pub run_id: u64,
     /// Firmware READY step encoded into each frame.
     pub step: u32,
+    /// Exact destination address captured on the stimulus frame.
+    pub destination: [u8; 6],
     /// Number of distinct sequence values captured.
     pub unique_sequences: u64,
+    /// Sorted distinct sequence values retained for exact-range validation.
+    pub sequences: Vec<u32>,
 }
 
 /// Fixed QA Ethernet frame length.
@@ -212,6 +368,8 @@ pub const QA_DUT_UDP_PORT: u16 = 42_424;
 /// Identity decoded from a valid PHQA Ethernet frame.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct QaFrameTag {
+    /// Ethernet destination address.
+    pub destination: [u8; 6],
     /// Encoded suite.
     pub suite: Suite,
     /// Encoded action.
@@ -442,6 +600,7 @@ pub fn drive_session(
                 SessionEvent::Ready(ready) => {
                     perform_ready(
                         &ready,
+                        serial,
                         packet,
                         actions,
                         lab,
@@ -459,6 +618,7 @@ pub fn drive_session(
 
 fn perform_ready(
     ready: &ReadyEvent,
+    serial: &mut dyn SerialIo,
     packet: &mut dyn PacketIo,
     actions: &mut dyn ActionRunner,
     lab: &LabConfig,
@@ -499,20 +659,34 @@ fn perform_ready(
             thread::sleep(Duration::from_millis(lab.settle.link_ms));
         }
         "udp_echo" => {
-            let started = Instant::now();
-            packet.inject(&arp_request(lab.packet.parsed_host_mac()?))?;
+            let host_mac = lab.packet.parsed_host_mac()?;
+            let dut_mac = lab.packet.parsed_dut_mac()?;
+            packet.inject(&arp_request(host_mac))?;
             thread::sleep(Duration::from_millis(100));
-            packet.inject(&udp_echo_challenge(
-                lab.packet.parsed_dut_mac()?,
-                lab.packet.parsed_host_mac()?,
+            packet.arm_udp_echo(UdpEchoExpectation {
+                suite,
+                action: qa_action_code("udp_echo").unwrap_or(13),
                 run_id,
-                ready.step,
-            )?)?;
+                step: ready.step,
+                dut_mac,
+                host_mac,
+            })?;
+            packet.inject(&udp_echo_challenge(dut_mac, host_mac, run_id, ready.step)?)?;
+            let echo_timeout = timeout.min(Duration::from_secs(2));
+            let echo = packet
+                .wait_udp_echo(echo_timeout)
+                .context("wait for exact DUT-to-host UDP echo")?;
+            if echo.latency > Duration::from_secs(2) {
+                bail!(
+                    "UDP echo latency {} ms exceeded 2000 ms",
+                    echo.latency.as_millis()
+                );
+            }
             action_records.push(ActionRecord {
                 action: "udp_echo".to_owned(),
                 executable: "udp-packet-adapter".to_owned(),
                 exit_code: Some(0),
-                duration_ms: started.elapsed().as_millis(),
+                duration_ms: echo.latency.as_millis(),
                 success: true,
                 suite: Some(suite),
                 run_id: Some(format!("{run_id:x}")),
@@ -554,37 +728,73 @@ fn perform_ready(
             if !pacing.is_zero() {
                 wait_until(started + pacing);
             }
+            let elapsed = started.elapsed();
             action_records.push(ActionRecord {
                 action: action.to_owned(),
                 executable: "packet-adapter".to_owned(),
                 exit_code: Some(0),
-                duration_ms: started.elapsed().as_millis(),
+                duration_ms: elapsed.as_millis(),
                 success: true,
                 suite: Some(suite),
                 run_id: Some(format!("{run_id:x}")),
                 step: Some(ready.step),
                 count: Some(u64::from(count)),
             });
+            if action == "flood_rx" {
+                thread::sleep(Duration::from_millis(100));
+                action_records.push(write_ready_ack(serial, ready, suite, run_id)?);
+            }
         }
         "dhcp" => {
-            // DHCP is supplied by the isolated lab network rather than by the
-            // raw-packet adapter. Retain the request as explicit evidence;
-            // firmware fails the required test if no lease arrives.
+            packet.arm_dhcp(lab.packet.parsed_dut_mac()?)?;
+            action_records.push(write_ready_ack(serial, ready, suite, run_id)?);
+            let transaction = packet
+                .wait_dhcp(timeout)
+                .context("wait for post-READY DHCP Request/ACK transaction")?;
+            let address = u32::from_be_bytes(transaction.yiaddr);
             action_records.push(ActionRecord {
-                action: "dhcp".to_owned(),
-                executable: "external-dhcp-fixture".to_owned(),
-                exit_code: None,
-                duration_ms: 0,
+                action: format!("dhcp_xid_{:08x}", transaction.xid),
+                executable: "npcap-dhcp-transaction".to_owned(),
+                exit_code: Some(0),
+                duration_ms: transaction.latency.as_millis(),
                 success: true,
                 suite: Some(suite),
                 run_id: Some(format!("{run_id:x}")),
                 step: Some(ready.step),
-                count: None,
+                count: Some(u64::from(address)),
             });
         }
         action => bail!("unsupported READY action `{action}`"),
     }
     Ok(())
+}
+
+fn write_ready_ack(
+    serial: &mut dyn SerialIo,
+    ready: &ReadyEvent,
+    suite: Suite,
+    run_id: u64,
+) -> Result<ActionRecord> {
+    let message = format!(
+        "PHQA|1|ACK|run={run_id:x}|step={}|action={}\n",
+        ready.step, ready.action
+    );
+    let started = Instant::now();
+    serial
+        .write_all(message.as_bytes())
+        .context("write firmware action ACK")?;
+    serial.flush().context("flush firmware action ACK")?;
+    Ok(ActionRecord {
+        action: format!("ack_{}", ready.action),
+        executable: "serial-control".to_owned(),
+        exit_code: Some(0),
+        duration_ms: started.elapsed().as_millis(),
+        success: true,
+        suite: Some(suite),
+        run_id: Some(format!("{run_id:x}")),
+        step: Some(ready.step),
+        count: Some(u64::try_from(message.len()).unwrap_or(u64::MAX)),
+    })
 }
 
 fn stimulus_duration(action: &str, count: u32) -> Duration {
@@ -621,7 +831,8 @@ fn wait_until(deadline: Instant) {
     }
 }
 
-fn destination_for_action(action: &str, dut: [u8; 6]) -> Result<[u8; 6]> {
+/// Derives the exact Ethernet destination for one READY action.
+pub(crate) fn destination_for_action(action: &str, dut: [u8; 6]) -> Result<[u8; 6]> {
     match action {
         "inject_broadcast" => Ok([0xff; 6]),
         "inject_multicast" => Ok([0x01, 0x00, 0x5e, 0x00, 0x00, 0x01]),
@@ -775,28 +986,119 @@ pub fn is_arp_reply(frame: &[u8]) -> bool {
 /// Returns true for a captured IPv4 DHCP client/server datagram.
 #[must_use]
 pub fn is_dhcp_frame(frame: &[u8]) -> bool {
+    dhcp_udp_payload(frame).is_some()
+}
+
+/// Decodes a strict DHCP Request or ACK belonging to the configured DUT.
+///
+/// This rejects malformed BOOTP envelopes, missing DHCP cookies, other
+/// message types, and ACKs without an assigned address.
+#[must_use]
+pub fn parse_dhcp_message_for_dut(frame: &[u8], dut_mac: [u8; 6]) -> Option<DhcpMessage> {
+    const BOOTP_FIXED_LEN: usize = 236;
+    const DHCP_COOKIE: [u8; 4] = [99, 130, 83, 99];
+    const DHCP_REQUEST: u8 = 3;
+    const DHCP_ACK: u8 = 5;
+
+    let (source_port, destination_port, payload) = dhcp_udp_payload(frame)?;
+    if payload.len() < BOOTP_FIXED_LEN + DHCP_COOKIE.len()
+        || payload[1] != 1
+        || payload[2] != 6
+        || payload.get(28..34) != Some(dut_mac.as_slice())
+        || payload.get(BOOTP_FIXED_LEN..BOOTP_FIXED_LEN + DHCP_COOKIE.len())
+            != Some(DHCP_COOKIE.as_slice())
+    {
+        return None;
+    }
+
+    let message_type = dhcp_message_type(&payload[BOOTP_FIXED_LEN + DHCP_COOKIE.len()..])?;
+    let kind = match (source_port, destination_port, payload[0], message_type) {
+        (68, 67, 1, DHCP_REQUEST) => DhcpMessageKind::Request,
+        (67, 68, 2, DHCP_ACK) => DhcpMessageKind::Ack,
+        _ => return None,
+    };
+    let xid = u32::from_be_bytes(payload.get(4..8)?.try_into().ok()?);
+    let yiaddr: [u8; 4] = payload.get(16..20)?.try_into().ok()?;
+    if kind == DhcpMessageKind::Ack && yiaddr == [0; 4] {
+        return None;
+    }
+    Some(DhcpMessage { kind, xid, yiaddr })
+}
+
+fn dhcp_udp_payload(frame: &[u8]) -> Option<(u16, u16, &[u8])> {
     const ETHERNET_HEADER_LEN: usize = 14;
+    const UDP_HEADER_LEN: usize = 8;
 
     if frame.get(12..14) != Some(&[0x08, 0x00]) {
-        return false;
+        return None;
     }
-    let Some(version_ihl) = frame.get(ETHERNET_HEADER_LEN).copied() else {
-        return false;
-    };
+    let version_ihl = *frame.get(ETHERNET_HEADER_LEN)?;
     if version_ihl >> 4 != 4 {
-        return false;
+        return None;
     }
     let ip_header_len = usize::from(version_ihl & 0x0f) * 4;
     if ip_header_len < 20
         || frame.get(ETHERNET_HEADER_LEN + 9) != Some(&17)
-        || frame.len() < ETHERNET_HEADER_LEN + ip_header_len + 4
+        || u16::from_be_bytes(
+            frame
+                .get(ETHERNET_HEADER_LEN + 6..ETHERNET_HEADER_LEN + 8)?
+                .try_into()
+                .ok()?,
+        ) & 0x1fff
+            != 0
     {
-        return false;
+        return None;
     }
-    let udp_start = ETHERNET_HEADER_LEN + ip_header_len;
-    let source = u16::from_be_bytes([frame[udp_start], frame[udp_start + 1]]);
-    let destination = u16::from_be_bytes([frame[udp_start + 2], frame[udp_start + 3]]);
-    matches!((source, destination), (67, 68) | (68, 67))
+    let ip_length = usize::from(u16::from_be_bytes(
+        frame
+            .get(ETHERNET_HEADER_LEN + 2..ETHERNET_HEADER_LEN + 4)?
+            .try_into()
+            .ok()?,
+    ));
+    if ip_length < ip_header_len + UDP_HEADER_LEN {
+        return None;
+    }
+    let ip_end = ETHERNET_HEADER_LEN.checked_add(ip_length)?;
+    if ip_end > frame.len() {
+        return None;
+    }
+    let udp_start = ETHERNET_HEADER_LEN.checked_add(ip_header_len)?;
+    let source = u16::from_be_bytes(frame.get(udp_start..udp_start + 2)?.try_into().ok()?);
+    let destination = u16::from_be_bytes(frame.get(udp_start + 2..udp_start + 4)?.try_into().ok()?);
+    if !matches!((source, destination), (67, 68) | (68, 67)) {
+        return None;
+    }
+    let udp_length = usize::from(u16::from_be_bytes(
+        frame.get(udp_start + 4..udp_start + 6)?.try_into().ok()?,
+    ));
+    if udp_length < UDP_HEADER_LEN || udp_start.checked_add(udp_length)? > ip_end {
+        return None;
+    }
+    Some((
+        source,
+        destination,
+        frame.get(udp_start + UDP_HEADER_LEN..udp_start + udp_length)?,
+    ))
+}
+
+fn dhcp_message_type(mut options: &[u8]) -> Option<u8> {
+    while let Some((&code, remaining)) = options.split_first() {
+        options = remaining;
+        match code {
+            0 => {}
+            255 => return None,
+            _ => {
+                let (&length, remaining) = options.split_first()?;
+                let length = usize::from(length);
+                let value = remaining.get(..length)?;
+                if code == 53 {
+                    return (length == 1).then_some(value[0]);
+                }
+                options = remaining.get(length..)?;
+            }
+        }
+    }
+    None
 }
 
 /// Extracts a PHQA payload from the DUT-to-host UDP echo direction.
@@ -928,6 +1230,7 @@ pub fn parse_qa_frame(frame: &[u8]) -> Option<QaFrameTag> {
             .ok()?,
     );
     Some(QaFrameTag {
+        destination: frame.get(..6)?.try_into().ok()?,
         suite,
         action,
         run_id,
@@ -1027,7 +1330,8 @@ pub enum DriveError {
 /// In-memory adapters used by deterministic host tests.
 pub mod fakes {
     use super::{
-        ActionRunner, Flasher, PacketClassStats, PacketIo, PacketStats, SerialIo, parse_qa_frame,
+        ActionRunner, DhcpTransaction, Flasher, PacketClassStats, PacketIo, PacketStats, SerialIo,
+        UdpEchoCapture, UdpEchoExpectation, parse_qa_frame,
     };
     use crate::{
         config::{CommandArgv, LabConfig},
@@ -1048,6 +1352,8 @@ pub mod fakes {
         pub reads: VecDeque<Vec<u8>>,
         /// Bytes written by the controller.
         pub writes: Vec<Vec<u8>>,
+        /// Number of explicit controller flushes.
+        pub flushes: usize,
     }
 
     impl SerialIo for FakeSerial {
@@ -1069,6 +1375,11 @@ pub mod fakes {
             Ok(())
         }
 
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            Ok(())
+        }
+
         fn discard_input(&mut self) -> io::Result<()> {
             self.reads.clear();
             Ok(())
@@ -1084,6 +1395,14 @@ pub mod fakes {
         pub filter: Option<String>,
         /// Injected Ethernet frames.
         pub injected: Vec<Vec<u8>>,
+        /// Exact UDP expectation most recently armed.
+        pub armed_udp_echo: Option<UdpEchoExpectation>,
+        /// Deterministic UDP result returned by the next wait.
+        pub udp_echo_capture: Option<UdpEchoCapture>,
+        /// DUT address most recently armed for DHCP.
+        pub armed_dhcp: Option<[u8; 6]>,
+        /// Deterministic DHCP result returned by the next wait.
+        pub dhcp_transaction: Option<DhcpTransaction>,
     }
 
     impl PacketIo for FakePacket {
@@ -1098,12 +1417,51 @@ pub mod fakes {
             Ok(())
         }
 
+        fn arm_udp_echo(&mut self, expected: UdpEchoExpectation) -> Result<()> {
+            self.armed_udp_echo = Some(expected);
+            Ok(())
+        }
+
+        fn wait_udp_echo(&mut self, timeout: Duration) -> Result<UdpEchoCapture> {
+            anyhow::ensure!(
+                self.armed_udp_echo.take().is_some(),
+                "fake UDP capture was not armed"
+            );
+            let capture = self
+                .udp_echo_capture
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("fake UDP echo timed out"))?;
+            anyhow::ensure!(capture.latency <= timeout, "fake UDP echo timed out");
+            Ok(capture)
+        }
+
+        fn arm_dhcp(&mut self, dut_mac: [u8; 6]) -> Result<()> {
+            self.armed_dhcp = Some(dut_mac);
+            Ok(())
+        }
+
+        fn wait_dhcp(&mut self, timeout: Duration) -> Result<DhcpTransaction> {
+            anyhow::ensure!(
+                self.armed_dhcp.take().is_some(),
+                "fake DHCP capture was not armed"
+            );
+            let transaction = self
+                .dhcp_transaction
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("fake DHCP transaction timed out"))?;
+            anyhow::ensure!(
+                transaction.latency <= timeout,
+                "fake DHCP transaction timed out"
+            );
+            Ok(transaction)
+        }
+
         fn finish_capture(&mut self) -> Result<PacketStats> {
             let mut classes = BTreeMap::<_, BTreeSet<u32>>::new();
             for frame in &self.injected {
                 if let Some(tag) = parse_qa_frame(frame) {
                     classes
-                        .entry((tag.suite, tag.action, tag.run_id, tag.step))
+                        .entry((tag.suite, tag.action, tag.run_id, tag.step, tag.destination))
                         .or_default()
                         .insert(tag.sequence);
                 }
@@ -1117,15 +1475,17 @@ pub mod fakes {
                     .count() as u64,
                 classes: classes
                     .into_iter()
-                    .map(
-                        |((suite, action, run_id, step), sequences)| PacketClassStats {
+                    .map(|((suite, action, run_id, step, destination), sequences)| {
+                        PacketClassStats {
                             suite,
                             action,
                             run_id,
                             step,
+                            destination,
                             unique_sequences: sequences.len() as u64,
-                        },
-                    )
+                            sequences: sequences.into_iter().collect(),
+                        }
+                    })
                     .collect(),
                 udp_echoes: Vec::new(),
                 arp_replies: 0,
@@ -1181,7 +1541,7 @@ pub mod fakes {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::VecDeque, fs};
+    use std::{collections::VecDeque, fs, time::Duration};
 
     use tempfile::tempdir;
 
@@ -1193,11 +1553,14 @@ mod tests {
     };
 
     use super::{
-        DriveError, QA_ACTION_OFFSET, QA_RUN_LEN_OFFSET, QA_RUN_OFFSET, QA_SEQUENCE_OFFSET,
-        QA_STEP_OFFSET, arp_request, destination_for_action, drive_session, internet_checksum,
-        is_arp_reply, is_dhcp_frame, parse_qa_frame, parse_udp_echo, qa_action_code, qa_frame,
-        udp_echo_challenge,
+        DhcpMessageKind, DhcpTransaction, DhcpTransactionTracker, DriveError, PacketClassStats,
+        PacketStats, QA_ACTION_OFFSET, QA_RUN_LEN_OFFSET, QA_RUN_OFFSET, QA_SEQUENCE_OFFSET,
+        QA_STEP_OFFSET, UdpEchoCapture, UdpEchoExpectation, arp_request, destination_for_action,
+        drive_session, internet_checksum, is_arp_reply, is_dhcp_frame, matches_udp_echo,
+        parse_dhcp_message_for_dut, parse_qa_frame, parse_udp_echo, perform_ready, qa_action_code,
+        qa_frame, udp_echo_challenge, write_ready_ack,
     };
+    use crate::session::ReadyEvent;
 
     const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -1226,7 +1589,7 @@ power_on = ["fake", "power_on"]
 link_down = ["fake", "link_down"]
 link_up = ["fake", "link_up"]
 [timeouts]
-action_ms = 10
+action_ms = 1000
 flash_ms = 10
 suite_ms = 10
 [settle]
@@ -1236,6 +1599,52 @@ link_ms = 0
         )
         .unwrap();
         LabConfig::load(path).unwrap()
+    }
+
+    fn dhcp_frame(dut: [u8; 6], xid: u32, kind: DhcpMessageKind, yiaddr: [u8; 4]) -> Vec<u8> {
+        const ETHERNET_HEADER: usize = 14;
+        const IPV4_HEADER: usize = 20;
+        const UDP_HEADER: usize = 8;
+        const BOOTP_FIXED: usize = 236;
+        const DHCP_PAYLOAD: usize = BOOTP_FIXED + 4 + 4;
+
+        let udp_length = UDP_HEADER + DHCP_PAYLOAD;
+        let ip_length = IPV4_HEADER + udp_length;
+        let mut frame = vec![0_u8; ETHERNET_HEADER + ip_length];
+        match kind {
+            DhcpMessageKind::Request => {
+                frame[..6].fill(0xff);
+                frame[6..12].copy_from_slice(&dut);
+            }
+            DhcpMessageKind::Ack => {
+                frame[..6].copy_from_slice(&dut);
+                frame[6..12].copy_from_slice(&[2, 0, 0, 0, 0, 1]);
+            }
+        }
+        frame[12..14].copy_from_slice(&0x0800_u16.to_be_bytes());
+        frame[14] = 0x45;
+        frame[16..18].copy_from_slice(&(ip_length as u16).to_be_bytes());
+        frame[23] = 17;
+
+        let udp = ETHERNET_HEADER + IPV4_HEADER;
+        let (source, destination, op, message_type) = match kind {
+            DhcpMessageKind::Request => (68_u16, 67_u16, 1_u8, 3_u8),
+            DhcpMessageKind::Ack => (67_u16, 68_u16, 2_u8, 5_u8),
+        };
+        frame[udp..udp + 2].copy_from_slice(&source.to_be_bytes());
+        frame[udp + 2..udp + 4].copy_from_slice(&destination.to_be_bytes());
+        frame[udp + 4..udp + 6].copy_from_slice(&(udp_length as u16).to_be_bytes());
+
+        let bootp = udp + UDP_HEADER;
+        frame[bootp] = op;
+        frame[bootp + 1] = 1;
+        frame[bootp + 2] = 6;
+        frame[bootp + 4..bootp + 8].copy_from_slice(&xid.to_be_bytes());
+        frame[bootp + 16..bootp + 20].copy_from_slice(&yiaddr);
+        frame[bootp + 28..bootp + 34].copy_from_slice(&dut);
+        frame[bootp + BOOTP_FIXED..bootp + BOOTP_FIXED + 4].copy_from_slice(&[99, 130, 83, 99]);
+        frame[bootp + BOOTP_FIXED + 4..].copy_from_slice(&[53, 1, message_type, 255]);
+        frame
     }
 
     #[test]
@@ -1268,6 +1677,7 @@ link_ms = 0
         assert_eq!(
             parse_qa_frame(&frame).unwrap(),
             super::QaFrameTag {
+                destination: [2, 0, 0, 0, 0, 2],
                 suite: Suite::RxSync,
                 action: 11,
                 run_id: 0xdead_beef,
@@ -1285,6 +1695,110 @@ link_ms = 0
         assert_eq!(qa_action_code("flood_rx"), Some(10));
         assert_eq!(qa_action_code("dhcp"), Some(14));
         assert_eq!(qa_action_code("unknown"), None);
+    }
+
+    #[test]
+    fn ready_ack_is_exact_lowercase_ascii_and_flushed() {
+        let mut serial = FakeSerial::default();
+        let record = write_ready_ack(
+            &mut serial,
+            &ReadyEvent {
+                step: 2,
+                action: "flood_rx".to_owned(),
+            },
+            Suite::RxSync,
+            0xDEAD_BEEF,
+        )
+        .unwrap();
+        assert_eq!(
+            serial.writes,
+            [b"PHQA|1|ACK|run=deadbeef|step=2|action=flood_rx\n".to_vec()]
+        );
+        assert_eq!(serial.flushes, 1);
+        assert_eq!(record.action, "ack_flood_rx");
+        assert_eq!(record.run_id.as_deref(), Some("deadbeef"));
+        assert_eq!(record.step, Some(2));
+    }
+
+    #[test]
+    fn udp_ready_waits_for_active_exact_echo_latency() {
+        let temp = tempdir().unwrap();
+        let lab = lab(temp.path());
+        let mut serial = FakeSerial::default();
+        let mut packet = FakePacket {
+            udp_echo_capture: Some(UdpEchoCapture {
+                latency: Duration::from_millis(37),
+            }),
+            ..FakePacket::default()
+        };
+        let mut runner = FakeActionRunner::default();
+        let mut records = Vec::new();
+        perform_ready(
+            &ReadyEvent {
+                step: 3,
+                action: "udp_echo".to_owned(),
+            },
+            &mut serial,
+            &mut packet,
+            &mut runner,
+            &lab,
+            Suite::RxEmbassy,
+            0x1234,
+            &mut records,
+        )
+        .unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].action, "udp_echo");
+        assert_eq!(records[0].duration_ms, 37);
+        assert_eq!(records[0].run_id.as_deref(), Some("1234"));
+        assert_eq!(records[0].step, Some(3));
+        assert_eq!(packet.injected.len(), 2);
+    }
+
+    #[test]
+    fn dhcp_ready_acks_then_records_scoped_lease_address() {
+        let temp = tempdir().unwrap();
+        let lab = lab(temp.path());
+        let mut serial = FakeSerial::default();
+        let mut packet = FakePacket {
+            dhcp_transaction: Some(DhcpTransaction {
+                xid: 0x1020_3040,
+                yiaddr: [192, 0, 2, 77],
+                latency: Duration::from_millis(125),
+            }),
+            ..FakePacket::default()
+        };
+        let mut runner = FakeActionRunner::default();
+        let mut records = Vec::new();
+        perform_ready(
+            &ReadyEvent {
+                step: 4,
+                action: "dhcp".to_owned(),
+            },
+            &mut serial,
+            &mut packet,
+            &mut runner,
+            &lab,
+            Suite::RxEmbassy,
+            0xabcd,
+            &mut records,
+        )
+        .unwrap();
+        assert_eq!(
+            serial.writes,
+            [b"PHQA|1|ACK|run=abcd|step=4|action=dhcp\n".to_vec()]
+        );
+        assert_eq!(serial.flushes, 1);
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].action, "ack_dhcp");
+        assert_eq!(records[1].action, "dhcp_xid_10203040");
+        assert_eq!(records[1].duration_ms, 125);
+        assert_eq!(
+            records[1].count,
+            Some(u64::from(u32::from_be_bytes([192, 0, 2, 77])))
+        );
+        assert_eq!(records[1].run_id.as_deref(), Some("abcd"));
+        assert_eq!(records[1].step, Some(4));
     }
 
     #[test]
@@ -1309,6 +1823,17 @@ link_ms = 0
         assert_eq!(tag.run_id, 0xdead_beef);
         assert_eq!(tag.step, 3);
         assert_eq!(tag.sequence, 0);
+        let expected = UdpEchoExpectation {
+            suite: Suite::RxEmbassy,
+            action: 13,
+            run_id: 0xdead_beef,
+            step: 3,
+            dut_mac: dut,
+            host_mac: host,
+        };
+        assert!(matches_udp_echo(&frame, expected));
+        frame[0] ^= 1;
+        assert!(!matches_udp_echo(&frame, expected));
     }
 
     #[test]
@@ -1330,15 +1855,73 @@ link_ms = 0
 
     #[test]
     fn recognizes_dhcp_udp_ports() {
-        let mut frame = vec![0_u8; 42];
-        frame[12..14].copy_from_slice(&0x0800_u16.to_be_bytes());
-        frame[14] = 0x45;
-        frame[23] = 17;
-        frame[34..36].copy_from_slice(&68_u16.to_be_bytes());
-        frame[36..38].copy_from_slice(&67_u16.to_be_bytes());
+        let dut = [2, 0, 0, 0, 0, 2];
+        let mut frame = dhcp_frame(dut, 0x1234_5678, DhcpMessageKind::Request, [0; 4]);
         assert!(is_dhcp_frame(&frame));
+        let message = parse_dhcp_message_for_dut(&frame, dut).unwrap();
+        assert_eq!(message.kind, DhcpMessageKind::Request);
+        assert_eq!(message.xid, 0x1234_5678);
+        assert!(parse_dhcp_message_for_dut(&frame, [2, 0, 0, 0, 0, 3]).is_none());
         frame[36..38].copy_from_slice(&53_u16.to_be_bytes());
         assert!(!is_dhcp_frame(&frame));
+    }
+
+    #[test]
+    fn strict_dhcp_parser_requires_cookie_and_nonzero_ack_address() {
+        let dut = [2, 0, 0, 0, 0, 2];
+        let mut ack = dhcp_frame(dut, 0x89ab_cdef, DhcpMessageKind::Ack, [192, 0, 2, 77]);
+        let message = parse_dhcp_message_for_dut(&ack, dut).unwrap();
+        assert_eq!(message.kind, DhcpMessageKind::Ack);
+        assert_eq!(message.yiaddr, [192, 0, 2, 77]);
+
+        ack[42 + 236] = 0;
+        assert!(parse_dhcp_message_for_dut(&ack, dut).is_none());
+        let zero = dhcp_frame(dut, 7, DhcpMessageKind::Ack, [0; 4]);
+        assert!(parse_dhcp_message_for_dut(&zero, dut).is_none());
+    }
+
+    #[test]
+    fn dhcp_tracker_requires_post_arm_request_with_matching_xid() {
+        let dut = [2, 0, 0, 0, 0, 2];
+        let mut tracker = DhcpTransactionTracker::new(dut);
+        let wrong_ack = dhcp_frame(dut, 0x2222, DhcpMessageKind::Ack, [192, 0, 2, 44]);
+        assert!(tracker.observe(&wrong_ack).is_none());
+
+        let request = dhcp_frame(dut, 0x1111, DhcpMessageKind::Request, [0; 4]);
+        assert!(tracker.observe(&request).is_none());
+        assert!(tracker.observe(&wrong_ack).is_none());
+
+        let ack = dhcp_frame(dut, 0x1111, DhcpMessageKind::Ack, [192, 0, 2, 45]);
+        let matched = tracker.observe(&ack).unwrap();
+        assert_eq!(matched.xid, 0x1111);
+        assert_eq!(matched.yiaddr, [192, 0, 2, 45]);
+        assert!(tracker.observe(&ack).is_none());
+    }
+
+    #[test]
+    fn packet_evidence_requires_the_exact_sequence_range() {
+        let class = PacketClassStats {
+            suite: Suite::RxSync,
+            action: 10,
+            run_id: 7,
+            step: 2,
+            destination: [2, 0, 0, 0, 0, 2],
+            unique_sequences: 4,
+            sequences: vec![0, 1, 2, 3],
+        };
+        let mut stats = PacketStats {
+            classes: vec![class],
+            ..PacketStats::default()
+        };
+        assert!(stats.has_exact_sequences(false, Suite::RxSync, 10, 7, 2, [2, 0, 0, 0, 0, 2], 4));
+        stats.classes[0].sequences = vec![0, 1, 2, 9];
+        assert!(!stats.has_exact_sequences(false, Suite::RxSync, 10, 7, 2, [2, 0, 0, 0, 0, 2], 4));
+        stats.classes[0].sequences = vec![0, 1, 2, 3];
+        stats.classes[0].destination = [2, 0, 0, 0, 0, 9];
+        assert!(!stats.has_exact_sequences(false, Suite::RxSync, 10, 7, 2, [2, 0, 0, 0, 0, 2], 4));
+        stats.classes[0].destination = [2, 0, 0, 0, 0, 2];
+        stats.classes[0].sequences = vec![0, 1, 2];
+        assert!(!stats.has_exact_sequences(false, Suite::RxSync, 10, 7, 2, [2, 0, 0, 0, 0, 2], 4));
     }
 
     #[test]
@@ -1425,6 +2008,7 @@ link_ms = 0
         let mut serial = FakeSerial {
             reads: VecDeque::from([input.into_bytes()]),
             writes: Vec::new(),
+            flushes: 0,
         };
         let mut packet = FakePacket::default();
         let mut actions = FakeActionRunner::default();
