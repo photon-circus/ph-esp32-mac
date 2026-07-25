@@ -63,7 +63,7 @@ critical-section = { version = "1.2", optional = true }
 
 # Optional: esp-hal for ergonomic integration with esp-rs ecosystem
 # Provides InterruptConfigurable, handler macro support, and delay types
-esp-hal = { version = "1.0", optional = true, default-features = false }
+esp-hal = { version = "1.1", optional = true, default-features = false }
 
 # Optional: Embassy network driver traits (driver-only, per embassy guidance)
 embassy-net-driver = { version = "0.2", optional = true }

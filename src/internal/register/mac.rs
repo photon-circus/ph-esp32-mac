@@ -883,8 +883,12 @@ impl MacRegs {
         // High register: addr[4] | (addr[5] << 8) | Address Enable (bit 31)
         let high = (addr[4] as u32) | ((addr[5] as u32) << 8) | (1 << 31);
 
-        Self::set_mac_addr0_low(low);
+        // Write HIGH (with Address-Enable) first, then LOW — matching both
+        // known-good references (ESP-IDF emac_ll, CycloneTCP esp32_eth_driver).
+        // The DW-GMAC perfect-match comparator latches on the address write;
+        // LOW-last is the order both vendor drivers use.
         Self::set_mac_addr0_high(high);
+        Self::set_mac_addr0_low(low);
     }
 
     /// Get the primary MAC address
