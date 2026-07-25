@@ -239,12 +239,14 @@ pub const DMAINTEN_NIE: u32 = 1 << 16;
 
 /// Default interrupt enable mask (normal operation)
 ///
-/// `RUE` (Receive buffer Unavailable) is essential: when the RX ring fills and
-/// the DMA suspends (RS=4, RU=1), a suspended DMA receives no further frames, so
-/// `RIE` will never fire again. Without `RUE` (which raises `AIS`, enabled via
-/// `AIE`) the RX waker is never woken to drain the ring and re-arm the DMA via
-/// `rx_poll_demand`, leaving RX permanently dead until a full re-init / power
-/// cycle. The wake handler already acts on `rx_buf_unavailable`; this enables it.
+/// `RUE` (Receive Buffer Unavailable) reports RX descriptor exhaustion and
+/// raises the abnormal summary selected by `AIE`. The async handlers treat RU
+/// as an RX wake so software can recycle descriptors and issue RX poll demand.
+///
+/// The ESP32 TRM documents the suspended state and poll-demand recovery. It
+/// does not establish that RU is the only possible wake or that omission
+/// always requires reinitialization; the QA exhaustion suites validate the
+/// recovery and interrupt-rate behavior on hardware.
 pub const DMAINTEN_DEFAULT: u32 =
     DMAINTEN_TIE | DMAINTEN_RIE | DMAINTEN_RUE | DMAINTEN_FBE | DMAINTEN_AIE | DMAINTEN_NIE;
 
@@ -511,5 +513,16 @@ impl From<u32> for TxProcessState {
             6 => TxProcessState::Suspended,
             _ => TxProcessState::ClosingDescriptor,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DMAINTEN_AIE, DMAINTEN_DEFAULT, DMAINTEN_RUE};
+
+    #[test]
+    fn default_interrupt_mask_pairs_ru_with_abnormal_summary() {
+        assert_eq!(DMAINTEN_DEFAULT & DMAINTEN_RUE, DMAINTEN_RUE);
+        assert_eq!(DMAINTEN_DEFAULT & DMAINTEN_AIE, DMAINTEN_AIE);
     }
 }

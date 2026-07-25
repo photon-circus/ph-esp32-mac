@@ -41,6 +41,9 @@ pub struct DmaEngine<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE:
     tx_ctrl_flags: u32,
     /// Whether the engine has been initialized
     initialized: bool,
+    /// Number of RX poll-demand signals issued by this engine in host tests.
+    #[cfg(test)]
+    rx_poll_demand_count: usize,
 }
 
 impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
@@ -62,7 +65,21 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
             tx_buffers: [[0u8; BUF_SIZE]; TX_BUFS],
             tx_ctrl_flags: 0,
             initialized: false,
+            #[cfg(test)]
+            rx_poll_demand_count: 0,
         }
+    }
+
+    /// Wake RX DMA after returning one or more descriptors to hardware.
+    #[inline(always)]
+    fn signal_rx_poll_demand(&mut self) {
+        #[cfg(test)]
+        {
+            self.rx_poll_demand_count += 1;
+        }
+
+        #[cfg(not(test))]
+        DmaRegs::rx_poll_demand();
     }
 
     /// Total memory usage in bytes.
@@ -320,7 +337,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
                 log_rx_error(first_desc);
                 first_desc.recycle();
                 self.rx_ring.advance();
-                DmaRegs::rx_poll_demand();
+                self.signal_rx_poll_demand();
                 return Err(IoError::FrameError.into());
             }
 
@@ -328,7 +345,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
             if buffer.len() < frame_len {
                 first_desc.recycle();
                 self.rx_ring.advance();
-                DmaRegs::rx_poll_demand();
+                self.signal_rx_poll_demand();
                 return Err(IoError::BufferTooSmall.into());
             }
 
@@ -336,7 +353,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
             buffer[..frame_len].copy_from_slice(&self.rx_buffers[idx][..frame_len]);
             first_desc.recycle();
             self.rx_ring.advance();
-            DmaRegs::rx_poll_demand();
+            self.signal_rx_poll_demand();
             return Ok(frame_len);
         }
 
@@ -402,7 +419,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
         }
 
         self.rx_ring.advance_by(desc_count);
-        DmaRegs::rx_poll_demand();
+        self.signal_rx_poll_demand();
 
         Ok(frame_len)
     }
@@ -425,7 +442,7 @@ impl<const RX_BUFS: usize, const TX_BUFS: usize, const BUF_SIZE: usize>
             }
         }
 
-        DmaRegs::rx_poll_demand();
+        self.signal_rx_poll_demand();
     }
 
     /// RX ring base address (for debugging).
@@ -527,6 +544,46 @@ mod tests {
         let mut dma: DmaEngine<4, 4, 1600> = DmaEngine::new();
         dma.set_tx_ctrl_flags(0x1234);
         assert_eq!(dma.tx_ctrl_flags(), 0x1234);
+    }
+
+    #[test]
+    fn receive_recycles_descriptor_and_signals_rx_poll_demand() {
+        let mut dma: DmaEngine<4, 4, 64> = DmaEngine::new();
+        dma.rx_buffers[0][..4].copy_from_slice(&[1, 2, 3, 4]);
+        dma.rx_ring.descriptors[0].complete_for_test(4, false);
+        let mut output = [0u8; 64];
+
+        assert_eq!(dma.receive(&mut output), Ok(4));
+        assert_eq!(&output[..4], &[1, 2, 3, 4]);
+        assert!(dma.rx_ring.descriptors[0].is_owned());
+        assert_eq!(dma.rx_current_index(), 1);
+        assert_eq!(dma.rx_poll_demand_count, 1);
+    }
+
+    #[test]
+    fn incomplete_receive_does_not_signal_rx_poll_demand() {
+        let mut dma: DmaEngine<4, 4, 64> = DmaEngine::new();
+        dma.rx_ring.descriptors[0].set_owned();
+        let mut output = [0u8; 64];
+
+        assert_eq!(
+            dma.receive(&mut output),
+            Err(IoError::IncompleteFrame.into())
+        );
+        assert_eq!(dma.rx_current_index(), 0);
+        assert_eq!(dma.rx_poll_demand_count, 0);
+    }
+
+    #[test]
+    fn failed_receive_recycles_descriptor_and_signals_rx_poll_demand() {
+        let mut dma: DmaEngine<4, 4, 64> = DmaEngine::new();
+        dma.rx_ring.descriptors[0].complete_for_test(4, true);
+        let mut output = [0u8; 64];
+
+        assert_eq!(dma.receive(&mut output), Err(IoError::FrameError.into()));
+        assert!(dma.rx_ring.descriptors[0].is_owned());
+        assert_eq!(dma.rx_current_index(), 1);
+        assert_eq!(dma.rx_poll_demand_count, 1);
     }
 
     // =========================================================================

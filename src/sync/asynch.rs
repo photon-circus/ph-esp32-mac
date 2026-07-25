@@ -446,6 +446,27 @@ mod tests {
     }
 
     #[test]
+    fn rx_buffer_unavailable_wakes_only_rx_waiter() {
+        let state = AsyncEmacState::new();
+        let rx_counter = WakeCounter::new();
+        let tx_counter = WakeCounter::new();
+        let err_counter = WakeCounter::new();
+
+        state.register_rx(&test_waker(rx_counter.clone()));
+        state.register_tx(&test_waker(tx_counter.clone()));
+        state.register_err(&test_waker(err_counter.clone()));
+        state.on_interrupt(InterruptStatus {
+            rx_buf_unavailable: true,
+            abnormal_summary: true,
+            ..InterruptStatus::default()
+        });
+
+        assert_eq!(rx_counter.count(), 1);
+        assert_eq!(tx_counter.count(), 0);
+        assert_eq!(err_counter.count(), 0);
+    }
+
+    #[test]
     fn reset_async_state_wakes_all() {
         let state = AsyncEmacState::new();
         let rx_counter = WakeCounter::new();

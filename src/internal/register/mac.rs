@@ -874,6 +874,18 @@ impl MacRegs {
 
     /// Set the primary MAC address (6 bytes)
     pub fn set_mac_address(addr: &[u8; 6]) {
+        Self::write_mac_address(addr, |offset, value| {
+            // SAFETY: `write_mac_address` supplies offsets for the two primary
+            // MAC address registers within the fixed MAC register block.
+            unsafe { write_reg(MAC_BASE + offset, value) }
+        });
+    }
+
+    /// Program the primary address through a caller-provided register writer.
+    ///
+    /// Keeping this helper private makes the high-before-low ordering directly
+    /// testable on the host without exposing a testing API or touching MMIO.
+    fn write_mac_address(addr: &[u8; 6], mut write: impl FnMut(usize, u32)) {
         // Low register: addr[0] | (addr[1] << 8) | (addr[2] << 16) | (addr[3] << 24)
         let low = (addr[0] as u32)
             | ((addr[1] as u32) << 8)
@@ -885,10 +897,10 @@ impl MacRegs {
 
         // Write HIGH (with Address-Enable) first, then LOW — matching both
         // known-good references (ESP-IDF emac_ll, CycloneTCP esp32_eth_driver).
-        // The DW-GMAC perfect-match comparator latches on the address write;
-        // LOW-last is the order both vendor drivers use.
-        Self::set_mac_addr0_high(high);
-        Self::set_mac_addr0_low(low);
+        // LOW-last is the order both vendor drivers use; the ESP32 references
+        // do not document an internal comparator-latch mechanism.
+        write(GMACADDR0H_OFFSET, high);
+        write(GMACADDR0L_OFFSET, low);
     }
 
     /// Get the primary MAC address
@@ -1058,5 +1070,31 @@ impl MacRegs {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn primary_mac_programming_writes_high_before_low() {
+        let address = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+        let mut writes = [(0usize, 0u32); 2];
+        let mut write_count = 0;
+
+        MacRegs::write_mac_address(&address, |offset, value| {
+            writes[write_count] = (offset, value);
+            write_count += 1;
+        });
+
+        assert_eq!(write_count, 2);
+        assert_eq!(
+            writes,
+            [
+                (GMACADDR0H_OFFSET, GMACADDRH_AE | 0x0000_5634),
+                (GMACADDR0L_OFFSET, 0x1200_0002),
+            ]
+        );
     }
 }

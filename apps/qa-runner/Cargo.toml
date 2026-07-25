@@ -8,14 +8,48 @@ license = "Apache-2.0"
 publish = false
 rust-version = "1.92.0"
 
+[lib]
+name = "ph_esp32_mac_qa_runner"
+path = "src/lib.rs"
+
 [[bin]]
-name = "qa-runner"
+name = "qa-smoke"
 path = "qa_runner.rs"
+test = false
+
+[[bin]]
+name = "mdio"
+path = "src/bin/mdio.rs"
+test = false
+
+[[bin]]
+name = "reset"
+path = "src/bin/reset.rs"
+test = false
+
+[[bin]]
+name = "mac-filter"
+path = "src/bin/mac_filter.rs"
+test = false
+
+[[bin]]
+name = "rx-sync"
+path = "src/bin/rx_sync.rs"
+test = false
+
+[[bin]]
+name = "rx-async"
+path = "src/bin/rx_async.rs"
+test = false
+
+[[bin]]
+name = "rx-embassy"
+path = "src/bin/rx_embassy.rs"
 test = false
 
 [dependencies]
 # The EMAC driver we're testing
-ph-esp32-mac = { version = "0.1.1", path = "../..", features = ["esp32", "critical-section", "smoltcp"] }
+ph-esp32-mac = { version = "0.1.1", path = "../..", features = ["esp32", "critical-section", "esp-hal", "smoltcp"] }
 
 # ESP32 HAL and support crates
 esp-hal = { version = "1.1", features = ["esp32", "unstable"] }

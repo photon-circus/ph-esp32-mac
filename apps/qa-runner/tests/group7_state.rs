@@ -19,8 +19,9 @@
 use log::{error, info, warn};
 
 use ph_esp32_mac::{InterruptStatus, State};
+use ph_esp32_mac_qa_runner::interrupts::INTERRUPTS;
 
-use super::framework::{TestResult, EMAC};
+use super::framework::{EMAC, TestResult};
 
 /// IT-7-001: Test state transitions through EMAC lifecycle
 pub fn test_state_transitions() -> TestResult {
@@ -29,7 +30,7 @@ pub fn test_state_transitions() -> TestResult {
             // After init + start, should be Running
             let state = emac.state();
             info!("  Current state: {:?}", state);
-            
+
             if state == State::Running {
                 info!("  EMAC is in Running state as expected");
                 TestResult::Pass
@@ -62,7 +63,9 @@ pub fn test_state_stop_changes() -> TestResult {
                 Err(e) => Err(e),
             }
         } else {
-            Err(ph_esp32_mac::Error::Config(ph_esp32_mac::ConfigError::InvalidConfig))
+            Err(ph_esp32_mac::Error::Config(
+                ph_esp32_mac::ConfigError::InvalidConfig,
+            ))
         }
     });
 
@@ -73,7 +76,9 @@ pub fn test_state_stop_changes() -> TestResult {
                 if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
                     emac.start()
                 } else {
-                    Err(ph_esp32_mac::Error::Config(ph_esp32_mac::ConfigError::InvalidConfig))
+                    Err(ph_esp32_mac::Error::Config(
+                        ph_esp32_mac::ConfigError::InvalidConfig,
+                    ))
                 }
             });
             match restart {
@@ -104,15 +109,21 @@ pub fn test_tx_ready() -> TestResult {
         if let Some(ref emac) = *EMAC.borrow_ref_mut(cs) {
             let ready = emac.tx_ready();
             let available = emac.tx_descriptors_available();
-            
-            info!("  tx_ready() = {}, descriptors available = {}", ready, available);
-            
+
+            info!(
+                "  tx_ready() = {}, descriptors available = {}",
+                ready, available
+            );
+
             if ready && available > 0 {
                 TestResult::Pass
             } else if !ready && available == 0 {
-                TestResult::Pass  // Consistent: not ready when none available
+                TestResult::Pass // Consistent: not ready when none available
             } else {
-                error!("  Inconsistent state: ready={} but available={}", ready, available);
+                error!(
+                    "  Inconsistent state: ready={} but available={}",
+                    ready, available
+                );
                 TestResult::Fail
             }
         } else {
@@ -129,27 +140,27 @@ pub fn test_can_transmit() -> TestResult {
             // Test minimum frame size
             let can_64 = emac.can_transmit(64);
             info!("  can_transmit(64) = {}", can_64);
-            
+
             // Test typical frame size
             let can_512 = emac.can_transmit(512);
             info!("  can_transmit(512) = {}", can_512);
-            
+
             // Test maximum Ethernet frame size
             let can_1518 = emac.can_transmit(1518);
             info!("  can_transmit(1518) = {}", can_1518);
-            
+
             // Test larger frame (uses scatter-gather with 4 buffers * 1600 = 6400 max)
             let can_2000 = emac.can_transmit(2000);
             info!("  can_transmit(2000) = {} (scatter-gather)", can_2000);
-            
+
             // Test truly oversized frame (exceeds 4 * 1600 = 6400)
             let can_7000 = emac.can_transmit(7000);
             info!("  can_transmit(7000) = {}", can_7000);
-            
+
             // Test zero length (should be false)
             let can_0 = emac.can_transmit(0);
             info!("  can_transmit(0) = {}", can_0);
-            
+
             if can_64 && can_512 && can_1518 && can_2000 && !can_7000 && !can_0 {
                 TestResult::Pass
             } else {
@@ -170,10 +181,10 @@ pub fn test_tx_backpressure() -> TestResult {
     frame[0..6].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); // Broadcast
     frame[6..12].copy_from_slice(&[0x02, 0x00, 0x00, 0x12, 0x34, 0x56]); // Our MAC
     frame[12..14].copy_from_slice(&[0x88, 0xB5]); // EtherType
-    
+
     let mut sent_count = 0u32;
     let mut not_ready = false;
-    
+
     // Try to fill the TX buffer
     for i in 0..10 {
         let result = critical_section::with(|cs| {
@@ -190,7 +201,7 @@ pub fn test_tx_backpressure() -> TestResult {
                 Some(false)
             }
         });
-        
+
         match result {
             Some(true) => {
                 sent_count += 1;
@@ -206,16 +217,16 @@ pub fn test_tx_backpressure() -> TestResult {
             }
         }
     }
-    
+
     if sent_count > 0 {
         info!("  Sent {} frames before backpressure", sent_count);
         if not_ready {
             info!("  Backpressure detected correctly");
         }
-        
+
         // Wait for TX to complete
         esp_hal::delay::Delay::new().delay_millis(50);
-        
+
         // Check TX is ready again
         let ready_again = critical_section::with(|cs| {
             if let Some(ref emac) = *EMAC.borrow_ref_mut(cs) {
@@ -224,7 +235,7 @@ pub fn test_tx_backpressure() -> TestResult {
                 false
             }
         });
-        
+
         if ready_again {
             info!("  TX ready again after drain");
             TestResult::Pass
@@ -241,15 +252,15 @@ pub fn test_tx_backpressure() -> TestResult {
 /// IT-7-006: Test peek_rx_length before receiving
 pub fn test_peek_rx_length() -> TestResult {
     info!("  Checking peek_rx_length...");
-    
+
     let result = critical_section::with(|cs| {
         if let Some(ref emac) = *EMAC.borrow_ref_mut(cs) {
             let available = emac.rx_available();
             let peek = emac.peek_rx_length();
-            
+
             info!("  rx_available() = {}", available);
             info!("  peek_rx_length() = {:?}", peek);
-            
+
             // Check consistency
             match (available, peek) {
                 (true, Some(len)) => {
@@ -277,7 +288,7 @@ pub fn test_peek_rx_length() -> TestResult {
             Err(())
         }
     });
-    
+
     match result {
         Ok(true) => TestResult::Pass,
         Ok(false) => {
@@ -298,10 +309,10 @@ pub fn test_rx_frames_waiting() -> TestResult {
         if let Some(ref emac) = *EMAC.borrow_ref_mut(cs) {
             let waiting = emac.rx_frames_waiting();
             let available = emac.rx_available();
-            
+
             info!("  rx_frames_waiting() = {}", waiting);
             info!("  rx_available() = {}", available);
-            
+
             // Check consistency
             if available && waiting > 0 {
                 info!("  Consistent: {} frames waiting", waiting);
@@ -329,7 +340,7 @@ pub fn test_interrupt_status() -> TestResult {
     critical_section::with(|cs| {
         if let Some(ref emac) = *EMAC.borrow_ref_mut(cs) {
             let status: InterruptStatus = emac.interrupt_status();
-            
+
             info!("  Interrupt status:");
             info!("    tx_complete: {}", status.tx_complete);
             info!("    rx_complete: {}", status.rx_complete);
@@ -337,7 +348,7 @@ pub fn test_interrupt_status() -> TestResult {
             info!("    rx_overflow: {}", status.rx_overflow);
             info!("    any: {}", status.any());
             info!("    has_error: {}", status.has_error());
-            
+
             // Status read successfully
             TestResult::Pass
         } else {
@@ -354,14 +365,14 @@ pub fn test_interrupt_clear() -> TestResult {
             // Read current status
             let before = emac.interrupt_status();
             info!("  Before clear: any={}", before.any());
-            
+
             // Clear all interrupts
             emac.clear_all_interrupts();
-            
+
             // Read status again
             let after = emac.interrupt_status();
             info!("  After clear: any={}", after.any());
-            
+
             // After clear, status should be minimal
             // Note: new interrupts may fire immediately, so we don't require all clear
             TestResult::Pass
@@ -379,44 +390,40 @@ pub fn test_handle_interrupt() -> TestResult {
     frame[0..6].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
     frame[6..12].copy_from_slice(&[0x02, 0x00, 0x00, 0x12, 0x34, 0x56]);
     frame[12..14].copy_from_slice(&[0x88, 0xB5]);
-    
-    critical_section::with(|cs| {
+
+    let (transmitted, before) = critical_section::with(|cs| {
         if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
             // Clear any pending interrupts first
             emac.clear_all_interrupts();
-            
+            emac.enable_tx_interrupt(true);
+            let before = INTERRUPTS.snapshot();
+
             // Transmit
-            let _ = emac.transmit(&frame);
+            (emac.transmit(&frame).is_ok(), before)
+        } else {
+            (false, INTERRUPTS.snapshot())
         }
     });
-    
+
+    if !transmitted {
+        error!("  Failed to transmit ISR test frame");
+        return TestResult::Fail;
+    }
+
     // Wait a bit for TX to complete
     esp_hal::delay::Delay::new().delay_millis(10);
-    
-    // Handle interrupt
-    let result = critical_section::with(|cs| {
-        if let Some(ref emac) = *EMAC.borrow_ref_mut(cs) {
-            let status = emac.handle_interrupt();
-            info!("  handle_interrupt returned:");
-            info!("    tx_complete: {}", status.tx_complete);
-            info!("    rx_complete: {}", status.rx_complete);
-            Some(status)
-        } else {
-            None
-        }
-    });
-    
-    match result {
-        Some(status) => {
-            if status.tx_complete {
-                info!("  TX complete interrupt detected");
-            }
-            TestResult::Pass
-        }
-        None => {
-            error!("  EMAC not available");
-            TestResult::Fail
-        }
+
+    let delta = INTERRUPTS.snapshot().since(before);
+    info!(
+        "  Real ISR delta: total={}, last_raw={:#010x}",
+        delta.total, delta.last_raw
+    );
+
+    if delta.total > 0 && (delta.last_raw & 1) != 0 {
+        TestResult::Pass
+    } else {
+        error!("  ETH_MAC ISR did not observe TX complete");
+        TestResult::Fail
     }
 }
 
@@ -429,10 +436,10 @@ pub fn test_frame_sizes() -> TestResult {
         (1024, "medium"),
         (1518, "maximum"),
     ];
-    
+
     let delay = esp_hal::delay::Delay::new();
     let mut all_ok = true;
-    
+
     for (size, name) in sizes {
         let mut frame = [0u8; 1518];
         frame[0..6].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
@@ -442,15 +449,17 @@ pub fn test_frame_sizes() -> TestResult {
         for i in 14..size {
             frame[i] = (i & 0xFF) as u8;
         }
-        
+
         let result = critical_section::with(|cs| {
             if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
                 emac.transmit(&frame[..size])
             } else {
-                Err(ph_esp32_mac::Error::Config(ph_esp32_mac::ConfigError::InvalidConfig))
+                Err(ph_esp32_mac::Error::Config(
+                    ph_esp32_mac::ConfigError::InvalidConfig,
+                ))
             }
         });
-        
+
         match result {
             Ok(len) => {
                 info!("  TX {} ({} bytes): OK, sent {} bytes", name, size, len);
@@ -460,10 +469,10 @@ pub fn test_frame_sizes() -> TestResult {
                 all_ok = false;
             }
         }
-        
+
         delay.delay_millis(10);
     }
-    
+
     if all_ok {
         TestResult::Pass
     } else {

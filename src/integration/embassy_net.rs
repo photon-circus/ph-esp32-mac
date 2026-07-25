@@ -347,3 +347,48 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Driver for EmbassyEmac<
         HardwareAddress::Ethernet(*emac.mac_address())
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::std_instead_of_core, clippy::std_instead_of_alloc)]
+mod tests {
+    extern crate std;
+
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use std::task::{Wake, Waker};
+
+    struct WakeCounter(AtomicUsize);
+
+    impl Wake for WakeCounter {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn rx_buffer_unavailable_wakes_only_rx_waiter() {
+        let state = EmbassyEmacState::new(LinkState::Down);
+        let rx_counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let tx_counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let rx_waker = Waker::from(rx_counter.clone());
+        let tx_waker = Waker::from(tx_counter.clone());
+
+        state.rx_waker.register(&rx_waker);
+        state.tx_waker.register(&tx_waker);
+        state.on_interrupt(InterruptStatus {
+            rx_buf_unavailable: true,
+            abnormal_summary: true,
+            ..InterruptStatus::default()
+        });
+
+        assert_eq!(rx_counter.0.load(Ordering::SeqCst), 1);
+        assert_eq!(tx_counter.0.load(Ordering::SeqCst), 0);
+    }
+}

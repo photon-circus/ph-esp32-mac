@@ -144,39 +144,53 @@ impl GpioMatrix {
     /// # Safety
     /// This function directly manipulates hardware registers.
     pub fn configure_mdc(gpio_num: u8) {
-        // SAFETY: Accesses fixed ESP32 peripheral registers via volatile reads/writes for setup.
-        unsafe {
-            // 1. Configure IO_MUX to use GPIO Matrix (function 2)
-            let iomux_addr = Self::iomux_addr_for_gpio(gpio_num);
-            if iomux_addr != 0 {
-                let iomux_val = read_reg(iomux_addr);
-                let new_iomux =
-                    (iomux_val & !IO_MUX_MCU_SEL_MASK) | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT);
-                write_reg(iomux_addr, new_iomux);
-            }
+        Self::configure_mdc_registers(
+            gpio_num,
+            |addr| {
+                // SAFETY: The helper only requests the validated IO_MUX address
+                // returned by `iomux_addr_for_gpio`.
+                unsafe { read_reg(addr) }
+            },
+            |addr, value| {
+                // SAFETY: The helper supplies fixed ESP32 IO_MUX/GPIO Matrix
+                // addresses derived from the selected GPIO.
+                unsafe { write_reg(addr, value) }
+            },
+        );
+    }
 
-            // 2. Enable GPIO output
-            write_reg(GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << gpio_num);
-
-            // 3. Connect GPIO output to EMAC_MDC_O signal via GPIO Matrix.
-            //    MDC is always an output, so OEN_SEL = 1 (output enable forced by
-            //    GPIO_ENABLE, set above) is fine.
-            let out_sel_addr = GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (gpio_num as usize * 4);
-            let out_sel_val = (EMAC_MDC_O_IDX & GPIO_FUNC_OUT_SEL_MASK) | GPIO_OEN_SEL;
-            write_reg(out_sel_addr, out_sel_val);
-
-            #[cfg(feature = "defmt")]
-            defmt::debug!(
-                "GPIO{} configured as MDC: IOMUX={:#010x} OUT_SEL={:#010x}",
-                gpio_num,
-                if iomux_addr != 0 {
-                    read_reg(iomux_addr)
-                } else {
-                    0
-                },
-                out_sel_val
-            );
+    /// Configure MDC through caller-provided register accessors.
+    fn configure_mdc_registers(
+        gpio_num: u8,
+        mut read: impl FnMut(usize) -> u32,
+        mut write: impl FnMut(usize, u32),
+    ) {
+        // 1. Configure IO_MUX to use GPIO Matrix (function 2)
+        let iomux_addr = Self::iomux_addr_for_gpio(gpio_num);
+        if iomux_addr != 0 {
+            let iomux_val = read(iomux_addr);
+            let new_iomux =
+                (iomux_val & !IO_MUX_MCU_SEL_MASK) | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT);
+            write(iomux_addr, new_iomux);
         }
+
+        // 2. Enable GPIO output
+        write(GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << gpio_num);
+
+        // 3. Connect GPIO output to EMAC_MDC_O signal via GPIO Matrix.
+        //    MDC is always an output, so OEN_SEL = 1 (output enable forced by
+        //    GPIO_ENABLE, set above) is fine.
+        let out_sel_addr = GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (gpio_num as usize * 4);
+        let out_sel_val = (EMAC_MDC_O_IDX & GPIO_FUNC_OUT_SEL_MASK) | GPIO_OEN_SEL;
+        write(out_sel_addr, out_sel_val);
+
+        #[cfg(feature = "defmt")]
+        defmt::debug!(
+            "GPIO{} configured as MDC: IOMUX={:#010x} OUT_SEL={:#010x}",
+            gpio_num,
+            if iomux_addr != 0 { read(iomux_addr) } else { 0 },
+            out_sel_val
+        );
     }
 
     /// Configure MDIO pin (bidirectional)
@@ -190,53 +204,67 @@ impl GpioMatrix {
     /// # Safety
     /// This function directly manipulates hardware registers.
     pub fn configure_mdio(gpio_num: u8) {
-        // SAFETY: Accesses fixed ESP32 peripheral registers via volatile reads/writes for setup.
-        unsafe {
-            // 1. Configure IO_MUX to use GPIO Matrix (function 2) with input enabled
-            let iomux_addr = Self::iomux_addr_for_gpio(gpio_num);
-            if iomux_addr != 0 {
-                let iomux_val = read_reg(iomux_addr);
-                let new_iomux = (iomux_val & !IO_MUX_MCU_SEL_MASK)
-                    | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT)
-                    | IO_MUX_FUN_IE; // Enable input
-                write_reg(iomux_addr, new_iomux);
-            }
+        Self::configure_mdio_registers(
+            gpio_num,
+            |addr| {
+                // SAFETY: The helper only requests the validated IO_MUX address
+                // returned by `iomux_addr_for_gpio`.
+                unsafe { read_reg(addr) }
+            },
+            |addr, value| {
+                // SAFETY: The helper supplies fixed ESP32 IO_MUX/GPIO Matrix
+                // addresses derived from the selected GPIO.
+                unsafe { write_reg(addr, value) }
+            },
+        );
+    }
 
-            // 2. Mark the GPIO as driven; the *actual* output enable is owned by
-            //    the EMAC's MDO output-enable signal (OEN_SEL = 0, see step 3), so
-            //    this bit is a baseline and the EMAC still tri-states the pin during
-            //    the MDIO read turnaround.
-            write_reg(GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << gpio_num);
-
-            // 3. Connect GPIO output to EMAC_MDO_O signal via GPIO Matrix.
-            //    MDIO is BIDIRECTIONAL: OEN_SEL MUST be 0 so the EMAC's MDO
-            //    output-enable signal controls direction and tri-states the pin
-            //    when the PHY drives the read data. Forcing OEN_SEL = 1 (GPIO_ENABLE)
-            //    makes MDIO write-only — every MDIO read then samples the SoC's own
-            //    driven-low output and returns 0x0000 (writes still work).
-            let out_sel_addr = GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (gpio_num as usize * 4);
-            let out_sel_val = EMAC_MDO_O_IDX & GPIO_FUNC_OUT_SEL_MASK; // OEN_SEL = 0
-            write_reg(out_sel_addr, out_sel_val);
-
-            // 4. Connect EMAC_MDI_I signal input to this GPIO
-            let in_sel_addr = GPIO_BASE + GPIO_FUNC_IN_SEL_CFG_BASE + (EMAC_MDI_I_IDX as usize * 4);
-            // SIG_IN_SEL = 1 (route through GPIO Matrix)
-            let in_sel_val = (gpio_num as u32 & GPIO_FUNC_IN_SEL_MASK) | GPIO_SIG_IN_SEL;
-            write_reg(in_sel_addr, in_sel_val);
-
-            #[cfg(feature = "defmt")]
-            defmt::debug!(
-                "GPIO{} configured as MDIO: IOMUX={:#010x} OUT_SEL={:#010x} IN_SEL={:#010x}",
-                gpio_num,
-                if iomux_addr != 0 {
-                    read_reg(iomux_addr)
-                } else {
-                    0
-                },
-                out_sel_val,
-                in_sel_val
-            );
+    /// Configure MDIO through caller-provided register accessors.
+    fn configure_mdio_registers(
+        gpio_num: u8,
+        mut read: impl FnMut(usize) -> u32,
+        mut write: impl FnMut(usize, u32),
+    ) {
+        // 1. Configure IO_MUX to use GPIO Matrix (function 2) with input enabled
+        let iomux_addr = Self::iomux_addr_for_gpio(gpio_num);
+        if iomux_addr != 0 {
+            let iomux_val = read(iomux_addr);
+            let new_iomux = (iomux_val & !IO_MUX_MCU_SEL_MASK)
+                | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT)
+                | IO_MUX_FUN_IE; // Enable input
+            write(iomux_addr, new_iomux);
         }
+
+        // 2. Mark the GPIO as driven; the *actual* output enable is owned by
+        //    the EMAC's MDO output-enable signal (OEN_SEL = 0, see step 3), so
+        //    this bit is a baseline and the EMAC still tri-states the pin during
+        //    the MDIO read turnaround.
+        write(GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << gpio_num);
+
+        // 3. Connect GPIO output to EMAC_MDO_O signal via GPIO Matrix.
+        //    MDIO is BIDIRECTIONAL: OEN_SEL MUST be 0 so the EMAC's MDO
+        //    output-enable signal controls direction and tri-states the pin
+        //    when the PHY drives the read data. Forcing OEN_SEL = 1 (GPIO_ENABLE)
+        //    makes MDIO write-only — every MDIO read then samples the SoC's own
+        //    driven-low output and returns 0x0000 (writes still work).
+        let out_sel_addr = GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (gpio_num as usize * 4);
+        let out_sel_val = EMAC_MDO_O_IDX & GPIO_FUNC_OUT_SEL_MASK; // OEN_SEL = 0
+        write(out_sel_addr, out_sel_val);
+
+        // 4. Connect EMAC_MDI_I signal input to this GPIO
+        let in_sel_addr = GPIO_BASE + GPIO_FUNC_IN_SEL_CFG_BASE + (EMAC_MDI_I_IDX as usize * 4);
+        // SIG_IN_SEL = 1 (route through GPIO Matrix)
+        let in_sel_val = (gpio_num as u32 & GPIO_FUNC_IN_SEL_MASK) | GPIO_SIG_IN_SEL;
+        write(in_sel_addr, in_sel_val);
+
+        #[cfg(feature = "defmt")]
+        defmt::debug!(
+            "GPIO{} configured as MDIO: IOMUX={:#010x} OUT_SEL={:#010x} IN_SEL={:#010x}",
+            gpio_num,
+            if iomux_addr != 0 { read(iomux_addr) } else { 0 },
+            out_sel_val,
+            in_sel_val
+        );
     }
 
     /// Configure both MDC and MDIO pins with default assignments
@@ -451,5 +479,77 @@ mod tests {
     fn test_iomux_addresses() {
         assert_eq!(GpioMatrix::iomux_addr_for_gpio(18), 0x3FF4_9070);
         assert_eq!(GpioMatrix::iomux_addr_for_gpio(23), 0x3FF4_908C);
+    }
+
+    #[test]
+    fn configure_mdc_programs_registers_in_required_order() {
+        let initial_iomux = 0xa5a5_5a5a;
+        let mut writes = [(0usize, 0u32); 3];
+        let mut write_count = 0;
+
+        GpioMatrix::configure_mdc_registers(
+            23,
+            |_| initial_iomux,
+            |addr, value| {
+                writes[write_count] = (addr, value);
+                write_count += 1;
+            },
+        );
+
+        assert_eq!(write_count, 3);
+        assert_eq!(
+            writes,
+            [
+                (
+                    IO_MUX_BASE + IO_MUX_GPIO23_OFFSET,
+                    (initial_iomux & !IO_MUX_MCU_SEL_MASK)
+                        | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT),
+                ),
+                (GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << 23),
+                (
+                    GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (23 * 4),
+                    EMAC_MDC_O_IDX | GPIO_OEN_SEL,
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn configure_mdio_programs_bidirectional_route_in_required_order() {
+        let initial_iomux = 0x5a5a_a5a5;
+        let mut writes = [(0usize, 0u32); 4];
+        let mut write_count = 0;
+
+        GpioMatrix::configure_mdio_registers(
+            18,
+            |_| initial_iomux,
+            |addr, value| {
+                writes[write_count] = (addr, value);
+                write_count += 1;
+            },
+        );
+
+        assert_eq!(write_count, 4);
+        assert_eq!(
+            writes,
+            [
+                (
+                    IO_MUX_BASE + IO_MUX_GPIO18_OFFSET,
+                    (initial_iomux & !IO_MUX_MCU_SEL_MASK)
+                        | (IO_MUX_FUNC_GPIO << IO_MUX_MCU_SEL_SHIFT)
+                        | IO_MUX_FUN_IE,
+                ),
+                (GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << 18),
+                (
+                    GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (18 * 4),
+                    EMAC_MDO_O_IDX,
+                ),
+                (
+                    GPIO_BASE + GPIO_FUNC_IN_SEL_CFG_BASE + (EMAC_MDI_I_IDX as usize * 4),
+                    18 | GPIO_SIG_IN_SEL,
+                ),
+            ]
+        );
+        assert_eq!(writes[2].1 & GPIO_OEN_SEL, 0);
     }
 }

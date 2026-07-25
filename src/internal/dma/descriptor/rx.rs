@@ -276,6 +276,19 @@ impl RxDescriptor {
     pub fn raw_rdes1(&self) -> u32 {
         self.rdes1.get()
     }
+
+    /// Simulate DMA completion for host-only engine regression tests.
+    #[cfg(test)]
+    pub(in crate::internal::dma) fn complete_for_test(&self, payload_length: usize, error: bool) {
+        let frame_length = payload_length.saturating_add(4) as u32;
+        let mut status = rdes0::FIRST_DESC
+            | rdes0::LAST_DESC
+            | ((frame_length << rdes0::FRAME_LEN_SHIFT) & rdes0::FRAME_LEN_MASK);
+        if error {
+            status |= rdes0::ERR_SUMMARY | rdes0::CRC_ERR;
+        }
+        self.rdes0.set(status);
+    }
 }
 
 impl Default for RxDescriptor {

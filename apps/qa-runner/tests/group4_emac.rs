@@ -11,7 +11,7 @@
 
 use log::{error, info, warn};
 
-use super::framework::{TestResult, EMAC};
+use super::framework::{EMAC, TestResult};
 
 /// IT-4-001: Test EMAC can be started
 pub fn test_emac_start() -> TestResult {
@@ -44,7 +44,7 @@ pub fn test_packet_tx() -> TestResult {
     for i in 14..64 {
         frame[i] = (i - 14) as u8; // Payload: incrementing pattern
     }
-    
+
     let result = critical_section::with(|cs| {
         if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
             match emac.transmit(&frame) {
@@ -62,7 +62,7 @@ pub fn test_packet_tx() -> TestResult {
             TestResult::Fail
         }
     });
-    
+
     esp_hal::delay::Delay::new().delay_millis(10);
     result
 }
@@ -70,12 +70,12 @@ pub fn test_packet_tx() -> TestResult {
 /// IT-4-003: Test packet reception
 pub fn test_packet_rx(duration_secs: u32) -> TestResult {
     info!("  Listening for {} seconds...", duration_secs);
-    
+
     let mut rx_buffer = [0u8; 1600];
     let mut packet_count = 0u32;
     let delay = esp_hal::delay::Delay::new();
     let iterations = duration_secs * 1000;
-    
+
     for _ in 0..iterations {
         critical_section::with(|cs| {
             if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
@@ -84,8 +84,10 @@ pub fn test_packet_rx(duration_secs: u32) -> TestResult {
                         packet_count += 1;
                         if packet_count <= 3 && len >= 14 {
                             let etype = u16::from_be_bytes([rx_buffer[12], rx_buffer[13]]);
-                            info!("    Packet #{}: {} bytes, EtherType=0x{:04X}", 
-                                  packet_count, len, etype);
+                            info!(
+                                "    Packet #{}: {} bytes, EtherType=0x{:04X}",
+                                packet_count, len, etype
+                            );
                         }
                     }
                 }
@@ -93,9 +95,9 @@ pub fn test_packet_rx(duration_secs: u32) -> TestResult {
         });
         delay.delay_millis(1);
     }
-    
+
     info!("  Received {} packets", packet_count);
-    
+
     if packet_count > 0 {
         TestResult::Pass
     } else {
@@ -114,23 +116,25 @@ pub fn test_emac_stop_start() -> TestResult {
             false
         }
     });
-    
+
     if !stop_result {
         error!("  EMAC not available");
         return TestResult::Fail;
     }
-    
+
     info!("  EMAC stopped");
     esp_hal::delay::Delay::new().delay_millis(100);
-    
+
     let start_result = critical_section::with(|cs| {
         if let Some(ref mut emac) = *EMAC.borrow_ref_mut(cs) {
             emac.start()
         } else {
-            Err(ph_esp32_mac::Error::Config(ph_esp32_mac::ConfigError::InvalidConfig))
+            Err(ph_esp32_mac::Error::Config(
+                ph_esp32_mac::ConfigError::InvalidConfig,
+            ))
         }
     });
-    
+
     match start_result {
         Ok(()) => {
             info!("  EMAC restarted");

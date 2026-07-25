@@ -17,7 +17,9 @@ fn main() {
         println!("cargo:warning=");
         println!("cargo:warning= Then build with:");
         println!("cargo:warning=   cargo xtask build qa-runner");
-        println!("cargo:warning= (or set --target xtensa-esp32-none-elf -Zbuild-std=core manually)");
+        println!(
+            "cargo:warning= (or set --target xtensa-esp32-none-elf -Zbuild-std=core manually)"
+        );
         println!("cargo:warning==============================================");
     }
 
