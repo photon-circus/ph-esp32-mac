@@ -9,6 +9,7 @@ driver. Use this index as the entry point and follow the links below.
 
 - [Core Documents](#core-documents)
 - [Planning Documents](#planning-documents)
+- [Vendor References](#vendor-references)
 - [Related Docs](#related-docs)
 
 ---
@@ -24,7 +25,18 @@ driver. Use this index as the entry point and follow the links below.
 
 ## Planning Documents
 
-- None.
+- [V0.1.2_REMEDIATION_PLAN.md](V0.1.2_REMEDIATION_PLAN.md) - Required
+  remediation and merge gates for v0.1.2.
+- [V0.1.2_RELEASE_CHECKLIST.md](V0.1.2_RELEASE_CHECKLIST.md) - Release
+  validation and sign-off checklist for v0.1.2.
+
+---
+
+## Vendor References
+
+- [vendor/V0.1.2_VENDOR_REFERENCES.md](vendor/V0.1.2_VENDOR_REFERENCES.md) -
+  Versioned vendor sources, checksums, and claim-validation conclusions used
+  for the v0.1.2 review.
 
 ---
 

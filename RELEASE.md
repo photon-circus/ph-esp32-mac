@@ -2,6 +2,10 @@
 
 This checklist defines the steps required to publish `ph-esp32-mac` to crates.io.
 
+For v0.1.2, the version-specific
+[release checklist](docs/V0.1.2_RELEASE_CHECKLIST.md) adds the required
+hardware, dependency, and remediation gates.
+
 ---
 
 ## Table of Contents
