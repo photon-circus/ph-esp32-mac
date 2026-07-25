@@ -13,6 +13,9 @@
 //! # Usage
 //!
 //! ```ignore
+//! cargo xtask qa build --suite mdio
+//! cargo xtask qa run --suite mac-filter --lab qa/lab.toml
+//! cargo xtask qa matrix --lab qa/lab.toml --cold 20 --warm 20
 //! cargo xtask run ex-smoltcp
 //! cargo xtask build qa-runner
 //! cargo xtask run ex-embassy-net --debug
@@ -87,6 +90,11 @@ fn run() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
+    if args.first().is_some_and(|argument| argument == "qa") {
+        args.remove(0);
+        return run_qa_host(&args);
+    }
+
     if matches!(args[0].as_str(), "-h" | "--help" | "help") {
         print_usage();
         return Ok(());
@@ -135,8 +143,57 @@ fn run() -> Result<(), Box<dyn Error>> {
 
 fn print_usage() {
     eprintln!(
-        "Usage:\n  cargo xtask run <target> [--debug|--release] [--] [args...]\n  cargo xtask build <target> [--debug|--release]\n\nTargets:\n  qa-runner | qa\n  ex-esp-hal | ex-esp-hal-async | ex-smoltcp | ex-embassy | ex-embassy-net\n  (or a path to a .rs entry file)\n\nNotes:\n  - If no command is supplied, `build` is assumed (no flashing).\n  - Use `--` to pass args to the target binary.\n",
+        "Usage:\n  cargo xtask qa build --suite <suite>\n  cargo xtask qa run --suite <suite> --lab qa/lab.toml [--allow-dirty]\n  cargo xtask qa matrix --lab qa/lab.toml --cold 20 --warm 20 [--allow-dirty]\n  cargo xtask run <target> [--debug|--release] [--] [args...]\n  cargo xtask build <target> [--debug|--release]\n\nQA suites:\n  mdio | reset | mac-filter | rx-sync | rx-async | rx-embassy\n\nTargets:\n  qa-runner | qa\n  ex-esp-hal | ex-esp-hal-async | ex-smoltcp | ex-embassy | ex-embassy-net\n  (or a path to a .rs entry file)\n\nNotes:\n  - Hardware QA currently requires Windows, Npcap, and the opt-in host adapter.\n  - If no application command is supplied, `build` is assumed (no flashing).\n  - Use `--` to pass args to an application binary.\n",
     );
+}
+
+fn run_qa_host(arguments: &[String]) -> Result<(), Box<dyn Error>> {
+    if arguments.is_empty() || matches!(arguments[0].as_str(), "-h" | "--help" | "help") {
+        return run_qa_host_command(&["--help".to_owned()], false);
+    }
+
+    let hardware = matches!(arguments[0].as_str(), "run" | "matrix");
+    run_qa_host_command(arguments, hardware)
+}
+
+fn run_qa_host_command(arguments: &[String], hardware: bool) -> Result<(), Box<dyn Error>> {
+    let repo_root = Path::new(XTASK_MANIFEST_DIR)
+        .parent()
+        .ok_or("xtask manifest directory has no parent")?;
+    let manifest = repo_root.join("tools").join("qa-host").join("Cargo.toml");
+    if !manifest.is_file() {
+        return Err(format!("QA host manifest not found: {}", manifest.display()).into());
+    }
+
+    let mut command = Command::new(env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+    command
+        .current_dir(repo_root)
+        .args(["run", "--locked", "--manifest-path"])
+        .arg(&manifest);
+    if hardware {
+        if !cfg!(windows) {
+            return Err("hardware QA execution currently requires Windows and Npcap".into());
+        }
+        command.args(["--features", "windows-hardware"]);
+    }
+    command.arg("--").args(arguments);
+
+    println!(
+        "xtask: cargo run --locked --manifest-path {}{} -- {}",
+        manifest.display(),
+        if hardware {
+            " --features windows-hardware"
+        } else {
+            ""
+        },
+        arguments.join(" ")
+    );
+    let status = command.status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("QA host failed (status: {status:?})").into())
+    }
 }
 
 fn resolve_target_arg(arg: &str) -> Result<PathBuf, Box<dyn Error>> {

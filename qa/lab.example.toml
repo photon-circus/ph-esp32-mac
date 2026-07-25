@@ -1,0 +1,36 @@
+# Copy this file to qa/lab.toml and replace every lab-specific value.
+# Commands are literal executable-plus-argument arrays. They are never passed
+# to a command shell and do not perform variable or wildcard expansion.
+
+schema = 1
+board_id = "wt32-eth01-lab-1"
+
+[serial]
+port = "COM7"
+baud = 115200
+read_timeout_ms = 50
+boot_timeout_ms = 10000
+
+[packet]
+adapter = "\\Device\\NPF_{00000000-0000-0000-0000-000000000000}"
+host_mac = "02:00:00:12:01:01"
+dut_mac = "02:00:00:12:01:02"
+capture_timeout_ms = 50
+
+[tools]
+espflash = ["espflash", "--skip-update-check"]
+
+[actions]
+power_off = ["C:\\lab\\relayctl.exe", "--channel", "1", "off"]
+power_on = ["C:\\lab\\relayctl.exe", "--channel", "1", "on"]
+link_down = ["C:\\lab\\switchctl.exe", "--port", "1", "down"]
+link_up = ["C:\\lab\\switchctl.exe", "--port", "1", "up"]
+
+[timeouts]
+action_ms = 10000
+flash_ms = 120000
+suite_ms = 60000
+
+[settle]
+power_ms = 500
+link_ms = 500

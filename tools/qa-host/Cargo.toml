@@ -1,0 +1,29 @@
+[package]
+name = "ph-esp32-mac-qa-host"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92.0"
+publish = false
+license = "Apache-2.0"
+description = "Host-side hardware validation controller for ph-esp32-mac"
+
+[features]
+default = []
+windows-hardware = ["dep:pcap", "dep:serial2"]
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+thiserror = "2.0"
+time = { version = "0.3", default-features = false, features = ["formatting", "macros", "std"] }
+toml = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+pcap = { version = "2.4", optional = true }
+serial2 = { version = "0.2.37", optional = true }
+
+[dev-dependencies]
+tempfile = "3.23"

@@ -44,4 +44,7 @@ driver. Use this index as the entry point and follow the links below.
 
 - [apps/examples/README.md](../apps/examples/README.md) - Example apps.
 - [apps/qa-runner/README.md](../apps/qa-runner/README.md) - Hardware QA runner.
-- [xtask/README.md](../xtask/README.md) - App build/flash helper.
+- [qa/README.md](../qa/README.md) - Host-controlled lab validation and
+  evidence.
+- [xtask/README.md](../xtask/README.md) - App build/flash and QA command
+  helper.

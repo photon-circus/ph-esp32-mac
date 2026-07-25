@@ -19,3 +19,6 @@ target/
 # Added by cargo
 
 /target
+
+# Machine-local hardware QA configuration
+/qa/lab.toml
