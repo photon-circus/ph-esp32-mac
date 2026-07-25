@@ -65,7 +65,17 @@ pub const EMAC_MDO_O_IDX: u32 = 201;
 /// Function output select field (bits 8:0) - which peripheral signal to output
 pub const GPIO_FUNC_OUT_SEL_MASK: u32 = 0x1FF;
 
-/// Output enable select (bit 10) - 0=GPIO, 1=peripheral controls OE
+/// Output-enable source select (bit 10).
+///
+/// Per the ESP32 TRM (GPIO_FUNCn_OEN_SEL):
+/// * `1` = the pin's output enable is forced by `GPIO_ENABLE_REG[n]` (software).
+/// * `0` = the pin's output enable is driven by the *peripheral's* output-enable
+///   signal routed through the GPIO matrix.
+///
+/// For a pin that is always an output (e.g. MDC) either works. For a
+/// **bidirectional** pin (MDIO) this MUST be `0` so the peripheral can
+/// tri-state the pin during the read turnaround — otherwise the pin stays
+/// driven and reads sample the SoC's own output instead of the PHY's response.
 pub const GPIO_OEN_SEL: u32 = 1 << 10;
 
 /// Output invert (bit 9)
@@ -148,9 +158,10 @@ impl GpioMatrix {
             // 2. Enable GPIO output
             write_reg(GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << gpio_num);
 
-            // 3. Connect GPIO output to EMAC_MDC_O signal via GPIO Matrix
+            // 3. Connect GPIO output to EMAC_MDC_O signal via GPIO Matrix.
+            //    MDC is always an output, so OEN_SEL = 1 (output enable forced by
+            //    GPIO_ENABLE, set above) is fine.
             let out_sel_addr = GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (gpio_num as usize * 4);
-            // OEN_SEL = 1 (peripheral controls output enable)
             let out_sel_val = (EMAC_MDC_O_IDX & GPIO_FUNC_OUT_SEL_MASK) | GPIO_OEN_SEL;
             write_reg(out_sel_addr, out_sel_val);
 
@@ -191,14 +202,20 @@ impl GpioMatrix {
                 write_reg(iomux_addr, new_iomux);
             }
 
-            // 2. Enable GPIO for both input and output
-            // Output enable is controlled by the peripheral via OEN_SEL
+            // 2. Mark the GPIO as driven; the *actual* output enable is owned by
+            //    the EMAC's MDO output-enable signal (OEN_SEL = 0, see step 3), so
+            //    this bit is a baseline and the EMAC still tri-states the pin during
+            //    the MDIO read turnaround.
             write_reg(GPIO_BASE + GPIO_ENABLE_W1TS_OFFSET, 1 << gpio_num);
 
-            // 3. Connect GPIO output to EMAC_MDO_O signal via GPIO Matrix
+            // 3. Connect GPIO output to EMAC_MDO_O signal via GPIO Matrix.
+            //    MDIO is BIDIRECTIONAL: OEN_SEL MUST be 0 so the EMAC's MDO
+            //    output-enable signal controls direction and tri-states the pin
+            //    when the PHY drives the read data. Forcing OEN_SEL = 1 (GPIO_ENABLE)
+            //    makes MDIO write-only — every MDIO read then samples the SoC's own
+            //    driven-low output and returns 0x0000 (writes still work).
             let out_sel_addr = GPIO_BASE + GPIO_FUNC_OUT_SEL_CFG_BASE + (gpio_num as usize * 4);
-            // OEN_SEL = 1 (peripheral controls output enable)
-            let out_sel_val = (EMAC_MDO_O_IDX & GPIO_FUNC_OUT_SEL_MASK) | GPIO_OEN_SEL;
+            let out_sel_val = EMAC_MDO_O_IDX & GPIO_FUNC_OUT_SEL_MASK; // OEN_SEL = 0
             write_reg(out_sel_addr, out_sel_val);
 
             // 4. Connect EMAC_MDI_I signal input to this GPIO

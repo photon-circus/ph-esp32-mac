@@ -10,9 +10,9 @@
 //! - pd_sel         (0x10): Power down select (RAM power down)
 
 use super::{
-    DPORT_WIFI_CLK_EMAC_EN, DPORT_WIFI_CLK_EN_REG, EXT_BASE, IO_MUX_BASE, IO_MUX_FUN_IE,
-    IO_MUX_GPIO0_FUNC_EMAC_TX_CLK, IO_MUX_GPIO0_OFFSET, IO_MUX_MCU_SEL_MASK, IO_MUX_MCU_SEL_SHIFT,
-    read_reg, reg_ro, reg_rw, write_reg,
+    DPORT_CORE_RST_EN_REG, DPORT_EMAC_RST, DPORT_WIFI_CLK_EMAC_EN, DPORT_WIFI_CLK_EN_REG, EXT_BASE,
+    IO_MUX_BASE, IO_MUX_FUN_IE, IO_MUX_GPIO0_FUNC_EMAC_TX_CLK, IO_MUX_GPIO0_OFFSET,
+    IO_MUX_MCU_SEL_MASK, IO_MUX_MCU_SEL_SHIFT, read_reg, reg_ro, reg_rw, write_reg,
 };
 
 // =============================================================================
@@ -210,6 +210,24 @@ impl ExtRegs {
                     (readback >> 14) & 1
                 );
             }
+        }
+    }
+
+    /// Pulse the EMAC peripheral reset via DPORT (assert then deassert).
+    ///
+    /// esp-idf asserts and immediately deasserts `DPORT_CORE_RST_EN.EMAC_RST`
+    /// right after enabling the EMAC bus clock and *before* any HAL-level
+    /// initialization (`emac_ll_reset_register()`), to bring the EMAC out of an
+    /// undefined post-power-on register state. Omitting it can leave the MAC in a
+    /// state where subsequent configuration does not take effect reliably.
+    ///
+    /// Call this immediately after [`Self::enable_peripheral_clock`].
+    #[inline(always)]
+    pub fn reset_peripheral() {
+        // SAFETY: DPORT register address is valid for this SoC.
+        unsafe {
+            write_reg(DPORT_CORE_RST_EN_REG, DPORT_EMAC_RST); // assert reset
+            write_reg(DPORT_CORE_RST_EN_REG, 0); // deassert reset
         }
     }
 
