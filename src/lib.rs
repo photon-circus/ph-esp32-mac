@@ -85,7 +85,6 @@
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(docsrs, doc(cfg_hide(feature = "esp32p4")))]
 #![deny(missing_docs)]
 #![allow(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]

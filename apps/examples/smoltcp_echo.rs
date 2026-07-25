@@ -197,7 +197,11 @@ fn log_dhcp(direction: &str, info: &DhcpInfo) {
         "{} DHCP {}->{} {}.{}.{}.{}:{} -> {}.{}.{}.{}:{} len={}",
         direction,
         msg_type_name(info.msg_type),
-        if info.src_port == 68 { "client" } else { "server" },
+        if info.src_port == 68 {
+            "client"
+        } else {
+            "server"
+        },
         info.src_ip[0],
         info.src_ip[1],
         info.src_ip[2],
@@ -281,12 +285,8 @@ impl<const RX: usize, const TX: usize, const BUF: usize> Device for LoggingEmac<
         &mut self,
         timestamp: SmolInstant,
     ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-        <Emac<RX, TX, BUF> as Device>::receive(self.emac, timestamp).map(|(rx, tx)| {
-            (
-                LoggingRxToken { inner: rx },
-                LoggingTxToken { inner: tx },
-            )
-        })
+        <Emac<RX, TX, BUF> as Device>::receive(self.emac, timestamp)
+            .map(|(rx, tx)| (LoggingRxToken { inner: rx }, LoggingTxToken { inner: tx }))
     }
 
     fn transmit(&mut self, timestamp: SmolInstant) -> Option<Self::TxToken<'_>> {
@@ -349,7 +349,11 @@ fn main() -> ! {
                 } else {
                     "10Mbps"
                 },
-                if matches!(status.duplex, Duplex::Full) { "FD" } else { "HD" }
+                if matches!(status.duplex, Duplex::Full) {
+                    "FD"
+                } else {
+                    "HD"
+                }
             );
             EMAC.with(|emac| {
                 emac.set_speed(status.speed);
@@ -393,7 +397,8 @@ fn main() -> ! {
     let rng = Rng::new();
     smol_config.random_seed = ((rng.random() as u64) << 32) | (rng.random() as u64);
 
-    let mut iface = EMAC.with(|emac| Interface::new(smol_config, emac, SmolInstant::from_millis(0)));
+    let mut iface =
+        EMAC.with(|emac| Interface::new(smol_config, emac, SmolInstant::from_millis(0)));
     iface.set_any_ip(true);
 
     // ======================================================================

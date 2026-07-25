@@ -37,9 +37,7 @@ use esp_hal::{
 };
 use log::{info, warn};
 
-use ph_esp32_mac::esp_hal::{
-    emac_async_isr, EmacBuilder, EmacExt, EmacPhyBundle, Wt32Eth01,
-};
+use ph_esp32_mac::esp_hal::{EmacBuilder, EmacExt, EmacPhyBundle, Wt32Eth01, emac_async_isr};
 use ph_esp32_mac::{AsyncEmacExt, Emac};
 
 // =============================================================================

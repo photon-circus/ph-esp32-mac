@@ -1,0 +1,220 @@
+name: Manual ESP32 Hardware QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Full 40-character commit SHA from v0.1.2-candidate
+        required: true
+        type: string
+      board:
+        description: Approved physical lab board
+        required: true
+        default: wt32-eth01-01
+        type: choice
+        options:
+          - wt32-eth01-01
+      cold:
+        description: Relay-controlled cold-boot iterations (1-100)
+        required: true
+        default: "20"
+        type: string
+      warm:
+        description: Software-reset iterations (1-100)
+        required: true
+        default: "20"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esp32-hardware-${{ inputs.board }}
+  cancel-in-progress: false
+
+jobs:
+  hardware-qa:
+    name: ${{ inputs.board }} at ${{ inputs.candidate_sha }}
+    if: github.ref == 'refs/heads/main'
+    environment: esp32-lab
+    runs-on: [self-hosted, windows, esp32, wt32-eth01, "${{ inputs.board }}"]
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      QA_DISPATCH_SHA: ${{ inputs.candidate_sha }}
+      QA_DISPATCH_COLD: ${{ inputs.cold }}
+      QA_DISPATCH_WARM: ${{ inputs.warm }}
+
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          QA_LAB_CONFIG_INPUT: ${{ vars.QA_LAB_CONFIG }}
+        run: |
+          $sha = $env:QA_DISPATCH_SHA
+          if ($sha -cnotmatch '^[0-9a-fA-F]{40}$') {
+            throw 'candidate_sha must be a full 40-character hexadecimal commit SHA'
+          }
+
+          $cold = $env:QA_DISPATCH_COLD
+          $warm = $env:QA_DISPATCH_WARM
+          foreach ($entry in @(
+            @{ Name = 'cold'; Value = $cold },
+            @{ Name = 'warm'; Value = $warm }
+          )) {
+            if ($entry.Value -cnotmatch '^[1-9][0-9]{0,2}$') {
+              throw "$($entry.Name) must be an integer in the range 1..100"
+            }
+            if ([int]$entry.Value -gt 100) {
+              throw "$($entry.Name) must be an integer in the range 1..100"
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:QA_LAB_CONFIG_INPUT)) {
+            throw 'The protected esp32-lab environment must define QA_LAB_CONFIG'
+          }
+          $lab = [System.IO.Path]::GetFullPath($env:QA_LAB_CONFIG_INPUT)
+          $workspace = [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          $workspacePrefix =
+            $workspace.TrimEnd([char[]]@('\', '/')) +
+            [System.IO.Path]::DirectorySeparatorChar
+          if (
+            $lab.Equals($workspace, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $lab.StartsWith($workspacePrefix, [System.StringComparison]::OrdinalIgnoreCase)
+          ) {
+            throw 'QA_LAB_CONFIG must resolve outside the checked-out repository'
+          }
+          if (-not (Test-Path -LiteralPath $lab -PathType Leaf)) {
+            throw "QA_LAB_CONFIG does not identify a readable file: $lab"
+          }
+
+          "QA_CANDIDATE_SHA=$($sha.ToLowerInvariant())" >> $env:GITHUB_ENV
+          "QA_COLD=$cold" >> $env:GITHUB_ENV
+          "QA_WARM=$warm" >> $env:GITHUB_ENV
+          "QA_LAB_CONFIG=$lab" >> $env:GITHUB_ENV
+
+      - name: Check out the exact candidate commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          clean: true
+
+      - name: Verify candidate identity and clean tree
+        id: candidate
+        run: |
+          $headOutput = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to resolve checked-out HEAD'
+          }
+          $head = $headOutput.Trim().ToLowerInvariant()
+          if ($head -cne $env:QA_CANDIDATE_SHA) {
+            throw "Checked-out HEAD $head does not match requested SHA $env:QA_CANDIDATE_SHA"
+          }
+
+          git fetch --no-tags origin `
+            '+refs/heads/v0.1.2-candidate:refs/remotes/origin/v0.1.2-candidate'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to fetch origin/v0.1.2-candidate for ancestry verification'
+          }
+          git merge-base --is-ancestor `
+            $env:QA_CANDIDATE_SHA origin/v0.1.2-candidate
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Requested commit is not an ancestor of origin/v0.1.2-candidate'
+          }
+
+          $status = @(git status --porcelain=v1 --untracked-files=all)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to inspect the candidate worktree'
+          }
+          if ($status.Count -ne 0) {
+            throw "Hardware QA requires a clean worktree:`n$($status -join "`n")"
+          }
+
+      - name: Run MDIO validation
+        id: mdio
+        continue-on-error: true
+        run: cargo xtask qa run --suite mdio --lab "$env:QA_LAB_CONFIG"
+
+      - name: Run reset matrix
+        id: reset
+        continue-on-error: true
+        run: >-
+          cargo xtask qa matrix
+          --lab "$env:QA_LAB_CONFIG"
+          --cold "$env:QA_COLD"
+          --warm "$env:QA_WARM"
+
+      - name: Run MAC-filter validation
+        id: mac_filter
+        continue-on-error: true
+        run: cargo xtask qa run --suite mac-filter --lab "$env:QA_LAB_CONFIG"
+
+      - name: Run synchronous RX validation
+        id: rx_sync
+        continue-on-error: true
+        run: cargo xtask qa run --suite rx-sync --lab "$env:QA_LAB_CONFIG"
+
+      - name: Run raw-async RX validation
+        id: rx_async
+        continue-on-error: true
+        run: cargo xtask qa run --suite rx-async --lab "$env:QA_LAB_CONFIG"
+
+      - name: Run embassy-net RX validation
+        id: rx_embassy
+        continue-on-error: true
+        run: cargo xtask qa run --suite rx-embassy --lab "$env:QA_LAB_CONFIG"
+
+      - name: Summarize QA outcomes
+        if: always()
+        run: |
+          @(
+            "## ESP32 hardware QA",
+            "",
+            "- Candidate: ``$env:QA_CANDIDATE_SHA``",
+            "- Board: ``${{ inputs.board }}``",
+            "- Cold iterations: ``$env:QA_COLD``",
+            "- Warm iterations: ``$env:QA_WARM``",
+            "",
+            "| Validation | Outcome |",
+            "|---|---|",
+            "| MDIO | ${{ steps.mdio.outcome }} |",
+            "| Reset matrix | ${{ steps.reset.outcome }} |",
+            "| MAC filter | ${{ steps.mac_filter.outcome }} |",
+            "| RX sync | ${{ steps.rx_sync.outcome }} |",
+            "| RX async | ${{ steps.rx_async.outcome }} |",
+            "| RX embassy | ${{ steps.rx_embassy.outcome }} |"
+          ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload hardware evidence
+        if: always() && steps.candidate.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qa-${{ inputs.board }}-${{ inputs.candidate_sha }}-${{ github.run_attempt }}
+          path: target/qa-evidence/**
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Enforce aggregate result
+        if: always()
+        run: |
+          $outcomes = [ordered]@{
+            mdio = '${{ steps.mdio.outcome }}'
+            reset = '${{ steps.reset.outcome }}'
+            mac_filter = '${{ steps.mac_filter.outcome }}'
+            rx_sync = '${{ steps.rx_sync.outcome }}'
+            rx_async = '${{ steps.rx_async.outcome }}'
+            rx_embassy = '${{ steps.rx_embassy.outcome }}'
+          }
+          $failed = @(
+            $outcomes.GetEnumerator() |
+              Where-Object { $_.Value -cne 'success' }
+          )
+          if ($failed.Count -ne 0) {
+            $details = $failed |
+              ForEach-Object { "$($_.Key)=$($_.Value)" }
+            throw "One or more hardware validations failed: $($details -join ', ')"
+          }

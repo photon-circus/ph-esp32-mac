@@ -2,24 +2,41 @@ name: CI
 
 on:
   push:
-    branches: [ main, "v*-candidate", "release/**" ]
+    branches: [main, "v*-candidate", "release/**"]
   pull_request:
-    branches: [ main, "v*-candidate", "release/**" ]
+    branches: [main, "v*-candidate", "release/**"]
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   dependencies:
-    name: Dependencies (cargo-deny)
+    name: Dependencies (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: root
+            manifest: Cargo.toml
+          - name: examples
+            manifest: apps/examples/Cargo.toml
+          - name: qa-runner
+            manifest: apps/qa-runner/Cargo.toml
+          - name: xtask
+            manifest: xtask/Cargo.toml
+          - name: qa-host
+            manifest: tools/qa-host/Cargo.toml
     steps:
       - uses: actions/checkout@v4
       - name: Check advisories, bans, licenses, and sources
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           rust-version: "1.92.0"
+          manifest-path: ${{ matrix.manifest }}
           command: check
           arguments: --all-features --locked
 
@@ -40,7 +57,55 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: cargo test --lib --verbose
+        run: cargo test --locked --lib --verbose
+      - name: Run supported host feature tests
+        run: >-
+          cargo test --locked --lib --verbose
+          --features "smoltcp,async,critical-section,embassy-net"
+
+  host-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          components: clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Test xtask
+        run: cargo test --locked --manifest-path xtask/Cargo.toml
+      - name: Test QA host controller
+        run: cargo test --locked --manifest-path tools/qa-host/Cargo.toml
+      - name: Clippy xtask
+        run: >-
+          cargo clippy --locked --manifest-path xtask/Cargo.toml
+          --all-targets -- -D warnings
+      - name: Clippy QA host controller
+        run: >-
+          cargo clippy --locked --manifest-path tools/qa-host/Cargo.toml
+          --all-targets -- -D warnings
+
+  windows-host-adapters:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          components: clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Check Windows serial and Npcap adapters
+        run: >-
+          cargo check --locked --manifest-path tools/qa-host/Cargo.toml
+          --all-targets --features windows-hardware
+      - name: Clippy Windows serial and Npcap adapters
+        run: >-
+          cargo clippy --locked --manifest-path tools/qa-host/Cargo.toml
+          --all-targets --features windows-hardware -- -D warnings
 
   fmt:
     runs-on: ubuntu-latest
@@ -51,8 +116,16 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt
-      - name: Check formatting
-        run: cargo fmt --all --manifest-path Cargo.toml -- --check
+      - name: Check root formatting
+        run: cargo fmt --manifest-path Cargo.toml -- --check
+      - name: Check examples formatting
+        run: cargo fmt --manifest-path apps/examples/Cargo.toml -- --check
+      - name: Check QA firmware formatting
+        run: cargo fmt --manifest-path apps/qa-runner/Cargo.toml -- --check
+      - name: Check xtask formatting
+        run: cargo fmt --manifest-path xtask/Cargo.toml -- --check
+      - name: Check QA host formatting
+        run: cargo fmt --manifest-path tools/qa-host/Cargo.toml -- --check
 
   clippy:
     runs-on: ubuntu-latest
@@ -66,13 +139,14 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Clippy (default features)
-        run: cargo clippy --lib --tests -- -D warnings
+        run: cargo clippy --locked --lib --tests -- -D warnings
       - name: Clippy (all testable features)
-        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section,embassy-net" -- -D warnings
+        run: >-
+          cargo clippy --locked --lib --tests
+          --features "smoltcp,async,critical-section,embassy-net"
+          -- -D warnings
       - name: Clippy (defmt)
-        run: cargo clippy --lib --features "defmt" -- -D warnings
-      - name: Clippy (smoltcp + async + embassy)
-        run: cargo clippy --lib --tests --features "smoltcp,async,critical-section,embassy-net" -- -D warnings
+        run: cargo clippy --locked --lib --features defmt -- -D warnings
 
   coverage:
     runs-on: ubuntu-latest
@@ -88,7 +162,10 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate coverage
-        run: cargo llvm-cov --features "smoltcp,async,critical-section,embassy-net" --lcov --output-path lcov.info
+        run: >-
+          cargo llvm-cov --locked
+          --features "smoltcp,async,critical-section,embassy-net"
+          --lcov --output-path lcov.info
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -99,21 +176,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Xtensa toolchain (esp32)
+      - name: Install Xtensa toolchain (ESP32)
         uses: esp-rs/xtensa-toolchain@v1.5
         with:
           default: true
           buildtargets: esp32
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-      - name: Check esp32 target
-        run: cargo +esp check --locked --target xtensa-esp32-none-elf -Zbuild-std=core
+      - name: Check default ESP32 graph
+        run: >-
+          cargo +esp check --locked --lib
+          --target xtensa-esp32-none-elf -Zbuild-std=core
       - name: Check standalone esp-hal facade
         run: >-
-          cargo +esp check --locked --lib --target xtensa-esp32-none-elf
-          -Zbuild-std=core --no-default-features --features "esp32,esp-hal"
+          cargo +esp check --locked --lib
+          --target xtensa-esp32-none-elf -Zbuild-std=core
+          --no-default-features --features "esp32,esp-hal"
+      - name: Check supported feature aggregate
+        run: >-
+          cargo +esp check --locked --lib
+          --target xtensa-esp32-none-elf -Zbuild-std=core
+          --no-default-features
+          --features "esp32,esp-hal,smoltcp,critical-section,async,embassy-net,log,defmt"
+      - name: Build every example
+        run: >-
+          cargo +esp build --locked --release
+          --manifest-path apps/examples/Cargo.toml
+          --target xtensa-esp32-none-elf -Zbuild-std=core
+          --all-features --bins
+          --config
+          'target.xtensa-esp32-none-elf.rustflags=["-C","link-arg=-nostartfiles","-C","link-arg=-Wl,-Tlinkall.x"]'
+      - name: Build every QA firmware binary
+        run: >-
+          cargo +esp build --locked --release
+          --manifest-path apps/qa-runner/Cargo.toml
+          --target xtensa-esp32-none-elf -Zbuild-std=core
+          --bins
+          --config
+          'target.xtensa-esp32-none-elf.rustflags=["-C","link-arg=-nostartfiles","-C","link-arg=-Wl,-Tlinkall.x"]'
 
-  doc:
+  documentation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -121,13 +223,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - name: Build docs
-        run: cargo doc --manifest-path Cargo.toml --no-deps
+      - name: Build host documentation
+        run: cargo doc --locked --manifest-path Cargo.toml --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+      - name: Run documentation tests
+        run: cargo test --locked --doc
 
   docsrs:
-    name: Docs (simulate docs.rs on nightly)
+    name: Docs (simulate docs.rs)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,13 +239,53 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: nightly
+          targets: x86_64-unknown-linux-gnu
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-      - name: Build docs like docs.rs
+      - name: Build with the published docs.rs metadata
+        run: >-
+          cargo +nightly doc --locked --lib --no-deps
+          --target x86_64-unknown-linux-gnu
+          --features "smoltcp,critical-section,async,embassy-net,log,defmt"
         env:
           DOCS_RS: "1"
-          RUSTDOCFLAGS: "--cfg docsrs --cap-lints warn"
-        run: |
-          cargo +nightly doc --lib --no-deps \
-            --features "smoltcp,critical-section,async,embassy-net,log,defmt"
-        
+          RUSTDOCFLAGS: "--cfg docsrs -D warnings"
+
+  xtensa-docs:
+    name: Docs (supported features on Xtensa)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Xtensa toolchain (ESP32)
+        uses: esp-rs/xtensa-toolchain@v1.5
+        with:
+          default: true
+          buildtargets: esp32
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build docs with docs.rs cfg and supported features
+        run: >-
+          cargo +esp doc --locked --lib --no-deps
+          --target xtensa-esp32-none-elf -Zbuild-std=core
+          --no-default-features
+          --features "esp32,esp-hal,smoltcp,critical-section,async,embassy-net,log,defmt"
+        env:
+          DOCS_RS: "1"
+          RUSTDOCFLAGS: "--cfg docsrs -D warnings"
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Inspect package contents
+        run: cargo package --locked --list
+      - name: Assemble and verify package
+        run: cargo package --locked
+      - name: crates.io dry run
+        run: cargo publish --locked --dry-run

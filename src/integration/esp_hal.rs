@@ -5,8 +5,10 @@
 //! is enabled. It offers:
 //!
 //! - [`EmacExt`]: Extension trait for interrupt handler registration
-//! - [`emac_isr!`]: Macro for defining EMAC interrupt handlers with esp-hal semantics
-//! - [`emac_async_isr!`]: Macro for defining EMAC async ISR handlers
+//! - [`emac_isr!`](crate::emac_isr): Macro for defining EMAC interrupt handlers
+//!   with esp-hal semantics
+//! - [`emac_async_isr!`](crate::emac_async_isr): Macro for defining EMAC async
+//!   ISR handlers
 //! - [`EmacBuilder`]: Builder for minimal-boilerplate esp-hal bring-up
 //! - [`EmacPhyBundle`]: Convenience wrapper for PHY + MDIO bring-up
 //! - [`Wt32Eth01`]: Board helper for the canonical WT32-ETH01 bring-up (ESP32 only)
@@ -275,7 +277,7 @@ impl<'a, const RX: usize, const TX: usize, const BUF: usize> EmacBuilder<'a, RX,
     ///
     /// # Errors
     ///
-    /// Propagates initialization errors from [`Emac::init`].
+    /// Propagates initialization errors from [`crate::Emac::init`].
     pub fn init(self, delay: &mut Delay) -> crate::Result<&'a mut crate::Emac<RX, TX, BUF>> {
         self.emac.init(self.config, delay)?;
         Ok(self.emac)
@@ -616,14 +618,14 @@ macro_rules! emac_isr {
 
 /// Macro for defining an EMAC async interrupt handler.
 ///
-/// This macro wires the ISR to [`async_interrupt_handler`] using a static
-/// [`AsyncEmacState`], minimizing boilerplate for async usage.
+/// This macro wires the ISR to [`crate::async_interrupt_handler`] using a static
+/// [`crate::AsyncEmacState`], minimizing boilerplate for async usage.
 ///
 /// # Parameters
 ///
 /// - `$name`: The name for the handler constant (e.g., `EMAC_ASYNC_IRQ`)
 /// - `$priority`: The interrupt priority (e.g., `Priority::Priority1`)
-/// - `$state`: Reference to a static [`AsyncEmacState`]
+/// - `$state`: Reference to a static [`crate::AsyncEmacState`]
 ///
 /// # Example
 ///

@@ -18,7 +18,8 @@ include = [
     "/README.md",
     "/LICENSE",
     "/CHANGELOG.md",
-    "/docs/**",
+    "/docs/*.md",
+    "/docs/vendor/*.md",
     "/src/**",
 ]
 
@@ -73,10 +74,10 @@ embassy-net-driver = { version = "0.2", optional = true }
 critical-section = { version = "1.2", features = ["std"] }
 
 [package.metadata.docs.rs]
-default-target = "xtensa-esp32-none-elf"
+default-target = "x86_64-unknown-linux-gnu"
+targets = []
 features = ["smoltcp", "critical-section", "async", "embassy-net", "log", "defmt"]
 rustdoc-args = ["--cfg", "docsrs"]
-cargo-args = ["-Z", "build-std=core"]
 
 # =============================================================================
 # Integration Test Dependencies (only needed when building for target hardware)

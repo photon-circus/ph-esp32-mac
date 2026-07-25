@@ -28,24 +28,30 @@ hardware, dependency, and remediation gates.
 
 ## Build and Test
 
-- [ ] `cargo fmt --all -- --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test --lib`
-- [ ] `cargo doc --no-deps`
-- [ ] Target toolchain build for ESP32 examples (documented in `apps/examples/README.md`).
+- [ ] Formatting passes for the root, examples, QA firmware, xtask, and QA
+  host manifests.
+- [ ] `cargo clippy --locked --lib --tests -- -D warnings`
+- [ ] `cargo test --locked --lib`
+- [ ] `cargo test --locked --manifest-path xtask/Cargo.toml`
+- [ ] `cargo test --locked --manifest-path tools/qa-host/Cargo.toml`
+- [ ] `cargo doc --locked --no-deps`
+- [ ] The standalone esp-hal graph, supported feature aggregate, every example,
+  and every QA binary build for `xtensa-esp32-none-elf`.
+- [ ] Release-grade hardware evidence is retained for the exact release commit.
 
 ---
 
 ## Packaging
 
-- [ ] `cargo package --list` contains only intended files.
-- [ ] `cargo publish --dry-run` passes with no warnings.
+- [ ] `cargo package --locked --list` contains only intended files.
+- [ ] `cargo package --locked` verifies the generated archive.
+- [ ] `cargo publish --locked --dry-run` passes with no warnings.
 
 ---
 
 ## Publish
 
-- [ ] `cargo publish`
+- [ ] `cargo publish --locked`
 - [ ] Tag the release in git.
 
 ---

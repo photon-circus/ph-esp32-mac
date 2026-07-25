@@ -95,17 +95,15 @@ fn main() -> ! {
     delay.delay_millis(Wt32Eth01::OSC_STARTUP_MS);
 
     info!("Initializing EMAC...");
-    EMAC.with(|emac| {
-        match EmacBuilder::wt32_eth01_with_mac(emac, MAC_ADDRESS)
-            .init(&mut delay)
-        {
+    EMAC.with(
+        |emac| match EmacBuilder::wt32_eth01_with_mac(emac, MAC_ADDRESS).init(&mut delay) {
             Ok(_) => info!("EMAC initialized successfully"),
             Err(e) => {
                 error!("EMAC initialization failed: {:?}", e);
                 panic!("Cannot continue without EMAC");
             }
-        }
-    });
+        },
+    );
 
     // Initialize PHY and wait for link (WT32-ETH01 LAN8720A).
     info!("Initializing LAN8720A PHY...");

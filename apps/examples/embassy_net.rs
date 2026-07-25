@@ -72,7 +72,7 @@
 // =============================================================================
 
 use embassy_executor::Spawner;
-use embassy_net::{udp::UdpSocket, Config, ConfigV4, DhcpConfig, Stack};
+use embassy_net::{Config, ConfigV4, DhcpConfig, Stack, udp::UdpSocket};
 use embassy_net_driver::LinkState;
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -89,7 +89,7 @@ use static_cell::StaticCell;
 
 use ph_esp32_mac::esp_hal::{EmacBuilder, EmacExt, EmacPhyBundle, Wt32Eth01};
 use ph_esp32_mac::hal::MdioController;
-use ph_esp32_mac::{emac_isr, Emac, EmbassyEmac};
+use ph_esp32_mac::{Emac, EmbassyEmac, emac_isr};
 
 // =============================================================================
 // Configuration
@@ -145,7 +145,9 @@ emac_isr!(EMAC_IRQ, Priority::Priority1, {
 /// This task runs the embassy-net stack, processing incoming/outgoing packets.
 /// It must run continuously for the network to function.
 #[embassy_executor::task]
-async fn net_task(mut runner: embassy_net::Runner<'static, EmbassyEmac<'static, 10, 10, 1600>>) -> ! {
+async fn net_task(
+    mut runner: embassy_net::Runner<'static, EmbassyEmac<'static, 10, 10, 1600>>,
+) -> ! {
     runner.run().await
 }
 
@@ -316,7 +318,10 @@ async fn main(spawner: Spawner) -> ! {
     clk_en.set_high();
     let mut delay = Delay::new();
     delay.delay_millis(Wt32Eth01::OSC_STARTUP_MS);
-    info!("External oscillator enabled (GPIO{})", Wt32Eth01::CLK_EN_GPIO);
+    info!(
+        "External oscillator enabled (GPIO{})",
+        Wt32Eth01::CLK_EN_GPIO
+    );
 
     // -------------------------------------------------------------------------
     // EMAC Initialization
@@ -357,7 +362,10 @@ async fn main(spawner: Spawner) -> ! {
     // Start EMAC and bind interrupt handler
     emac.start().expect("EMAC start failed");
     emac.bind_interrupt(EMAC_IRQ);
-    info!("EMAC started (memory: {} bytes)", Emac::<10, 10, 1600>::memory_usage());
+    info!(
+        "EMAC started (memory: {} bytes)",
+        Emac::<10, 10, 1600>::memory_usage()
+    );
 
     // -------------------------------------------------------------------------
     // Embassy-net Stack Setup
@@ -371,7 +379,8 @@ async fn main(spawner: Spawner) -> ! {
     let seed = ((rng.random() as u64) << 32) | (rng.random() as u64);
 
     // Create network stack with static resources
-    let (stack, runner) = ph_esp32_mac::embassy_net_stack!(driver, NET_RESOURCES, Config::default(), seed);
+    let (stack, runner) =
+        ph_esp32_mac::embassy_net_stack!(driver, NET_RESOURCES, Config::default(), seed);
 
     // -------------------------------------------------------------------------
     // Spawn Tasks

@@ -33,7 +33,8 @@
 //!
 //! # See Also
 //!
-//! - [`crate::esp_hal`] - re-exported esp-hal facade at the crate root
+//! - `crate::esp_hal` - re-exported esp-hal facade at the crate root when the
+//!   `esp-hal` feature is enabled
 
 #[cfg(feature = "esp-hal")]
 #[cfg_attr(docsrs, doc(cfg(feature = "esp-hal")))]

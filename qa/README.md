@@ -14,6 +14,7 @@ runs.
 - [Commands](#commands)
 - [Synchronization and Trust Rules](#synchronization-and-trust-rules)
 - [Evidence](#evidence)
+- [Manual Lab Workflow](#manual-lab-workflow)
 - [Reset Matrix](#reset-matrix)
 
 ---
@@ -136,6 +137,34 @@ reset reasons, external-action records, and `SHA256SUMS`.
 An `INCOMPLETE` marker remains if finalization fails. Raw evidence belongs in
 CI artifacts or controlled lab storage; only approved summaries and
 checksums should be referenced from a release checklist.
+
+---
+
+## Manual Lab Workflow
+
+`.github/workflows/hardware-qa.yml` is prepared with only a
+`workflow_dispatch` trigger. It requires a full candidate commit SHA, a
+protected `esp32-lab` environment approval, an approved board label, and a lab
+configuration path supplied by the environment-level `QA_LAB_CONFIG`
+configuration variable. That variable is loaded by the first execution step,
+normalized, and required to resolve outside the checkout. The workflow verifies
+that the selected SHA is the exact checkout and belongs to
+`origin/v0.1.2-candidate` before executing candidate code on the persistent
+runner.
+
+GitHub exposes `workflow_dispatch` only when the workflow file exists on the
+default branch. Candidate development therefore continues with the local
+commands above. Activating the workflow requires a later, explicitly approved
+tooling-only merge to `main`; the workflow then checks out the selected
+candidate SHA rather than running arbitrary pull-request refs.
+
+The repository environment must require reviewers, and the runner must carry
+the labels `self-hosted`, `esp32`, `wt32-eth01`, and its board-specific label.
+Use a dedicated Actions Runner 2.329.0 or later with no reusable repository or
+cloud credentials and no route to production networks. The workflow pins its
+checkout and artifact actions to reviewed immutable commits.
+After candidate identity succeeds, evidence upload runs even when a suite
+fails so its raw artifacts are retained. Missing evidence fails the workflow.
 
 ---
 
