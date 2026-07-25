@@ -26,7 +26,7 @@ include = [
 default = ["esp32"]
 
 # Target chip selection (mutually exclusive)
-esp32 = []
+esp32 = ["esp-hal?/esp32"]
 # Experimental placeholder for future ESP32-P4 support (hidden from docs; not supported in 0.1)
 esp32p4 = []
 
@@ -35,7 +35,7 @@ defmt = ["dep:defmt"]
 log = ["dep:log"]
 smoltcp = ["dep:smoltcp"]
 critical-section = ["dep:critical-section"]
-esp-hal = ["dep:esp-hal", "critical-section"]  # esp-hal ergonomic integration
+esp-hal = ["dep:esp-hal", "esp-hal/unstable", "critical-section"]  # esp-hal ergonomic integration
 async = ["critical-section"]  # Async/await support with wakers
 embassy-net = ["dep:embassy-net-driver", "critical-section"]
 

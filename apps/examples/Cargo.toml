@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
 description = "Example binaries for ph-esp32-mac on ESP32"
+license = "Apache-2.0"
 publish = false
 rust-version = "1.92.0"
 
@@ -47,6 +48,7 @@ esp-hal-async-example = [
   "dep:esp-hal",
   "dep:esp-println",
   "dep:esp-rtos",
+  "dep:esp-sync",
   "dep:log",
   "dep:static_cell",
   "ph-esp32-mac/async",
@@ -75,6 +77,7 @@ embassy-net-example = [
   "dep:esp-println",
   "dep:log",
   "dep:esp-rtos",
+  "dep:esp-sync",
   "dep:static_cell",
   "ph-esp32-mac/async",
   "ph-esp32-mac/critical-section",
@@ -84,17 +87,16 @@ embassy-net-example = [
 ]
 
 [dependencies]
-ph-esp32-mac = { path = "../.." }
+ph-esp32-mac = { version = "0.1.1", path = "../.." }
 embedded-hal = "1.0"
 
 # Optional example dependencies
 critical-section = { version = "1.2", optional = true }
-esp-hal = { version = "1.0.0", features = ["esp32", "unstable"], optional = true }
+esp-hal = { version = "1.1", features = ["esp32", "unstable"], optional = true }
 esp-backtrace = { version = "0.18", features = ["esp32", "panic-handler", "println", "colors"], optional = true }
 esp-bootloader-esp-idf = { version = "0.4", features = ["esp32"], optional = true }
 esp-println = { version = "0.16", default-features = false, features = ["esp32", "log-04", "uart"], optional = true }
 log = { version = "0.4", optional = true }
-esp-rom-sys = "=0.1.2"
 smoltcp = { version = "0.12", default-features = false, optional = true, features = [
   "log",
   "medium-ethernet",
@@ -114,6 +116,8 @@ embassy-net = { version = "0.7.0", default-features = false, optional = true, fe
 embassy-net-driver = { version = "0.2", optional = true }
 embassy-time = { version = "0.5.0", optional = true }
 esp-rtos = { version = "0.2.0", features = ["embassy", "esp32"], optional = true }
+# esp-rtos 0.2 does not forward its chip selection to esp-sync 0.1.
+esp-sync = { version = "0.1", features = ["esp32"], optional = true }
 static_cell = { version = "2", optional = true }
 
 [profile.dev]

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Steven Giacomelli <steve@giacomelli.ca>"]
 description = "QA runner for ph-esp32-mac on real ESP32 hardware"
+license = "Apache-2.0"
 publish = false
 rust-version = "1.92.0"
 
@@ -14,10 +15,10 @@ test = false
 
 [dependencies]
 # The EMAC driver we're testing
-ph-esp32-mac = { path = "../..", features = ["esp32", "critical-section", "smoltcp"] }
+ph-esp32-mac = { version = "0.1.1", path = "../..", features = ["esp32", "critical-section", "smoltcp"] }
 
 # ESP32 HAL and support crates
-esp-hal = { version = "1.0", features = ["esp32", "unstable"] }
+esp-hal = { version = "1.1", features = ["esp32", "unstable"] }
 esp-bootloader-esp-idf = { version = "0.4", features = ["esp32"] }
 esp-backtrace = { version = "0.18", features = ["esp32", "panic-handler", "println", "colors"] }
 esp-println = { version = "0.16", features = ["esp32", "log-04"] }

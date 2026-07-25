@@ -30,7 +30,7 @@ ch = "check"
 test-lib = "test --lib"
 clippy-strict = "clippy -- -D warnings"
 docs = "doc --no-deps"
-xtask = "run --manifest-path xtask/Cargo.toml --"
+xtask = "run --locked --manifest-path xtask/Cargo.toml --"
 
 [build]
 target-dir = "target"

@@ -118,7 +118,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             }
             _ => {
                 if path.is_none() {
-                    path = Some(PathBuf::from(resolve_target_arg(&arg)?));
+                    path = Some(resolve_target_arg(&arg)?);
                 } else {
                     return Err(format!("unexpected argument: {arg}").into());
                 }
@@ -152,9 +152,7 @@ fn resolve_target_arg(arg: &str) -> Result<PathBuf, Box<dyn Error>> {
         "ex-esp-hal" | "esp-hal" | "ex-esp-hal-integration" => {
             "apps/examples/esp_hal_integration.rs"
         }
-        "ex-esp-hal-async" | "esp-hal-async" | "ex-async" => {
-            "apps/examples/esp_hal_async.rs"
-        }
+        "ex-esp-hal-async" | "esp-hal-async" | "ex-async" => "apps/examples/esp_hal_async.rs",
         "ex-smoltcp" | "smoltcp" | "ex-smoltcp-echo" => "apps/examples/smoltcp_echo.rs",
         "ex-embassy" | "embassy" | "ex-embassy-net" | "embassy-net" => {
             "apps/examples/embassy_net.rs"
@@ -165,7 +163,7 @@ fn resolve_target_arg(arg: &str) -> Result<PathBuf, Box<dyn Error>> {
             return Err(format!(
                 "unknown target: {arg}\nUse `cargo xtask --help` to list targets."
             )
-            .into())
+            .into());
         }
     };
 
@@ -179,8 +177,8 @@ fn resolve_bin(path: &Path) -> Result<ResolvedBin, Box<dyn Error>> {
     } else {
         cwd.join(path)
     };
-    let file_path = fs::canonicalize(&path)
-        .map_err(|_| format!("file not found: {}", path.display()))?;
+    let file_path =
+        fs::canonicalize(&path).map_err(|_| format!("file not found: {}", path.display()))?;
 
     let manifest_path = find_manifest(&file_path)?;
     let manifest_dir = manifest_path
@@ -197,26 +195,26 @@ fn resolve_bin(path: &Path) -> Result<ResolvedBin, Box<dyn Error>> {
         .map(|name| name.to_string());
 
     let mut bins = parse_bins(&manifest, manifest_dir);
-    if bins.is_empty() {
-        if let Some(default_bin) = default_bin(&file_path, manifest_dir, package_name.clone()) {
-            bins.push(default_bin);
-        }
+    if bins.is_empty()
+        && let Some(default_bin) = default_bin(&file_path, manifest_dir, package_name.clone())
+    {
+        bins.push(default_bin);
     }
 
     for bin in &bins {
-        if let Ok(candidate) = fs::canonicalize(&bin.path) {
-            if candidate == file_path {
-                return Ok(ResolvedBin {
-                    manifest_path,
-                    bin_name: if bin.name.is_empty() {
-                        None
-                    } else {
-                        Some(bin.name.clone())
-                    },
-                    required_features: bin.required_features.clone(),
-                    package_name,
-                });
-            }
+        if let Ok(candidate) = fs::canonicalize(&bin.path)
+            && candidate == file_path
+        {
+            return Ok(ResolvedBin {
+                manifest_path,
+                bin_name: if bin.name.is_empty() {
+                    None
+                } else {
+                    Some(bin.name.clone())
+                },
+                required_features: bin.required_features.clone(),
+                package_name,
+            });
         }
     }
 
@@ -277,7 +275,10 @@ fn parse_bins(manifest: &toml::Value, manifest_dir: &Path) -> Vec<BinInfo> {
         let path = if let Some(path) = bin.get("path").and_then(|path| path.as_str()) {
             manifest_dir.join(path)
         } else if !name.is_empty() {
-            manifest_dir.join("src").join("bin").join(format!("{name}.rs"))
+            manifest_dir
+                .join("src")
+                .join("bin")
+                .join(format!("{name}.rs"))
         } else {
             continue;
         };
@@ -337,6 +338,7 @@ fn run_cargo(
 
     cargo_args.push("--manifest-path".to_string());
     cargo_args.push(resolved.manifest_path.display().to_string());
+    cargo_args.push("--locked".to_string());
     cargo_args.push("--target".to_string());
     cargo_args.push("xtensa-esp32-none-elf".to_string());
     cargo_args.push("-Zbuild-std=core".to_string());
@@ -345,11 +347,11 @@ fn run_cargo(
         cargo_args.push("--release".to_string());
     }
 
-    if let Some(bin_name) = &resolved.bin_name {
-        if !bin_name.is_empty() {
-            cargo_args.push("--bin".to_string());
-            cargo_args.push(bin_name.clone());
-        }
+    if let Some(bin_name) = &resolved.bin_name
+        && !bin_name.is_empty()
+    {
+        cargo_args.push("--bin".to_string());
+        cargo_args.push(bin_name.clone());
     }
 
     if !resolved.required_features.is_empty() {
@@ -359,7 +361,8 @@ fn run_cargo(
 
     if matches!(mode, Mode::Run) {
         cargo_args.push("--config".to_string());
-        cargo_args.push("target.xtensa-esp32-none-elf.runner='espflash flash --monitor'".to_string());
+        cargo_args
+            .push("target.xtensa-esp32-none-elf.runner='espflash flash --monitor'".to_string());
     }
 
     if needs_linkall(

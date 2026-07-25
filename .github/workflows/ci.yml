@@ -107,7 +107,11 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Check esp32 target
-        run: cargo +esp check --target xtensa-esp32-none-elf -Zbuild-std=core
+        run: cargo +esp check --locked --target xtensa-esp32-none-elf -Zbuild-std=core
+      - name: Check standalone esp-hal facade
+        run: >-
+          cargo +esp check --locked --lib --target xtensa-esp32-none-elf
+          -Zbuild-std=core --no-default-features --features "esp32,esp-hal"
 
   doc:
     runs-on: ubuntu-latest

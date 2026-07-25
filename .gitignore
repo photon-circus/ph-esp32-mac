@@ -19,5 +19,3 @@ target/
 # Added by cargo
 
 /target
-
-/apps/**/Cargo.lock
