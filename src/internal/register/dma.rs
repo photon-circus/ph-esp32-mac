@@ -245,12 +245,8 @@ pub const DMAINTEN_NIE: u32 = 1 << 16;
 /// `AIE`) the RX waker is never woken to drain the ring and re-arm the DMA via
 /// `rx_poll_demand`, leaving RX permanently dead until a full re-init / power
 /// cycle. The wake handler already acts on `rx_buf_unavailable`; this enables it.
-pub const DMAINTEN_DEFAULT: u32 = DMAINTEN_TIE
-    | DMAINTEN_RIE
-    | DMAINTEN_RUE
-    | DMAINTEN_FBE
-    | DMAINTEN_AIE
-    | DMAINTEN_NIE;
+pub const DMAINTEN_DEFAULT: u32 =
+    DMAINTEN_TIE | DMAINTEN_RIE | DMAINTEN_RUE | DMAINTEN_FBE | DMAINTEN_AIE | DMAINTEN_NIE;
 
 // =============================================================================
 // DMA Register Access Functions
