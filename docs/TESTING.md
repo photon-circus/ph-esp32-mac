@@ -50,9 +50,10 @@ notes.
 
 ## CI Coverage
 
-CI validates the host toolchain and documentation, and includes an ESP32 target
-check. Current CI jobs cover:
+CI validates the host toolchain, dependency policy, and documentation, and
+includes an ESP32 target check. Current CI jobs cover:
 
+- `cargo deny --all-features --locked check`
 - `cargo fmt --all -- --check`
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo test --lib`
@@ -61,6 +62,8 @@ check. Current CI jobs cover:
 
 Clippy also runs a feature matrix (default + `smoltcp` + `async` +
 `critical-section` + `embassy-net`) to catch feature-gated issues.
+Pull requests targeting `main`, a versioned `v*-candidate` branch, or a
+`release/**` branch run the same workflow.
 
 ---
 

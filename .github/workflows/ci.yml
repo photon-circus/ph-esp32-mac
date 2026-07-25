@@ -2,15 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "v*-candidate", "release/**" ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, "v*-candidate", "release/**" ]
 
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
+  dependencies:
+    name: Dependencies (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check advisories, bans, licenses, and sources
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: "1.92.0"
+          command: check
+          arguments: --all-features --locked
+
   test:
     runs-on: ubuntu-latest
     strategy:

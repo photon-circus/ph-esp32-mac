@@ -1,0 +1,35 @@
+# Dependency policy for the published crate graph.
+#
+# Run locally with:
+# cargo deny --all-features --locked check
+
+[advisories]
+ignore = [
+    # Unmaintained transitive dependency of esp-hal 1.1.1; the advisory lists
+    # no safe upgrade. Re-evaluate when esp-hal removes paste.
+    "RUSTSEC-2024-0436",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[licenses]
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "BSL-1.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
