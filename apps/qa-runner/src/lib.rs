@@ -8,6 +8,7 @@
 #![deny(missing_docs)]
 
 pub mod board;
+pub mod frames;
 pub mod interrupts;
 pub mod protocol;
 pub mod snapshots;

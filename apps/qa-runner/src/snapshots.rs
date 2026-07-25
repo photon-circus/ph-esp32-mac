@@ -5,10 +5,16 @@ use ph_esp32_mac::unsafe_registers::{DmaRegs, ExtRegs, MacRegs};
 const DPORT_WIFI_CLK_EN_REG: usize = 0x3FF0_00CC;
 const DPORT_CORE_RST_EN_REG: usize = 0x3FF0_00D0;
 const DPORT_EMAC_CLOCK_BIT: u32 = 1 << 14;
+const DPORT_EMAC_RESET_BIT: u32 = 1 << 7;
 
 const GPIO18_IOMUX_REG: usize = 0x3FF4_9070;
 const GPIO18_OUT_SEL_REG: usize = 0x3FF4_4578;
 const EMAC_MDI_IN_SEL_REG: usize = 0x3FF4_4454;
+
+const MAC_BASE: usize = 0x3FF6_A000;
+const MAC_ADDITIONAL_ADDRESS_HIGH: [usize; 4] = [0x48, 0x50, 0x58, 0x60];
+const MAC_ADDITIONAL_ADDRESS_LOW: [usize; 4] = [0x4c, 0x54, 0x5c, 0x64];
+const MAC_ADDRESS_ENABLE: u32 = 1 << 31;
 
 const DMA_RX_DESCRIPTOR_BASE_REG: usize = 0x3FF6_900C;
 const RX_DESCRIPTOR_STRIDE: usize = 32;
@@ -22,6 +28,10 @@ pub struct RccSnapshot {
     pub peripheral_clock_enable: u32,
     /// Raw DPORT core-reset-enable value.
     pub peripheral_reset_enable: u32,
+    /// Whether the DPORT EMAC peripheral clock is enabled.
+    pub emac_clock_enabled: bool,
+    /// Whether the DPORT EMAC peripheral reset remains asserted.
+    pub emac_reset_asserted: bool,
     /// Whether extension-register fields were safe to sample.
     pub extension_valid: bool,
     /// Raw EMAC extension clock-control value.
@@ -43,7 +53,9 @@ impl RccSnapshot {
                 core::ptr::read_volatile(DPORT_CORE_RST_EN_REG as *const u32),
             )
         };
-        let extension_valid = (clock & DPORT_EMAC_CLOCK_BIT) != 0;
+        let emac_clock_enabled = (clock & DPORT_EMAC_CLOCK_BIT) != 0;
+        let emac_reset_asserted = (reset & DPORT_EMAC_RESET_BIT) != 0;
+        let extension_valid = emac_clock_enabled && !emac_reset_asserted;
 
         let (extension_clock_control, phy_interface_config, power_down_select) = if extension_valid
         {
@@ -59,6 +71,8 @@ impl RccSnapshot {
         Self {
             peripheral_clock_enable: clock,
             peripheral_reset_enable: reset,
+            emac_clock_enabled,
+            emac_reset_asserted,
             extension_valid,
             extension_clock_control,
             phy_interface_config,
@@ -118,18 +132,78 @@ pub struct MacSnapshot {
     pub config: u32,
     /// Raw frame-filter register.
     pub frame_filter: u32,
+    /// Raw high words for additional address-filter slots 1 through 4.
+    pub additional_address_high: [u32; 4],
+    /// Raw low words for additional address-filter slots 1 through 4.
+    pub additional_address_low: [u32; 4],
+    /// Number of enabled additional address-filter slots.
+    pub enabled_additional_filters: u8,
 }
 
 impl MacSnapshot {
     /// Capture the primary address and filtering state.
     pub fn capture() -> Self {
+        let mut additional_address_high = [0u32; 4];
+        let mut additional_address_low = [0u32; 4];
+        let mut enabled_additional_filters = 0u8;
+
+        for index in 0..additional_address_high.len() {
+            // SAFETY: These offsets select the four documented additional
+            // address-filter register pairs in the ESP32 EMAC MAC block.
+            let (high, low) = unsafe {
+                (
+                    core::ptr::read_volatile(
+                        (MAC_BASE + MAC_ADDITIONAL_ADDRESS_HIGH[index]) as *const u32,
+                    ),
+                    core::ptr::read_volatile(
+                        (MAC_BASE + MAC_ADDITIONAL_ADDRESS_LOW[index]) as *const u32,
+                    ),
+                )
+            };
+            additional_address_high[index] = high;
+            additional_address_low[index] = low;
+            enabled_additional_filters += u8::from((high & MAC_ADDRESS_ENABLE) != 0);
+        }
+
         Self {
             address: MacRegs::get_mac_address(),
             address_high: MacRegs::mac_addr0_high(),
             address_low: MacRegs::mac_addr0_low(),
             config: MacRegs::config(),
             frame_filter: MacRegs::frame_filter(),
+            additional_address_high,
+            additional_address_low,
+            enabled_additional_filters,
         }
+    }
+
+    /// Return whether the primary address exactly matches its hardware encoding.
+    #[must_use]
+    pub fn primary_address_matches(self, expected: [u8; 6]) -> bool {
+        let low = (expected[0] as u32)
+            | ((expected[1] as u32) << 8)
+            | ((expected[2] as u32) << 16)
+            | ((expected[3] as u32) << 24);
+        let high = (expected[4] as u32) | ((expected[5] as u32) << 8) | MAC_ADDRESS_ENABLE;
+        self.address == expected && self.address_high == high && self.address_low == low
+    }
+
+    /// Return whether one additional slot is an exact destination-address filter.
+    ///
+    /// `slot` is one-based and must be in the range 1 through 4. Exact matching
+    /// also proves that source-address selection and byte masks are disabled.
+    #[must_use]
+    pub fn additional_destination_filter_matches(self, slot: usize, expected: [u8; 6]) -> bool {
+        if slot == 0 || slot > 4 {
+            return false;
+        }
+        let index = slot - 1;
+        let low = (expected[0] as u32)
+            | ((expected[1] as u32) << 8)
+            | ((expected[2] as u32) << 16)
+            | ((expected[3] as u32) << 24);
+        let high = (expected[4] as u32) | ((expected[5] as u32) << 8) | MAC_ADDRESS_ENABLE;
+        self.additional_address_high[index] == high && self.additional_address_low[index] == low
     }
 }
 
